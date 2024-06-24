@@ -51,10 +51,15 @@ from ultralytics.nn.modules import (
     Segment,
     Silence,
     WorldDetect,
+    C2fCIB,
+    PSA,
+    SCDown,
+    RepVGGDW,
+    v10Detect,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
-from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8OBBLoss, v8PoseLoss, v8SegmentationLoss, v8MDetectionLoss
+from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8OBBLoss, v8PoseLoss, v8SegmentationLoss, v8MDetectionLoss, v10DetectLoss
 from ultralytics.utils.plotting import feature_visualization
 from ultralytics.utils.torch_utils import (
     fuse_conv_and_bn,
@@ -252,7 +257,7 @@ class BaseModel(nn.Module):
         csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
         if verbose:
-            LOGGER.info(f"Transferred {len(csd)}/{len(self.model.state_dict())} items from pretrained weights")
+            LOGGER.info(f"\n++++++++++ Transferred [{len(csd)}/{len(self.model.state_dict())}] items from pretrained weights ++++++++++\n")
 
     def loss(self, batch, preds=None):
         """
@@ -296,6 +301,8 @@ class DetectionModel(BaseModel):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB)) else self.forward(x)
+            if isinstance(m, v10Detect):
+                forward = lambda x: self.forward(x)["one2many"]
             m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
             self.stride = m.stride
             m.bias_init()  # only run once
@@ -348,6 +355,9 @@ class DetectionModel(BaseModel):
         """Initialize the loss criterion for the DetectionModel."""
         return v8DetectionLoss(self)
 
+class YOLOv10DetectionModel(DetectionModel):
+    def init_criterion(self):
+        return v10DetectLoss(self)
 
 class MDetectionModel(BaseModel):
     """YOLOv8 mdetection model."""
@@ -968,6 +978,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             DWConvTranspose2d,
             C3x,
             RepC3,
+            PSA,
+            SCDown,
+            C2fCIB,
         }:
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
@@ -979,7 +992,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 )  # num heads
 
             args = [c1, c2, *args[1:]]
-            if m in {BottleneckCSP, C1, C2, C2f, C2fAttn, C3, C3TR, C3Ghost, C3x, RepC3}:
+            if m in {BottleneckCSP, C1, C2, C2f, C2fAttn, C3, C3TR, C3Ghost, C3x, RepC3, C2fCIB}:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is AIFI:
@@ -996,7 +1009,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in {Detect, MDetect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn}:
+        elif m in {Detect, MDetect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}:
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
