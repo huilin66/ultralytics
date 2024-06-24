@@ -125,10 +125,13 @@ class BaseMixTransform:
         self.p = p
 
     def __call__(self, labels):
+        # print('before %s'%type(self).__name__, labels['instances'].mdet_attributes.shape, labels['instances'].bboxes.shape)
+
         """Applies pre-processing transforms and mixup/mosaic transforms to labels data."""
         if random.uniform(0, 1) > self.p:
             return labels
-
+        # if labels['instances'].mdet_attributes.shape[0] == 3:
+        #     print('test')
         # Get index of one or three other images
         indexes = self.get_indexes()
         if isinstance(indexes, int):
@@ -249,6 +252,9 @@ class Mosaic(BaseMixTransform):
 
     def _mosaic4(self, labels):
         """Create a 2x2 image mosaic."""
+        # print('before mosaic application', labels["instances"].mdet_attributes.shape, labels["instances"].bboxes.shape)
+        # if labels["instances"].mdet_attributes.shape[0] == 2:
+        #     print('test in mosaic application')
         mosaic_labels = []
         s = self.imgsz
         yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y
@@ -360,7 +366,9 @@ class Mosaic(BaseMixTransform):
             "mosaic_border": self.border,
         }
         final_labels["instances"].clip(imgsz, imgsz)
+
         good = final_labels["instances"].remove_zero_area_boxes()
+
         final_labels["cls"] = final_labels["cls"][good]
         if "texts" in mosaic_labels[0]:
             final_labels["texts"] = mosaic_labels[0]["texts"]
@@ -560,6 +568,8 @@ class RandomPerspective:
         Args:
             labels (dict): a dict of `bboxes`, `segments`, `keypoints`.
         """
+        # print('before %s' % type(self).__name__, labels['instances'].mdet_attributes.shape,
+        #       labels['instances'].bboxes.shape)
         if self.pre_transform and "mosaic_border" not in labels:
             labels = self.pre_transform(labels)
         labels.pop("ratio_pad", None)  # do not need ratio pad
@@ -567,6 +577,7 @@ class RandomPerspective:
         img = labels["img"]
         cls = labels["cls"]
         instances = labels.pop("instances")
+
         # Make sure the coord formats are right
         instances.convert_bbox(format="xyxy")
         instances.denormalize(*img.shape[:2][::-1])
@@ -581,13 +592,15 @@ class RandomPerspective:
 
         segments = instances.segments
         keypoints = instances.keypoints
+        mdet_attributes = instances.mdet_attributes
         # Update bboxes if there are segments.
         if len(segments):
             bboxes, segments = self.apply_segments(segments, M)
 
         if keypoints is not None:
             keypoints = self.apply_keypoints(keypoints, M)
-        new_instances = Instances(bboxes, segments, keypoints, bbox_format="xyxy", normalized=False)
+        new_instances = Instances(bboxes, segments, keypoints, bbox_format="xyxy", normalized=False,
+                                  mdet_attributes=mdet_attributes)
         # Clip
         new_instances.clip(*self.size)
 
@@ -597,10 +610,16 @@ class RandomPerspective:
         i = self.box_candidates(
             box1=instances.bboxes.T, box2=new_instances.bboxes.T, area_thr=0.01 if len(segments) else 0.10
         )
-        labels["instances"] = new_instances[i]
-        labels["cls"] = cls[i]
-        labels["img"] = img
-        labels["resized_shape"] = img.shape[:2]
+        # print('after %s'%type(self).__name__, labels['instances'].mdet_attributes.shape, labels['instances'].bboxes.shape)
+        if i.any():
+            labels["instances"] = new_instances[i]
+            labels["cls"] = cls[i]
+            labels["img"] = img
+            labels["resized_shape"] = img.shape[:2]
+        else:
+            labels["instances"] = instances
+            labels["cls"] = cls
+            labels["img"] = img
         return labels
 
     def box_candidates(self, box1, box2, wh_thr=2, ar_thr=100, area_thr=0.1, eps=1e-16):
@@ -996,6 +1015,7 @@ class Format:
         return_mask=False,
         return_keypoint=False,
         return_obb=False,
+        return_mdetect=False,
         mask_ratio=4,
         mask_overlap=True,
         batch_idx=True,
@@ -1007,6 +1027,7 @@ class Format:
         self.return_mask = return_mask  # set False when training detection only
         self.return_keypoint = return_keypoint
         self.return_obb = return_obb
+        self.return_mdetect = return_mdetect
         self.mask_ratio = mask_ratio
         self.mask_overlap = mask_overlap
         self.batch_idx = batch_idx  # keep the batch indexes
@@ -1043,6 +1064,8 @@ class Format:
             labels["bboxes"] = (
                 xyxyxyxy2xywhr(torch.from_numpy(instances.segments)) if len(instances.segments) else torch.zeros((0, 5))
             )
+        if self.return_mdetect:
+            labels["mdet_attributes"] = torch.from_numpy(instances.mdet_attributes)
         # NOTE: need to normalize obb in xywhr format for width-height consistency
         if self.normalize:
             labels["bboxes"][:, [0, 2]] /= w
@@ -1050,6 +1073,7 @@ class Format:
         # Then we can use collate_fn
         if self.batch_idx:
             labels["batch_idx"] = torch.zeros(nl)
+        # print('src:', labels["bboxes"].shape, labels["mdet_attributes"].shape)
         return labels
 
     def _format_img(self, img):

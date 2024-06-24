@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
-from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
+from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, TaskAlignedAssignerMdet, dist2bbox, dist2rbox, make_anchors
 
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
@@ -714,3 +714,153 @@ class v8OBBLoss(v8DetectionLoss):
             b, a, c = pred_dist.shape  # batch, anchors, channels
             pred_dist = pred_dist.view(b, a, 4, c // 4).softmax(3).matmul(self.proj.type(pred_dist.dtype))
         return torch.cat((dist2rbox(pred_dist, pred_angle, anchor_points), pred_angle), dim=-1)
+
+
+class v8MDetectionLoss(v8DetectionLoss):
+    """Criterion class for computing training losses."""
+    def __init__(self, model, epsilon=None, size_sum=False, weight_ratio=False):
+        super().__init__(model)
+        if epsilon is not None and (epsilon <= 0 or epsilon >= 1):
+            epsilon = None
+        self.epsilon = epsilon
+        self.weight_ratio = weight_ratio
+        self.size_sum = size_sum
+
+
+        m = model.model[-1]
+        self.na = m.na
+        self.no = m.nc + m.na + m.reg_max * 4
+        self.assigner = TaskAlignedAssignerMdet(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
+
+    def _labelsmoothing(self, target, class_num):
+        # if target.ndim == 1 or target.shape[-1] != class_num:
+        #     one_hot_target = F.one_hot(target, class_num)
+        # else:
+        #     one_hot_target = target
+
+        confidence = 1.0 - self.epsilon
+        label_shape = torch.Size((target.size(0), class_num))
+        with torch.no_grad():
+            soft_target = torch.empty(size=label_shape, device=target.device)
+            soft_target.fill_(self.epsilon / (class_num - 1))
+            soft_target.scatter_(1, target.data.unsqueeze(1), confidence)
+
+        soft_target = soft_target.reshape((-1, class_num))
+        return soft_target
+
+    def ratio2weight(self, targets, ratio):
+        pos_weights = targets * (1. - ratio)
+        neg_weights = (1. - targets) * ratio
+        weights = torch.exp(neg_weights + pos_weights)
+
+        # for RAP dataloader, targets element may be 2, with or without smooth, some element must great than 1
+        weights = weights - weights * (targets > 1)
+
+        return weights
+
+    def preprocess(self, targets, batch_size, scale_tensor):
+        """Preprocesses the target counts and matches with the input batch size to output a tensor."""
+        if targets.shape[0] == 0:
+            out = torch.zeros(batch_size, 0, 5, device=self.device)
+        else:
+            i = targets[:, 0]  # image index
+            _, counts = i.unique(return_counts=True)
+            counts = counts.to(dtype=torch.int32)
+            out = torch.zeros(batch_size, counts.max(), 5+self.na, device=self.device)
+            for j in range(batch_size):
+                matches = i == j
+                n = matches.sum()
+                if n:
+                    out[j, :n] = targets[matches, 1:]
+            out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
+        return out
+
+    def __call__(self, preds, batch):
+        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
+        loss = torch.zeros(4, device=self.device)  # box, cls, att, dfl
+        feats = preds[1] if isinstance(preds, tuple) else preds
+        pred_distri, pred_scores, pred_attributes = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+            (self.reg_max * 4, self.nc, self.na), 1
+        )
+
+        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_attributes = pred_attributes.permute(0, 2, 1).contiguous()
+
+        dtype = pred_scores.dtype
+        batch_size = pred_scores.shape[0]
+        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+
+        # Targets
+        targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"], batch["mdet_attributes"]), 1)
+        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        gt_labels, gt_bboxes, gt_attributes = targets.split((1, 4, self.na), 2)  # cls, xyxy
+        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
+
+        # Pboxes
+        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+
+        _, target_bboxes, target_scores, gt_attributes, fg_mask, _ = self.assigner(
+            pred_scores.detach().sigmoid(),
+            (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+            pred_attributes.detach().sigmoid(),
+            anchor_points * stride_tensor,
+            gt_labels,
+            gt_bboxes,
+            gt_attributes,
+            mask_gt,
+        )
+
+        target_scores_sum = max(target_scores.sum(), 1)
+
+        # Cls loss
+        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
+        loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
+
+        # Bbox loss
+        if fg_mask.sum():
+            target_bboxes /= stride_tensor
+            loss[0], loss[2] = self.bbox_loss(
+                pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
+            )
+
+        # pos_weight = torch.tensor([10.0]).to(self.device)
+        # loss[3] = F.binary_cross_entropy_with_logits(
+        #                                              input=pred_attributes,
+        #                                              target=gt_attributes,
+        #                                              pos_weight=pos_weight,
+        #                                              )
+        loss[3] = F.binary_cross_entropy_with_logits(
+                                                     input=pred_attributes,
+                                                     target=gt_attributes,
+                                                     )
+        loss[0] *= self.hyp.box  # box gain
+        loss[1] *= self.hyp.cls  # cls gain
+        loss[2] *= self.hyp.dfl  # dfl gain
+        loss[3] *= self.hyp.mdet # mdet gain
+
+        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
+
+
+        target = batch["mdetect_attributes"]
+        if self.weight_ratio:
+            target, label_ratio = target[:, 0, :], target[:, 1, :]
+        if self.epsilon is not None:
+            target = self._labelsmoothing(target, self.class_num)
+        cost = F.binary_cross_entropy_with_logits(
+            logit=input, label=target, reduction='none')
+
+        if self.weight_ratio:
+            targets_mask = torch.tensor(target > 0.5, dtype=torch.float32)
+            weight = self.ratio2weight(targets_mask, torch.tensor(label_ratio))
+            weight = weight * (target > -1)
+            cost = cost * weight
+
+        if self.size_sum:
+            cost = cost.sum(1).mean() if self.size_sum else cost.mean()
+        return cost
+
+
+
+

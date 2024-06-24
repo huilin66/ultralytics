@@ -435,6 +435,161 @@ class ConfusionMatrix:
             LOGGER.info(" ".join(map(str, self.matrix[i])))
 
 
+class MConfusionMatrix:
+    """
+    A class for calculating and updating a confusion matrix for object detection and classification tasks.
+
+    Attributes:
+        task (str): The type of task, either 'detect' or 'classify'.
+        matrix (np.ndarray): The confusion matrix, with dimensions depending on the task.
+        nc (int): The number of classes.
+        conf (float): The confidence threshold for detections.
+        iou_thres (float): The Intersection over Union threshold.
+    """
+
+    def __init__(self, nc, na, conf=0.25, iou_thres=0.45, task="detect"):
+        """Initialize attributes for the YOLO model."""
+        self.task = task
+        self.matrix = np.zeros((nc + 1, nc + 1)) if self.task == "detect" else np.zeros((nc, nc))
+        self.nc = nc  # number of classes
+        self.na = na
+        self.conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
+        self.iou_thres = iou_thres
+
+    def process_cls_preds(self, preds, targets):
+        """
+        Update confusion matrix for classification task.
+
+        Args:
+            preds (Array[N, min(nc,5)]): Predicted class labels.
+            targets (Array[N, 1]): Ground truth class labels.
+        """
+        preds, targets = torch.cat(preds)[:, 0], torch.cat(targets)
+        for p, t in zip(preds.cpu().numpy(), targets.cpu().numpy()):
+            self.matrix[p][t] += 1
+
+    def process_batch(self, detections, gt_bboxes, gt_cls, gt_attributes):
+        """
+        Update confusion matrix for object detection task.
+
+        Args:
+            detections (Array[N, 6] | Array[N, 7]): Detected bounding boxes and their associated information.
+                                      Each row should contain (x1, y1, x2, y2, conf, class)
+                                      or with an additional element `angle` when it's obb.
+            gt_bboxes (Array[M, 4]| Array[N, 5]): Ground truth bounding boxes with xyxy/xyxyr format.
+            gt_cls (Array[M]): The class labels.
+        """
+        if gt_cls.shape[0] == 0:  # Check if labels is empty
+            if detections is not None:
+                detections = detections[detections[:, 4] > self.conf]
+                detection_classes = detections[:, 5].int()
+                for dc in detection_classes:
+                    self.matrix[dc, self.nc] += 1  # false positives
+            return
+        if detections is None:
+            gt_classes = gt_cls.int()
+            for gc in gt_classes:
+                self.matrix[self.nc, gc] += 1  # background FN
+            return
+
+        detections = detections[detections[:, 4] > self.conf]
+        gt_classes = gt_cls.int()
+        detection_classes = detections[:, 5].int()
+        is_obb = detections.shape[1] == 7 and gt_bboxes.shape[1] == 5  # with additional `angle` dimension
+        iou = (
+            batch_probiou(gt_bboxes, torch.cat([detections[:, :4], detections[:, -1:]], dim=-1))
+            if is_obb
+            else box_iou(gt_bboxes, detections[:, :4])
+        )
+
+        x = torch.where(iou > self.iou_thres)
+        if x[0].shape[0]:
+            matches = torch.cat((torch.stack(x, 1), iou[x[0], x[1]][:, None]), 1).cpu().numpy()
+            if x[0].shape[0] > 1:
+                matches = matches[matches[:, 2].argsort()[::-1]]
+                matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
+                matches = matches[matches[:, 2].argsort()[::-1]]
+                matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
+        else:
+            matches = np.zeros((0, 3))
+
+        n = matches.shape[0] > 0
+        m0, m1, _ = matches.transpose().astype(int)
+        for i, gc in enumerate(gt_classes):
+            j = m0 == i
+            if n and sum(j) == 1:
+                self.matrix[detection_classes[m1[j]], gc] += 1  # correct
+            else:
+                self.matrix[self.nc, gc] += 1  # true background
+
+        if n:
+            for i, dc in enumerate(detection_classes):
+                if not any(m1 == i):
+                    self.matrix[dc, self.nc] += 1  # predicted background
+
+    def matrix(self):
+        """Returns the confusion matrix."""
+        return self.matrix
+
+    def tp_fp(self):
+        """Returns true positives and false positives."""
+        tp = self.matrix.diagonal()  # true positives
+        fp = self.matrix.sum(1) - tp  # false positives
+        # fn = self.matrix.sum(0) - tp  # false negatives (missed detections)
+        return (tp[:-1], fp[:-1]) if self.task == "detect" else (tp, fp)  # remove background class if task=detect
+
+    @TryExcept("WARNING ⚠️ ConfusionMatrix plot failure")
+    @plt_settings()
+    def plot(self, normalize=True, save_dir="", names=(), on_plot=None):
+        """
+        Plot the confusion matrix using seaborn and save it to a file.
+
+        Args:
+            normalize (bool): Whether to normalize the confusion matrix.
+            save_dir (str): Directory where the plot will be saved.
+            names (tuple): Names of classes, used as labels on the plot.
+            on_plot (func): An optional callback to pass plots path and data when they are rendered.
+        """
+        import seaborn  # scope for faster 'import ultralytics'
+
+        array = self.matrix / ((self.matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1)  # normalize columns
+        array[array < 0.005] = np.nan  # don't annotate (would appear as 0.00)
+
+        fig, ax = plt.subplots(1, 1, figsize=(12, 9), tight_layout=True)
+        nc, nn = self.nc, len(names)  # number of classes, names
+        seaborn.set_theme(font_scale=1.0 if nc < 50 else 0.8)  # for label size
+        labels = (0 < nn < 99) and (nn == nc)  # apply names to ticklabels
+        ticklabels = (list(names) + ["background"]) if labels else "auto"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # suppress empty matrix RuntimeWarning: All-NaN slice encountered
+            seaborn.heatmap(
+                array,
+                ax=ax,
+                annot=nc < 30,
+                annot_kws={"size": 8},
+                cmap="Blues",
+                fmt=".2f" if normalize else ".0f",
+                square=True,
+                vmin=0.0,
+                xticklabels=ticklabels,
+                yticklabels=ticklabels,
+            ).set_facecolor((1, 1, 1))
+        title = "Confusion Matrix" + " Normalized" * normalize
+        ax.set_xlabel("True")
+        ax.set_ylabel("Predicted")
+        ax.set_title(title)
+        plot_fname = Path(save_dir) / f'{title.lower().replace(" ", "_")}.png'
+        fig.savefig(plot_fname, dpi=250)
+        plt.close(fig)
+        if on_plot:
+            on_plot(plot_fname)
+
+    def print(self):
+        """Print the confusion matrix to the console."""
+        for i in range(self.nc + 1):
+            LOGGER.info(" ".join(map(str, self.matrix[i])))
+
+
 def smooth(y, f=0.05):
     """Box filter of fraction f."""
     nf = round(len(y) * f * 2) // 2 + 1  # number of filter elements (must be odd)
@@ -721,7 +876,15 @@ class Metric(SimpleClass):
         Returns:
             (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
         """
-        return self.all_ap.mean() if len(self.all_ap) else 0.0
+        if isinstance(self.all_ap, list):
+            all_ap = np.array(self.all_ap)
+            map = all_ap.mean()
+            if np.isnan(map):
+                return 0
+            else:
+                return map
+        else:
+            return self.all_ap.mean() if len(self.all_ap) else 0.0
 
     def mean_results(self):
         """Mean of results, return mp, mr, map50, map."""
@@ -858,6 +1021,133 @@ class DetMetrics(SimpleClass):
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
         return self.box.class_result(i)
+
+    @property
+    def maps(self):
+        """Returns mean Average Precision (mAP) scores per class."""
+        return self.box.maps
+
+    @property
+    def fitness(self):
+        """Returns the fitness of box object."""
+        return self.box.fitness()
+
+    @property
+    def ap_class_index(self):
+        """Returns the average precision index per class."""
+        return self.box.ap_class_index
+
+    @property
+    def results_dict(self):
+        """Returns dictionary of computed performance metrics and statistics."""
+        return dict(zip(self.keys + ["fitness"], self.mean_results() + [self.fitness]))
+
+    @property
+    def curves(self):
+        """Returns a list of curves for accessing specific metrics curves."""
+        return ["Precision-Recall(B)", "F1-Confidence(B)", "Precision-Confidence(B)", "Recall-Confidence(B)"]
+
+    @property
+    def curves_results(self):
+        """Returns dictionary of computed performance metrics and statistics."""
+        return self.box.curves_results
+
+
+class MDetMetrics(SimpleClass):
+    """
+    This class is a utility class for computing detection metrics such as precision, recall, and mean average precision
+    (mAP) of an object detection model.
+
+    Args:
+        save_dir (Path): A path to the directory where the output plots will be saved. Defaults to current directory.
+        plot (bool): A flag that indicates whether to plot precision-recall curves for each class. Defaults to False.
+        on_plot (func): An optional callback to pass plots path and data when they are rendered. Defaults to None.
+        names (tuple of str): A tuple of strings that represents the names of the classes. Defaults to an empty tuple.
+
+    Attributes:
+        save_dir (Path): A path to the directory where the output plots will be saved.
+        plot (bool): A flag that indicates whether to plot the precision-recall curves for each class.
+        on_plot (func): An optional callback to pass plots path and data when they are rendered.
+        names (tuple of str): A tuple of strings that represents the names of the classes.
+        box (Metric): An instance of the Metric class for storing the results of the detection metrics.
+        speed (dict): A dictionary for storing the execution time of different parts of the detection process.
+
+    Methods:
+        process(tp, conf, pred_cls, target_cls): Updates the metric results with the latest batch of predictions.
+        keys: Returns a list of keys for accessing the computed detection metrics.
+        mean_results: Returns a list of mean values for the computed detection metrics.
+        class_result(i): Returns a list of values for the computed detection metrics for a specific class.
+        maps: Returns a dictionary of mean average precision (mAP) values for different IoU thresholds.
+        fitness: Computes the fitness score based on the computed detection metrics.
+        ap_class_index: Returns a list of class indices sorted by their average precision (AP) values.
+        results_dict: Returns a dictionary that maps detection metric keys to their computed values.
+        curves: TODO
+        curves_results: TODO
+    """
+
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), attribute_names=(), nc=0, na=0) -> None:
+        """Initialize a DetMetrics instance with a save directory, plot flag, callback function, and class names."""
+        self.save_dir = save_dir
+        self.plot = plot
+        self.on_plot = on_plot
+        self.names = names
+        self.box = Metric()
+        self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
+        self.task = "mdetect"
+        self.attributes = Metric()
+        self.attribute_names = attribute_names
+        self.nc = nc
+        self.na = na
+
+    def get_attribute_names(self):
+        attribute_dict = self.attribute_names
+        attribute_names = []
+        for k, v in attribute_dict.items():
+            if len(v) == 2:
+                attribute_names.append(k)
+            elif len(v) > 2:
+                for i in range(1, len(v)):
+                    attribute_name = '%s_%s'%(k, v[i])
+                    attribute_names.append(attribute_name)
+            else:
+                print('Error in get_attribute_names')
+        self.attribute_names = attribute_names
+
+    def process(self, tp, ap, conf, pred_cls, target_cls, pred_attributes, target_attributes):
+        """Process predicted results for object detection and update metrics."""
+        results = ap_per_class(
+            tp,
+            conf,
+            pred_cls,
+            target_cls,
+            plot=self.plot,
+            save_dir=self.save_dir,
+            names=self.names,
+            on_plot=self.on_plot,
+        )[2:]
+        self.box.nc = self.nc
+        self.box.update(results)
+        self.attributes.nc = self.na
+        self.attributes.all_ap = np.mean(ap, axis=0)
+        # self.attribute_names = self.get_attribute_names(self.attribute_names)
+
+
+    @property
+    def keys(self):
+        """Returns a list of keys for accessing specific metrics."""
+        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mAP"]
+
+
+    def mean_results(self):
+        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
+        return self.box.mean_results() + [self.attributes.map]
+
+    def class_result(self, i):
+        """Return the result of evaluating the performance of an object detection model on a specific class."""
+        if i < self.nc:
+            return self.box.class_result(i) + (0,)
+        else:
+            return (0, 0, 0, 0) + (self.attributes.all_ap[i-self.nc],)
 
     @property
     def maps(self):

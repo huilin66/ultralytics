@@ -208,7 +208,7 @@ class Instances:
         This class does not perform input validation, and it assumes the inputs are well-formed.
     """
 
-    def __init__(self, bboxes, segments=None, keypoints=None, bbox_format="xywh", normalized=True) -> None:
+    def __init__(self, bboxes, segments=None, keypoints=None, bbox_format="xywh", normalized=True, mdet_attributes=None) -> None:
         """
         Args:
             bboxes (ndarray): bboxes with shape [N, 4].
@@ -219,6 +219,7 @@ class Instances:
         self.keypoints = keypoints
         self.normalized = normalized
         self.segments = segments
+        self.mdet_attributes = mdet_attributes
 
     def convert_bbox(self, format):
         """Convert bounding box format."""
@@ -293,6 +294,7 @@ class Instances:
         segments = self.segments[index] if len(self.segments) else self.segments
         keypoints = self.keypoints[index] if self.keypoints is not None else None
         bboxes = self.bboxes[index]
+        mdet_attributes = self.mdet_attributes[index] if self.mdet_attributes is not None else None
         bbox_format = self._bboxes.format
         return Instances(
             bboxes=bboxes,
@@ -300,6 +302,7 @@ class Instances:
             keypoints=keypoints,
             bbox_format=bbox_format,
             normalized=self.normalized,
+            mdet_attributes=mdet_attributes,
         )
 
     def flipud(self, h):
@@ -351,6 +354,8 @@ class Instances:
                 self.segments = self.segments[good]
             if self.keypoints is not None:
                 self.keypoints = self.keypoints[good]
+            if self.mdet_attributes is not None:
+                self.mdet_attributes = self.mdet_attributes[good]
         return good
 
     def update(self, bboxes, segments=None, keypoints=None):
@@ -392,13 +397,15 @@ class Instances:
             return instances_list[0]
 
         use_keypoint = instances_list[0].keypoints is not None
+        use_attribute = instances_list[0].mdet_attributes is not None
         bbox_format = instances_list[0]._bboxes.format
         normalized = instances_list[0].normalized
 
         cat_boxes = np.concatenate([ins.bboxes for ins in instances_list], axis=axis)
         cat_segments = np.concatenate([b.segments for b in instances_list], axis=axis)
         cat_keypoints = np.concatenate([b.keypoints for b in instances_list], axis=axis) if use_keypoint else None
-        return cls(cat_boxes, cat_segments, cat_keypoints, bbox_format, normalized)
+        cat_mdet_attributes = np.concatenate([ins.mdet_attributes for ins in instances_list], axis=axis) if use_attribute else None
+        return cls(cat_boxes, cat_segments, cat_keypoints, bbox_format, normalized, cat_mdet_attributes)
 
     @property
     def bboxes(self):

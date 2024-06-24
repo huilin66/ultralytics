@@ -513,6 +513,7 @@ class BaseTrainer:
                 "segment",
                 "pose",
                 "obb",
+                'mdetect',
             }:
                 data = check_det_dataset(self.args.data)
                 if "yaml_file" in data:

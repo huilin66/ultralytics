@@ -156,6 +156,13 @@ class BaseValidator:
             model.eval()
             model.warmup(imgsz=(1 if pt else self.args.batch, 3, imgsz, imgsz))  # warmup
 
+        if isinstance(model, AutoBackend):
+            model.model.nc = self.data['nc']
+            model.model.names = self.data['names']
+            if 'na' in self.data:
+                model.model.na = self.data['na']
+                model.model.attribute_names = self.data['attributes']
+
         self.run_callbacks("on_val_start")
         dt = (
             Profile(device=self.device),
