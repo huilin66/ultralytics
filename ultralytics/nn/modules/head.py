@@ -148,13 +148,15 @@ class MDetect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch
         )
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
-        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.na, 1)) for x in ch)
+        # self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.na, 1)) for x in ch)
+        self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, 1, 1)) for x in ch) for _ in range(self.na))
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         for i in range(self.nl):
-            x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+            # x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+            x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])]+[self.cv4[j][i](x[i]) for j in range(self.na)], 1)
         if self.training:  # Training path
             return x
 

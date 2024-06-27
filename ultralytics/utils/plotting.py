@@ -196,16 +196,6 @@ class Annotator:
                 outside = p1[1] - h >= 3
                 p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
                 cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)  # filled
-                # cv2.putText(
-                #     self.im,
-                #     label,
-                #     (p1[0], p1[1] - 2 if outside else p1[1] + h + 2),
-                #     0,
-                #     self.sf,
-                #     txt_color,
-                #     thickness=self.tf,
-                #     lineType=cv2.LINE_AA,
-                # )
                 p0 = p1[0]
                 p1 = p1[1] - 2 if outside else p1[1] + h + 2
                 cv2.putText(
@@ -328,6 +318,7 @@ class Annotator:
                     xy[1] += h
             else:
                 self.draw.text(xy, text, fill=txt_color, font=self.font)
+            br_pos = [[0, 0], [0, 0]]
         else:
             if box_style:
                 w, h = cv2.getTextSize(text, 0, fontScale=self.sf, thickness=self.tf)[0]  # text width, height
@@ -337,6 +328,16 @@ class Annotator:
                 # Using `txt_color` for background and draw fg with white color
                 txt_color = (255, 255, 255)
             cv2.putText(self.im, text, xy, 0, self.sf, txt_color, thickness=self.tf, lineType=cv2.LINE_AA)
+            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, self.sf, self.tf)
+            br_pos = (xy[0] + text_width, xy[1])
+        return br_pos
+
+    def rectangle_mask(self, box, color, alpha=0.5,):
+        p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
+        cv2.rectangle(self.im, p1, p2, color)
+        overlay = self.im.copy()
+        cv2.rectangle(overlay, p1, p2, color, -1)
+        cv2.addWeighted(overlay, alpha, self.im, 1 - alpha, 0, self.im)
 
     def fromarray(self, im):
         """Update self.im from a numpy array."""

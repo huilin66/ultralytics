@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from ultralytics.data import build_dataloader, build_yolo_dataset, converter
+from ultralytics.data import build_dataloader, build_yolo_dataset, converter, build_yolo_mdet_dataset
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.nn.tasks import MDetectionModel
 from ultralytics.utils import LOGGER, ops
@@ -36,7 +36,7 @@ class MDetectionValidator(BaseValidator):
         self.is_coco = False
         self.is_lvis = False
         self.class_map = None
-        self.args.task = "detect"
+        self.args.task = "mdetect"
         self.metrics = MDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
         self.iouv = torch.linspace(0.5, 0.95, 10)  # IoU vector for mAP@0.5:0.95
         self.niou = self.iouv.numel()
@@ -308,7 +308,7 @@ class MDetectionValidator(BaseValidator):
             mode (str): `train` mode or `val` mode, users are able to customize different augmentations for each mode.
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
+        return build_yolo_mdet_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
 
     def get_dataloader(self, dataset_path, batch_size):
         """Construct and return dataloader."""

@@ -236,8 +236,15 @@ class BaseTrainer:
             if isinstance(self.args.freeze, int)
             else []
         )
+        freeze_head_list = (
+            self.args.freeze_head
+            if isinstance(self.args.freeze_head, list)
+            else range(self.args.freeze_head)
+            if isinstance(self.args.freeze_head, int)
+            else []
+        )
         always_freeze_names = [".dfl"]  # always freeze these layers
-        freeze_layer_names = [f"model.{x}." for x in freeze_list] + always_freeze_names
+        freeze_layer_names = [f"model.{x}." for x in freeze_list] + always_freeze_names + freeze_head_list
         for k, v in self.model.named_parameters():
             # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
             if any(x in k for x in freeze_layer_names):
@@ -249,6 +256,8 @@ class BaseTrainer:
                     "See ultralytics.engine.trainer for customization of frozen layers."
                 )
                 v.requires_grad = True
+            else:
+                LOGGER.info(f"Training layer '{k}'")
 
         # Check AMP
         self.amp = torch.tensor(self.args.amp).to(self.device)  # True or False

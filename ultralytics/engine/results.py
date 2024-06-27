@@ -672,14 +672,21 @@ class MdetResults(SimpleClass):
                 attribute = a.result
                 count = 0
                 pos_base = poss[i]
+                br_poss = []
                 for idx, (k, v) in enumerate(attribute.items()):
                     label = f'{k}-{v}'
                     if filter_no and not v:
                         continue
+                    if k=='surface_obstructed':
+                        continue
                     count += 1
-                    pos = [pos_base[0], pos_base[1]+10*(count+1)]
-                    annotator.text(pos, label, txt_color=colors(idx, True))
-
+                    pos = [pos_base[0], pos_base[1]+15*(count+1)-10]
+                    br_pos = annotator.text(pos, label, txt_color=colors(idx, True))
+                    br_poss.append(br_pos)
+                br_poss = np.array(br_poss)
+                tl_pos = pos_base
+                br_pos = (np.max(br_poss, axis=0)[0], br_poss[-1][1])
+                annotator.rectangle_mask(box=tl_pos+br_pos, color=(255, 255, 255), alpha=0.5,)
         # Plot Classify results
         if pred_probs is not None and show_probs:
             text = ",\n".join(f"{names[j] if names else j} {pred_probs.data[j]:.2f}" for j in pred_probs.top5)
