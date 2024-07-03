@@ -172,7 +172,7 @@ class MDetect(nn.Module):
     anchors = torch.empty(0)  # init
     strides = torch.empty(0)  # init
 
-    def __init__(self, nc=80, na=14, ch=()):
+    def __init__(self, nc=80, na=14, sep=True, c4=None, ch=()):
         """Initializes the YOLOv8 detection layer with specified number of classes and channels."""
         super().__init__()
         self.nc = nc  # number of classes
@@ -186,15 +186,22 @@ class MDetect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch
         )
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
-        # self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.na, 1)) for x in ch)
-        self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, 1, 1)) for x in ch) for _ in range(self.na))
+        self.sep=sep
+        c4 = c3 if c4 is None else c4
+        if not self.sep:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+        else:
+            self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         for i in range(self.nl):
-            # x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
-            x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])]+[self.cv4[j][i](x[i]) for j in range(self.na)], 1)
+            if not self.sep:
+                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+            else:
+                x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])]+[self.cv4[j][i](x[i]) for j in range(self.na)], 1)
         if self.training:  # Training path
             return x
 

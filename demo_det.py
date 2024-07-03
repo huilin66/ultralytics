@@ -1,5 +1,5 @@
 import torch
-from ultralytics import YOLO, YOLOv10, RTDETR
+from ultralytics import YOLO, RTDETR
 BATCH_SIZE = 2
 EPOCHS = 2
 DEVICE = torch.device('cuda:0')
@@ -23,7 +23,8 @@ def yolo9_e():
 
 
 def yolo10_x():
-    model = YOLOv10('yolov10x.pt')
+    model = YOLO("yolov10x.yaml", task='detect')
+    model.load('yolov10x.pt')
     model.train(data=DATA, device=DEVICE,
                 epochs=EPOCHS, imgsz=640, val=True, batch=BATCH_SIZE, patience=EPOCHS)
 
@@ -37,5 +38,5 @@ if __name__ == '__main__':
     pass
     # yolo8_x()
     # yolo9_e()
-    # yolo10_x()
-    rtdetr_x()
+    yolo10_x()
+    # rtdetr_x()

@@ -844,6 +844,7 @@ class v8MDetectionLoss(v8DetectionLoss):
                 pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
             )
 
+        gt_attributes = gt_attributes * 0.6 + 0.4
         # pos_weight = torch.tensor([10.0]).to(self.device)
         # loss[3] = F.binary_cross_entropy_with_logits(
         #                                              input=pred_attributes,

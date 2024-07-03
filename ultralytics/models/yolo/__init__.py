@@ -2,6 +2,6 @@
 
 from ultralytics.models.yolo import classify, detect, mdetect, obb, pose, segment, world
 
-from .model import YOLO, YOLOWorld, YOLOv10
+from .model import YOLO, YOLOWorld
 
-__all__ = "classify", "segment", "detect", "mdetect", "pose", "obb", "world", "YOLO", "YOLOWorld", "YOLOv10"
+__all__ = "classify", "segment", "detect", "mdetect", "pose", "obb", "world", "YOLO", "YOLOWorld"
