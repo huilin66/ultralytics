@@ -6,12 +6,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from ultralytics.data import build_dataloader, build_yolo_dataset, converter, build_yolo_mdet_dataset
+from ultralytics.data import build_dataloader, converter, build_yolo_mdet_dataset
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.nn.tasks import MDetectionModel
 from ultralytics.utils import LOGGER, ops
 from ultralytics.utils.checks import check_requirements
-from ultralytics.utils.metrics import ConfusionMatrix, MConfusionMatrix, DetMetrics, MDetMetrics, box_iou
+from ultralytics.utils.metrics import MConfusionMatrix, MDetMetrics, box_iou
 from ultralytics.utils.plotting import output_to_target, plot_images
 
 

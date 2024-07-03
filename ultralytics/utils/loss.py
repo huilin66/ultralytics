@@ -737,7 +737,7 @@ class E2EDetectLoss:
 
 class v8MDetectionLoss(v8DetectionLoss):
     """Criterion class for computing training losses."""
-    def __init__(self, model, epsilon=None, size_sum=False, weight_ratio=False):
+    def __init__(self, model, mloss_enlarge=0.4, epsilon=None, size_sum=False, weight_ratio=False):
         super().__init__(model)
         if epsilon is not None and (epsilon <= 0 or epsilon >= 1):
             epsilon = None
@@ -745,11 +745,11 @@ class v8MDetectionLoss(v8DetectionLoss):
         self.weight_ratio = weight_ratio
         self.size_sum = size_sum
 
-
         m = model.model[-1]
         self.na = m.na
         self.no = m.nc + m.na + m.reg_max * 4
         self.assigner = TaskAlignedAssignerMdet(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
+        self.mloss_enlarge=mloss_enlarge
 
     def _labelsmoothing(self, target, class_num):
         # if target.ndim == 1 or target.shape[-1] != class_num:
@@ -844,13 +844,8 @@ class v8MDetectionLoss(v8DetectionLoss):
                 pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
             )
 
-        gt_attributes = gt_attributes * 0.6 + 0.4
-        # pos_weight = torch.tensor([10.0]).to(self.device)
-        # loss[3] = F.binary_cross_entropy_with_logits(
-        #                                              input=pred_attributes,
-        #                                              target=gt_attributes,
-        #                                              pos_weight=pos_weight,
-        #                                              )
+        gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
+
         loss[3] = F.binary_cross_entropy_with_logits(
                                                      input=pred_attributes,
                                                      target=gt_attributes,
@@ -861,25 +856,6 @@ class v8MDetectionLoss(v8DetectionLoss):
         loss[3] *= self.hyp.mdet # mdet gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
-
-
-        target = batch["mdetect_attributes"]
-        if self.weight_ratio:
-            target, label_ratio = target[:, 0, :], target[:, 1, :]
-        if self.epsilon is not None:
-            target = self._labelsmoothing(target, self.class_num)
-        cost = F.binary_cross_entropy_with_logits(
-            logit=input, label=target, reduction='none')
-
-        if self.weight_ratio:
-            targets_mask = torch.tensor(target > 0.5, dtype=torch.float32)
-            weight = self.ratio2weight(targets_mask, torch.tensor(label_ratio))
-            weight = weight * (target > -1)
-            cost = cost * weight
-
-        if self.size_sum:
-            cost = cost.sum(1).mean() if self.size_sum else cost.mean()
-        return cost
 
 
 class v10DetectLoss:

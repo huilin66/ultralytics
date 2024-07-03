@@ -915,21 +915,6 @@ class MultiHeadAttention(nn.Module):
         self.head_dim = embed_dim // num_heads
         assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
 
-        # if self._qkv_same_embed_dim:
-        #     self.in_proj_weight = self.create_parameter(
-        #         shape=[embed_dim, 3 * embed_dim],
-        #         attr=None,
-        #         dtype=self._dtype,
-        #         is_bias=False)
-        #     self.in_proj_bias = self.create_parameter(
-        #         shape=[3 * embed_dim],
-        #         attr=None,
-        #         dtype=self._dtype,
-        #         is_bias=True)
-        # else:
-        #     self.q_proj = nn.Linear(embed_dim, embed_dim)
-        #     self.k_proj = nn.Linear(self.kdim, embed_dim)
-        #     self.v_proj = nn.Linear(self.vdim, embed_dim)
         if not self._qkv_same_embed_dim:
             self.q_proj_weight = Parameter(torch.empty((embed_dim, embed_dim), ))
             self.k_proj_weight = Parameter(torch.empty((embed_dim, self.kdim), ))
@@ -1016,14 +1001,10 @@ class MultiHeadAttention(nn.Module):
         key = query if key is None else key
         value = query if value is None else value
         # compute q ,k ,v
-        # q, k, v = (self.compute_qkv(t, i)
-        #            for i, t in enumerate([query, key, value]))
-
         q = query.reshape([query.shape[0], query.shape[1], 4, -1]).transpose(1, 2)
         k = key.reshape([query.shape[0], query.shape[1], 4, -1]).transpose(1, 2)
         v = value.reshape([query.shape[0], query.shape[1], 4, -1]).transpose(1, 2)
 
-        # return q.transpose(1, 2).reshape([query.shape[0], query.shape[1], query.shape[2]])
         # scale dot product attention
         product = torch.matmul(q, k.transpose(2, 3))
         scaling = float(self.head_dim)**-0.5
@@ -1045,7 +1026,7 @@ class MultiHeadAttention(nn.Module):
         # combine heads
         out = torch.transpose(out, 1, 2)
         out = torch.reshape(out, [out.shape[0], out.shape[1], out.shape[2] * out.shape[3]])
-        # return out
+
         # project to output
         out = self.out_proj(out)
 
