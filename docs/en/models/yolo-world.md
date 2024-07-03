@@ -1,7 +1,7 @@
 ---
 comments: true
-description: Discover YOLO-World, a YOLOv8-based framework for real-time open-vocabulary object detection in images. It enhances user interaction, boosts computational efficiency, and adapts across various vision tasks.
-keywords: YOLO-World, YOLOv8, machine learning, CNN-based framework, object detection, real-time detection, Ultralytics, vision tasks, image processing, industrial applications, user interaction
+description: Explore the YOLO-World Model for efficient, real-time open-vocabulary object detection using Ultralytics YOLOv8 advancements. Achieve top performance with minimal computation.
+keywords: YOLO-World, Ultralytics, open-vocabulary detection, YOLOv8, real-time object detection, machine learning, computer vision, AI, deep learning, model training
 ---
 
 # YOLO-World Model
@@ -48,20 +48,20 @@ This section details the models available with their specific pre-trained weight
     All the YOLOv8-World weights have been directly migrated from the official [YOLO-World](https://github.com/AILab-CVC/YOLO-World) repository, highlighting their excellent contributions.
 
 | Model Type      | Pre-trained Weights                                                                                     | Tasks Supported                        | Inference | Validation | Training | Export |
-|-----------------|---------------------------------------------------------------------------------------------------------|----------------------------------------|-----------|------------|----------|--------|
-| YOLOv8s-world   | [yolov8s-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8s-world.pt)     | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ❌      |
-| YOLOv8s-worldv2 | [yolov8s-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8s-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv8m-world   | [yolov8m-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8m-world.pt)     | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ❌      |
-| YOLOv8m-worldv2 | [yolov8m-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8m-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv8l-world   | [yolov8l-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8l-world.pt)     | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ❌      |
-| YOLOv8l-worldv2 | [yolov8l-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8l-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv8x-world   | [yolov8x-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8x-world.pt)     | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ❌      |
-| YOLOv8x-worldv2 | [yolov8x-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8x-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
+| --------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------- | ---------- | -------- | ------ |
+| YOLOv8s-world   | [yolov8s-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8s-world.pt)     | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ❌     |
+| YOLOv8s-worldv2 | [yolov8s-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8s-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv8m-world   | [yolov8m-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8m-world.pt)     | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ❌     |
+| YOLOv8m-worldv2 | [yolov8m-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8m-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv8l-world   | [yolov8l-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8l-world.pt)     | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ❌     |
+| YOLOv8l-worldv2 | [yolov8l-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8l-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv8x-world   | [yolov8x-world.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8x-world.pt)     | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ❌     |
+| YOLOv8x-worldv2 | [yolov8x-worldv2.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8x-worldv2.pt) | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
 
 ## Zero-shot Transfer on COCO Dataset
 
 | Model Type      | mAP  | mAP50 | mAP75 |
-|-----------------|------|-------|-------|
+| --------------- | ---- | ----- | ----- |
 | yolov8s-world   | 37.4 | 52.0  | 40.6  |
 | yolov8s-worldv2 | 37.7 | 52.2  | 41.0  |
 | yolov8m-world   | 42.0 | 57.0  | 45.6  |
@@ -272,7 +272,7 @@ This approach provides a powerful means of customizing state-of-the-art object d
 - Train data
 
 | Dataset                                                           | Type      | Samples | Boxes | Annotation Files                                                                                                                           |
-|-------------------------------------------------------------------|-----------|---------|-------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------------------------------------------------- | --------- | ------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | [Objects365v1](https://opendatalab.com/OpenDataLab/Objects365_v1) | Detection | 609k    | 9621k | [objects365_train.json](https://opendatalab.com/OpenDataLab/Objects365_v1)                                                                 |
 | [GQA](https://nlp.stanford.edu/data/gqa/images.zip)               | Grounding | 621k    | 3681k | [final_mixed_train_no_coco.json](https://huggingface.co/GLIPModel/GLIP/blob/main/mdetr_annotations/final_mixed_train_no_coco.json)         |
 | [Flickr30k](https://shannon.cs.illinois.edu/DenotationGraph/)     | Grounding | 149k    | 641k  | [final_flickr_separateGT_train.json](https://huggingface.co/GLIPModel/GLIP/blob/main/mdetr_annotations/final_flickr_separateGT_train.json) |
@@ -280,7 +280,7 @@ This approach provides a powerful means of customizing state-of-the-art object d
 - Val data
 
 | Dataset                                                                                                 | Type      | Annotation Files                                                                                       |
-|---------------------------------------------------------------------------------------------------------|-----------|--------------------------------------------------------------------------------------------------------|
+| ------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
 | [LVIS minival](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/lvis.yaml) | Detection | [minival.txt](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/lvis.yaml) |
 
 ### Launch training from scratch
@@ -335,3 +335,61 @@ We extend our gratitude to the [Tencent AILab Computer Vision Center](https://ai
         ```
 
 For further reading, the original YOLO-World paper is available on [arXiv](https://arxiv.org/pdf/2401.17270v2.pdf). The project's source code and additional resources can be accessed via their [GitHub repository](https://github.com/AILab-CVC/YOLO-World). We appreciate their commitment to advancing the field and sharing their valuable insights with the community.
+
+## FAQ
+
+### What is the YOLO-World Model and how does it improve open-vocabulary object detection?
+
+The YOLO-World Model is an advanced, real-time object detection model based on Ultralytics YOLOv8, designed specifically for open-vocabulary detection tasks. It leverages vision-language modeling and pre-training on large datasets to detect a broad range of objects based on descriptive texts, significantly reducing computational demands while maintaining high performance. This makes it suitable for real-time applications across various industries needing immediate results.
+
+### How do I train a custom YOLO-World Model using the Ultralytics API?
+
+Training a custom YOLO-World Model is straightforward with Ultralytics' API. You can use pretrained weights and configuration files to start training on your dataset. Here is an example of training with Python:
+
+```python
+from ultralytics import YOLOWorld
+
+# Load a pretrained YOLOv8s-worldv2 model
+model = YOLOWorld("yolov8s-worldv2.pt")
+
+# Train the model on the COCO8 example dataset for 100 epochs
+results = model.train(data="coco8.yaml", epochs=100, imgsz=640)
+
+# Run inference with the YOLOv8s-worldv2 model on an image
+results = model("path/to/image.jpg")
+```
+
+Refer to the [Training](../modes/train.md) page for more details.
+
+### What are the main advantages of using YOLO-World for object detection?
+
+YOLO-World offers several advantages:
+
+- **Real-time detection**: Utilizes CNNs for high-speed inference.
+- **Lower computational demand**: Efficiently processes images with minimal resources.
+- **Open-vocabulary detection**: Detects objects without predefined categories, based on descriptive texts.
+- **High performance**: Outperforms other models on standard benchmarks while running on a single NVIDIA V100 GPU.
+
+### Can I customize the classes YOLO-World detects without retraining the model?
+
+Yes, YOLO-World allows you to dynamically specify detection classes through custom prompts without retraining the model. Here's an example of how to set custom classes:
+
+```python
+from ultralytics import YOLOWorld
+
+# Initialize a YOLO-World model
+model = YOLOWorld("yolov8s-world.pt")
+
+# Define custom classes
+model.set_classes(["person", "bus"])
+
+# Execute prediction on an image
+results = model.predict("path/to/image.jpg")
+results[0].show()
+```
+
+You can learn more about this feature on the [Predict Usage](#predict-usage) section.
+
+### What datasets are supported for training YOLO-World from scratch?
+
+YOLO-World supports various datasets for training, including Objects365, GQA, and Flickr30k for detection and grounding tasks. For validation, it supports datasets like LVIS minival. Detailed information about preparing and using these datasets can be found in the [Zero-shot Transfer on COCO Dataset](#zero-shot-transfer-on-coco-dataset) section.

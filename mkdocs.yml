@@ -5,8 +5,8 @@
 # Material theme, define the navigation structure, and enable various plugins.
 
 # Site metadata
-site_name: Ultralytics YOLOv8 Docs
-site_description: Explore Ultralytics YOLOv8, a cutting-edge real-time object detection and image segmentation model for various applications and hardware platforms.
+site_name: Ultralytics YOLO Docs
+site_description: Explore Ultralytics YOLO, a cutting-edge real-time object detection and image segmentation model for various applications and hardware platforms.
 site_url: https://docs.ultralytics.com
 site_author: Ultralytics
 repo_url: https://github.com/ultralytics/ultralytics
@@ -84,7 +84,7 @@ extra: # version:
     - icon: fontawesome/brands/x-twitter
       link: https://twitter.com/ultralytics
     - icon: fontawesome/brands/youtube
-      link: https://www.youtube.com/ultralytics
+      link: https://youtube.com/ultralytics?sub_confirmation=1
     - icon: fontawesome/brands/docker
       link: https://hub.docker.com/r/ultralytics/ultralytics/
     - icon: fontawesome/brands/python
@@ -156,11 +156,13 @@ nav:
           - models/index.md
       - Datasets:
           - datasets/index.md
+      - Solutions:
+          - solutions/index.md
       - Guides:
           - guides/index.md
-      - New 🚀 Analytics: guides/analytics.md
       - Explorer:
           - datasets/explorer/index.md
+      - NEW 🚀 Analytics: guides/analytics.md # for promotion of new pages
       - Languages:
           - 🇬🇧&nbsp English: https://ultralytics.com/docs/
           - 🇨🇳&nbsp 简体中文: https://docs.ultralytics.com/zh/
@@ -184,6 +186,31 @@ nav:
           - Configuration: usage/cfg.md
           - Simple Utilities: usage/simple-utilities.md
           - Advanced Customization: usage/engine.md
+      - Modes:
+          - modes/index.md
+          - Train: modes/train.md
+          - Val: modes/val.md
+          - Predict: modes/predict.md
+          - Export: modes/export.md
+          - Track: modes/track.md
+          - Benchmark: modes/benchmark.md
+      - Tasks:
+          - tasks/index.md
+          - Detect: tasks/detect.md
+          - Segment: tasks/segment.md
+          - Classify: tasks/classify.md
+          - Pose: tasks/pose.md
+          - OBB: tasks/obb.md
+      - Models:
+          - models/index.md
+      - Datasets:
+          - datasets/index.md
+      - Solutions:
+          - solutions/index.md
+      - Guides:
+          - guides/index.md
+      - Explorer:
+          - datasets/explorer/index.md
   - Modes:
       - modes/index.md
       - Train: modes/train.md
@@ -217,7 +244,7 @@ nav:
       - YOLO-World (Real-Time Open-Vocabulary Object Detection): models/yolo-world.md
   - Datasets:
       - datasets/index.md
-      - NEW 🚀 Explorer:
+      - Explorer:
           - datasets/explorer/index.md
           - Explorer API: datasets/explorer/api.md
           - Explorer Dashboard: datasets/explorer/dashboard.md
@@ -269,11 +296,22 @@ nav:
           - DOTA8: datasets/obb/dota8.md
       - Multi-Object Tracking:
           - datasets/track/index.md
-  - NEW 🚀 Explorer:
-      - datasets/explorer/index.md
-      - Explorer API: datasets/explorer/api.md
-      - Explorer Dashboard Demo: datasets/explorer/dashboard.md
-      - VOC Exploration Example: datasets/explorer/explorer.ipynb
+  - NEW 🚀 Solutions:
+      - solutions/index.md
+      - NEW 🚀 Analytics: guides/analytics.md
+      - Object Counting: guides/object-counting.md
+      - Object Cropping: guides/object-cropping.md
+      - Object Blurring: guides/object-blurring.md
+      - Workouts Monitoring: guides/workouts-monitoring.md
+      - Objects Counting in Regions: guides/region-counting.md
+      - Security Alarm System: guides/security-alarm-system.md
+      - Heatmaps: guides/heatmaps.md
+      - Instance Segmentation with Object Tracking: guides/instance-segmentation-and-tracking.md
+      - VisionEye Mapping: guides/vision-eye.md
+      - Speed Estimation: guides/speed-estimation.md
+      - Distance Calculation: guides/distance-calculation.md
+      - Queue Management: guides/queue-management.md
+      - Parking Management: guides/parking-management.md
   - Guides:
       - guides/index.md
       - YOLO Common Issues: guides/yolo-common-issues.md
@@ -288,26 +326,24 @@ nav:
       - Docker Quickstart: guides/docker-quickstart.md
       - Raspberry Pi: guides/raspberry-pi.md
       - NVIDIA Jetson: guides/nvidia-jetson.md
+      - DeepStream on NVIDIA Jetson: guides/deepstream-nvidia-jetson.md
       - Triton Inference Server: guides/triton-inference-server.md
       - Isolating Segmentation Objects: guides/isolating-segmentation-objects.md
       - Edge TPU on Raspberry Pi: guides/coral-edge-tpu-on-raspberry-pi.md
       - Viewing Inference Images in a Terminal: guides/view-results-in-terminal.md
       - OpenVINO Latency vs Throughput modes: guides/optimizing-openvino-latency-vs-throughput-modes.md
-      - Real-World Projects:
-          - NEW 🚀 Analytics: guides/analytics.md
-          - Object Counting: guides/object-counting.md
-          - Object Cropping: guides/object-cropping.md
-          - Object Blurring: guides/object-blurring.md
-          - Workouts Monitoring: guides/workouts-monitoring.md
-          - Objects Counting in Regions: guides/region-counting.md
-          - Security Alarm System: guides/security-alarm-system.md
-          - Heatmaps: guides/heatmaps.md
-          - Instance Segmentation with Object Tracking: guides/instance-segmentation-and-tracking.md
-          - VisionEye Mapping: guides/vision-eye.md
-          - Speed Estimation: guides/speed-estimation.md
-          - Distance Calculation: guides/distance-calculation.md
-          - Queue Management: guides/queue-management.md
-          - Parking Management: guides/parking-management.md
+      - ROS Quickstart: guides/ros-quickstart.md
+      - Steps of a Computer Vision Project: guides/steps-of-a-cv-project.md
+      - Defining A Computer Vision Project's Goals: guides/defining-project-goals.md
+      - Data Collection and Annotation: guides/data-collection-and-annotation.md
+      - Preprocessing Annotated Data: guides/preprocessing_annotated_data.md
+      - Tips for Model Training: guides/model-training-tips.md
+      - Insights on Model Evaluation and Fine-Tuning: guides/model-evaluation-insights.md
+      - Explorer:
+          - datasets/explorer/index.md
+          - Explorer API: datasets/explorer/api.md
+          - Explorer Dashboard Demo: datasets/explorer/dashboard.md
+          - VOC Exploration Example: datasets/explorer/explorer.ipynb
       - YOLOv5:
           - yolov5/index.md
           - Quickstart: yolov5/quickstart_tutorial.md
@@ -322,7 +358,6 @@ nav:
               - Multi-GPU Training: yolov5/tutorials/multi_gpu_training.md
               - PyTorch Hub: yolov5/tutorials/pytorch_hub_model_loading.md
               - TFLite, ONNX, CoreML, TensorRT Export: yolov5/tutorials/model_export.md
-              - NVIDIA Jetson Nano Deployment: yolov5/tutorials/running_on_jetson_nano.md
               - Test-Time Augmentation (TTA): yolov5/tutorials/test_time_augmentation.md
               - Model Ensembling: yolov5/tutorials/model_ensembling.md
               - Pruning/Sparsity Tutorial: yolov5/tutorials/model_pruning_and_sparsity.md
@@ -361,6 +396,7 @@ nav:
       - Paperspace Gradient: integrations/paperspace.md
       - Google Colab: integrations/google-colab.md
   - HUB:
+      - hub/index.md
       - Web:
           - hub/index.md
           - Quickstart: hub/quickstart.md
@@ -621,7 +657,7 @@ plugins:
         tutorials/hyperparameter-evolution.md: yolov5/tutorials/hyperparameter_evolution.md
         tutorials/model-ensembling.md: yolov5/tutorials/model_ensembling.md
         tutorials/multi-gpu-training.md: yolov5/tutorials/multi_gpu_training.md
-        tutorials/nvidia-jetson.md: yolov5/tutorials/running_on_jetson_nano.md
+        tutorials/nvidia-jetson.md: guides/nvidia-jetson.md
         tutorials/pruning-sparsity.md: yolov5/tutorials/model_pruning_and_sparsity.md
         tutorials/pytorch-hub.md: yolov5/tutorials/pytorch_hub_model_loading.md
         tutorials/roboflow.md: yolov5/tutorials/roboflow_datasets_integration.md
@@ -640,7 +676,7 @@ plugins:
         yolov5/tta.md: yolov5/tutorials/test_time_augmentation.md
         yolov5/multi_gpu_training.md: yolov5/tutorials/multi_gpu_training.md
         yolov5/ensemble.md: yolov5/tutorials/model_ensembling.md
-        yolov5/jetson_nano.md: yolov5/tutorials/running_on_jetson_nano.md
+        yolov5/jetson_nano.md: guides/nvidia-jetson.md
         yolov5/transfer_learn_frozen.md: yolov5/tutorials/transfer_learning_with_frozen_layers.md
         yolov5/neural_magic.md: yolov5/tutorials/neural_magic_pruning_quantization.md
         yolov5/train_custom_data.md: yolov5/tutorials/train_custom_data.md
@@ -655,7 +691,7 @@ plugins:
         yolov5/tutorials/multi_gpu_training_tutorial.md: yolov5/tutorials/multi_gpu_training.md
         yolov5/tutorials/yolov5_pytorch_hub_tutorial.md: yolov5/tutorials/pytorch_hub_model_loading.md
         yolov5/tutorials/model_export_tutorial.md: yolov5/tutorials/model_export.md
-        yolov5/tutorials/jetson_nano_tutorial.md: yolov5/tutorials/running_on_jetson_nano.md
+        yolov5/tutorials/jetson_nano_tutorial.md: guides/nvidia-jetson.md
         yolov5/tutorials/yolov5_model_ensembling_tutorial.md: yolov5/tutorials/model_ensembling.md
         yolov5/tutorials/roboflow_integration.md: yolov5/tutorials/roboflow_datasets_integration.md
         yolov5/tutorials/pruning_and_sparsity_tutorial.md: yolov5/tutorials/model_pruning_and_sparsity.md
@@ -667,7 +703,8 @@ plugins:
         yolov5/tutorials/yolov5_train_custom_data.md: yolov5/tutorials/train_custom_data.md
         yolov5/tutorials/comet_integration_tutorial.md: yolov5/tutorials/comet_logging_integration.md
         yolov5/tutorials/yolov5_pruning_and_sparsity_tutorial.md: yolov5/tutorials/model_pruning_and_sparsity.md
-        yolov5/tutorials/yolov5_jetson_nano_tutorial.md: yolov5/tutorials/running_on_jetson_nano.md
+        yolov5/tutorials/yolov5_jetson_nano_tutorial.md: guides/nvidia-jetson.md
+        yolov5/tutorials/running_on_jetson_nano.md: guides/nvidia-jetson.md
         yolov5/tutorials/yolov5_roboflow_integration.md: yolov5/tutorials/roboflow_datasets_integration.md
         yolov5/tutorials/hyperparameter_evolution_tutorial.md: yolov5/tutorials/hyperparameter_evolution.md
         yolov5/tutorials/yolov5_hyperparameter_evolution_tutorial.md: yolov5/tutorials/hyperparameter_evolution.md

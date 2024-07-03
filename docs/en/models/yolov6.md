@@ -1,7 +1,7 @@
 ---
 comments: true
-description: Explore Meituan YOLOv6, a state-of-the-art object detection model striking a balance between speed and accuracy. Dive into features, pre-trained models, and Python usage.
-keywords: Meituan YOLOv6, object detection, Ultralytics, YOLOv6 docs, Bi-directional Concatenation, Anchor-Aided Training, pretrained models, real-time applications
+description: Explore Meituan YOLOv6, a top-tier object detector balancing speed and accuracy. Learn about its unique features and performance metrics on Ultralytics Docs.
+keywords: Meituan YOLOv6, object detection, real-time applications, BiC module, Anchor-Aided Training, COCO dataset, high-performance models, Ultralytics Docs
 ---
 
 # Meituan YOLOv6
@@ -75,12 +75,12 @@ This example provides simple YOLOv6 training and inference examples. For full do
 The YOLOv6 series offers a range of models, each optimized for high-performance [Object Detection](../tasks/detect.md). These models cater to varying computational needs and accuracy requirements, making them versatile for a wide array of applications.
 
 | Model Type | Pre-trained Weights | Tasks Supported                        | Inference | Validation | Training | Export |
-|------------|---------------------|----------------------------------------|-----------|------------|----------|--------|
-| YOLOv6-N   | `yolov6-n.pt`       | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv6-S   | `yolov6-s.pt`       | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv6-M   | `yolov6-m.pt`       | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv6-L   | `yolov6-l.pt`       | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
-| YOLOv6-L6  | `yolov6-l6.pt`      | [Object Detection](../tasks/detect.md) | ✅         | ✅          | ✅        | ✅      |
+| ---------- | ------------------- | -------------------------------------- | --------- | ---------- | -------- | ------ |
+| YOLOv6-N   | `yolov6-n.pt`       | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv6-S   | `yolov6-s.pt`       | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv6-M   | `yolov6-m.pt`       | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv6-L   | `yolov6-l.pt`       | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
+| YOLOv6-L6  | `yolov6-l6.pt`      | [Object Detection](../tasks/detect.md) | ✅        | ✅         | ✅       | ✅     |
 
 This table provides a detailed overview of the YOLOv6 model variants, highlighting their capabilities in object detection tasks and their compatibility with various operational modes such as [Inference](../modes/predict.md), [Validation](../modes/val.md), [Training](../modes/train.md), and [Export](../modes/export.md). This comprehensive support ensures that users can fully leverage the capabilities of YOLOv6 models in a broad range of object detection scenarios.
 
@@ -104,3 +104,56 @@ We would like to acknowledge the authors for their significant contributions in 
         ```
 
 The original YOLOv6 paper can be found on [arXiv](https://arxiv.org/abs/2301.05586). The authors have made their work publicly available, and the codebase can be accessed on [GitHub](https://github.com/meituan/YOLOv6). We appreciate their efforts in advancing the field and making their work accessible to the broader community.
+
+## FAQ
+
+### What is Meituan YOLOv6 and how does it differ from other YOLO models?
+
+Meituan YOLOv6 is a highly advanced object detection model that balances speed and accuracy, making it ideal for real-time applications. This model features unique enhancements such as the Bidirectional Concatenation (BiC) module, Anchor-Aided Training (AAT) strategy, and an improved backbone and neck design, providing state-of-the-art performance on the COCO dataset. Unlike prior YOLO models, YOLOv6 incorporates these innovative strategies to enhance both inference speed and detection accuracy.
+
+### How do I use the YOLOv6 model in a Python script?
+
+Using the YOLOv6 model in a Python script is straightforward. Here is a sample code snippet to get you started:
+
+```python
+from ultralytics import YOLO
+
+# Build a YOLOv6n model from scratch
+model = YOLO("yolov6n.yaml")
+
+# Display model information (optional)
+model.info()
+
+# Train the model on the COCO8 example dataset for 100 epochs
+results = model.train(data="coco8.yaml", epochs=100, imgsz=640)
+
+# Run inference with the YOLOv6n model on the 'bus.jpg' image
+results = model("path/to/bus.jpg")
+```
+
+For more detailed examples and documentation, visit the [Train](../modes/train.md) and [Predict](../modes/predict.md) pages.
+
+### What are the performance metrics for different scales of YOLOv6 models?
+
+YOLOv6 offers pretrained models in various scales with the following performance metrics on the COCO val2017 dataset:
+
+- **YOLOv6-N**: 37.5% AP at 1187 FPS using an NVIDIA Tesla T4 GPU
+- **YOLOv6-S**: 45.0% AP at 484 FPS
+- **YOLOv6-M**: 50.0% AP at 226 FPS
+- **YOLOv6-L**: 52.8% AP at 116 FPS
+- **YOLOv6-L6**: State-of-the-art accuracy for real-time
+
+These metrics make YOLOv6 a versatile choice for both high-accuracy and high-speed applications.
+
+### What are the unique features of YOLOv6 that improve its performance?
+
+YOLOv6 introduces several key features that enhance its performance:
+
+- **Bidirectional Concatenation (BiC) Module**: Improves localization signals and offers performance gains with minimal speed degradation.
+- **Anchor-Aided Training (AAT) Strategy**: Combines the benefits of anchor-based and anchor-free methods for better efficiency without sacrificing inference speed.
+- **Enhanced Backbone and Neck Design**: Adds additional stages to the backbone and neck, achieving state-of-the-art results on high-resolution inputs.
+- **Self-Distillation Strategy**: Boosts smaller model performance by refining the auxiliary regression branch during training and removing it during inference to maintain speed.
+
+### How can YOLOv6 be used for mobile and embedded applications?
+
+YOLOv6 supports quantized models for different precisions and models optimized for mobile platforms, making it suitable for applications requiring low-latency and energy-efficient computations. For deployment on mobile and edge devices, you can explore conversion to formats like TFLite and ONNX, as detailed in the [Export](../modes/export.md) documentation. Quantized models ensure high performance even on resource-constrained devices, enabling real-time object detection in mobile and IoT applications.

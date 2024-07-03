@@ -1,7 +1,7 @@
 ---
 comments: true
-description: Learn more about MobileSAM, its implementation, comparison with the original SAM, and how to download and test it in the Ultralytics framework. Improve your mobile applications today.
-keywords: MobileSAM, Ultralytics, SAM, mobile applications, Arxiv, GPU, API, image encoder, mask decoder, model download, testing method
+description: Discover MobileSAM, a lightweight and fast image segmentation model for mobile applications. Compare its performance with the original SAM and explore its various modes.
+keywords: MobileSAM, image segmentation, lightweight model, fast segmentation, mobile applications, SAM, ViT encoder, Tiny-ViT, Ultralytics
 ---
 
 ![MobileSAM Logo](https://github.com/ChaoningZhang/MobileSAM/blob/master/assets/logo2.png?raw=true)
@@ -21,8 +21,8 @@ MobileSAM is trained on a single GPU with a 100k dataset (1% of the original ima
 This table presents the available models with their specific pre-trained weights, the tasks they support, and their compatibility with different operating modes like [Inference](../modes/predict.md), [Validation](../modes/val.md), [Training](../modes/train.md), and [Export](../modes/export.md), indicated by ✅ emojis for supported modes and ❌ emojis for unsupported modes.
 
 | Model Type | Pre-trained Weights                                                                           | Tasks Supported                              | Inference | Validation | Training | Export |
-|------------|-----------------------------------------------------------------------------------------------|----------------------------------------------|-----------|------------|----------|--------|
-| MobileSAM  | [mobile_sam.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/mobile_sam.pt) | [Instance Segmentation](../tasks/segment.md) | ✅         | ❌          | ❌        | ❌      |
+| ---------- | --------------------------------------------------------------------------------------------- | -------------------------------------------- | --------- | ---------- | -------- | ------ |
+| MobileSAM  | [mobile_sam.pt](https://github.com/ultralytics/assets/releases/download/v8.2.0/mobile_sam.pt) | [Instance Segmentation](../tasks/segment.md) | ✅        | ❌         | ❌       | ❌     |
 
 ## Adapting from SAM to MobileSAM
 
@@ -33,21 +33,21 @@ MobileSAM performs comparably to the original SAM and retains the same pipeline 
 The following table provides a comparison of ViT-based image encoders:
 
 | Image Encoder | Original SAM | MobileSAM |
-|---------------|--------------|-----------|
+| ------------- | ------------ | --------- |
 | Parameters    | 611M         | 5M        |
 | Speed         | 452ms        | 8ms       |
 
 Both the original SAM and MobileSAM utilize the same prompt-guided mask decoder:
 
 | Mask Decoder | Original SAM | MobileSAM |
-|--------------|--------------|-----------|
+| ------------ | ------------ | --------- |
 | Parameters   | 3.876M       | 3.876M    |
 | Speed        | 4ms          | 4ms       |
 
 Here is the comparison of the whole pipeline:
 
 | Whole Pipeline (Enc+Dec) | Original SAM | MobileSAM |
-|--------------------------|--------------|-----------|
+| ------------------------ | ------------ | --------- |
 | Parameters               | 615M         | 9.66M     |
 | Speed                    | 456ms        | 12ms      |
 
@@ -117,3 +117,52 @@ If you find MobileSAM useful in your research or development work, please consid
           year={2023}
         }
         ```
+
+## FAQ
+
+### How do I use MobileSAM for image segmentation on a mobile application?
+
+MobileSAM is specifically designed for lightweight and fast image segmentation on mobile applications. To get started, you can download the model weights [here](https://github.com/ChaoningZhang/MobileSAM/blob/master/weights/mobile_sam.pt) and use the following Python code snippet for inference:
+
+```python
+from ultralytics import SAM
+
+# Load the model
+model = SAM("mobile_sam.pt")
+
+# Predict a segment based on a point prompt
+model.predict("ultralytics/assets/zidane.jpg", points=[900, 370], labels=[1])
+```
+
+For more detailed usage and various prompts, refer to the [SAM page](sam.md).
+
+### What are the performance benefits of using MobileSAM over the original SAM?
+
+MobileSAM offers significant improvements in both size and speed over the original SAM. Here is a detailed comparison:
+
+- **Image Encoder**: MobileSAM uses a smaller Tiny-ViT (5M parameters) instead of the original heavyweight ViT-H (611M parameters), resulting in an 8ms encoding time versus 452ms with SAM.
+- **Overall Pipeline**: MobileSAM's entire pipeline, including image encoding and mask decoding, operates at 12ms per image compared to SAM's 456ms, making it approximately 7 times faster.
+    In summary, MobileSAM is about 5 times smaller and 7 times faster than the original SAM, making it ideal for mobile applications.
+
+### Why should developers adopt MobileSAM for mobile applications?
+
+Developers should consider using MobileSAM for mobile applications due to its lightweight and fast performance, making it highly efficient for real-time image segmentation tasks.
+
+- **Efficiency**: MobileSAM's Tiny-ViT encoder allows for rapid processing, achieving segmentation results in just 12ms.
+- **Size**: The model size is significantly reduced, making it easier to deploy and run on mobile devices.
+    These advancements facilitate real-time applications, such as augmented reality, mobile games, and other interactive experiences.
+
+Learn more about the MobileSAM's performance on its [project page](https://github.com/ChaoningZhang/MobileSAM).
+
+### How easy is it to transition from the original SAM to MobileSAM?
+
+Transitioning from the original SAM to MobileSAM is straightforward as MobileSAM retains the same pipeline, including pre-processing, post-processing, and interfaces. Only the image encoder has been changed to the more efficient Tiny-ViT. Users currently using SAM can switch to MobileSAM with minimal code modifications, benefiting from improved performance without the need for significant reconfiguration.
+
+### What tasks are supported by the MobileSAM model?
+
+The MobileSAM model supports instance segmentation tasks. Currently, it is optimized for [Inference](../modes/predict.md) mode. Additional tasks like validation, training, and export are not supported at this time, as indicated in the mode compatibility table:
+| Model Type | Tasks Supported | Inference | Validation | Training | Export |
+| ---------- | -------------------------------------------- | --------- | ---------- | -------- | ------ |
+| MobileSAM | [Instance Segmentation](../tasks/segment.md) | ✅ | ❌ | ❌ | ❌ |
+
+For more information about supported tasks and operational modes, check the [tasks page](../tasks/segment.md) and the mode details like [Inference](../modes/predict.md), [Validation](../modes/val.md), and [Export](../modes/export.md).
