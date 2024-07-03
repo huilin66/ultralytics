@@ -1158,7 +1158,7 @@ class MDetMetrics(SimpleClass):
     @property
     def fitness(self):
         """Returns the fitness of box object."""
-        return self.box.fitness()
+        return self.box.fitness() * self.attributes.map
 
     @property
     def ap_class_index(self):

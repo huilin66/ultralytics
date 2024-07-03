@@ -250,6 +250,7 @@ class BaseTrainer:
         )
         always_freeze_names = [".dfl"]  # always freeze these layers
         freeze_layer_names = [f"model.{x}." for x in freeze_list] + always_freeze_names + freeze_head_list
+        self.freeze_layer_names = freeze_layer_names
         for k, v in self.model.named_parameters():
             # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
             if any(x in k for x in freeze_layer_names):
@@ -262,7 +263,8 @@ class BaseTrainer:
                 )
                 v.requires_grad = True
             else:
-                LOGGER.info(f"Training layer '{k}'")
+                if len(freeze_layer_names) > 10:
+                    LOGGER.info(f"Training layer '{k}'")
 
         # Check AMP
         self.amp = torch.tensor(self.args.amp).to(self.device)  # True or False
@@ -357,6 +359,7 @@ class BaseTrainer:
                 self.scheduler.step()
 
             self.model.train()
+            self._model_train()
             if RANK != -1:
                 self.train_loader.sampler.set_epoch(epoch)
             pbar = enumerate(self.train_loader)
@@ -482,6 +485,16 @@ class BaseTrainer:
         gc.collect()
         torch.cuda.empty_cache()
         self.run_callbacks("teardown")
+
+    def _model_train(self):
+        """Set model in training mode."""
+        self.model.train()
+
+        # Freeze BN
+        if self.args.freeze_bn:
+            for n, m in self.model.named_modules():
+                if any(filter(lambda f: f in n, self.freeze_layer_names)) and isinstance(m, nn.BatchNorm2d):
+                    m.eval()
 
     def save_model(self):
         """Save model training checkpoints with additional metadata."""
