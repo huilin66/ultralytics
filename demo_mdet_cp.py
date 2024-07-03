@@ -30,6 +30,7 @@ def myolo8_m(weight_path):
                 epochs=200, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS,
                 freeze=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,],
                 freeze_head=['.cv2', '.cv3'],
+                freeze_bn=True,
                 mdet=10.0,
                 lrf=0.001,
                 )
