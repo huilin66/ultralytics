@@ -1,13 +1,21 @@
 import torch
 from ultralytics import YOLO, RTDETR
-BATCH_SIZE = 2
-EPOCHS = 2
+BATCH_SIZE = 16
+EPOCHS = 500
+IMGSZ = 640
 DEVICE = torch.device('cuda:0')
 DATA = "billboard_det5.yaml"
 
 
 def yolo8_x():
     model = YOLO("yolov8x.yaml", task='detect')
+    model.load('yolov8x.pt')
+
+    model.train(data=DATA, device=DEVICE,
+                epochs=EPOCHS, imgsz=640, val=True, batch=BATCH_SIZE, patience=EPOCHS)
+
+def yolo8_modifiy(model_path):
+    model = YOLO(model_path, task='detect')
     model.load('yolov8x.pt')
 
     model.train(data=DATA, device=DEVICE,
@@ -38,5 +46,10 @@ if __name__ == '__main__':
     pass
     # yolo8_x()
     # yolo9_e()
-    yolo10_x()
+    # yolo10_x()
     # rtdetr_x()
+    # yolo8_modifiy(r'yolov8x-n1.yaml')
+    # yolo8_modifiy(r'yolov8x-n2.yaml')
+    # yolo8_modifiy(r'yolov8x-n3.yaml')
+
+    yolo8_modifiy(r'yolov8x-n1.yaml')
