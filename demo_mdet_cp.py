@@ -70,5 +70,13 @@ if __name__ == '__main__':
     # myolo8_modifiy('yolov8x-mdetect-gat22.yaml')
     # myolo8_modifiy('yolov8x-mdetect-gat23.yaml')
 
-    myolo8_modifiy('yolov8x-mdetect-gat11-n2.yaml')
-    myolo8_modifiy('yolov8x-mdetect-gat12-n3.yaml')
+    # myolo8_modifiy('yolov8x-mdetect-gat11-n2.yaml')
+    # myolo8_modifiy('yolov8x-mdetect-gat11-n3.yaml')
+
+    # model_val(r'runs/mdetect/train68/weights/best.pt')
+    # model_val(r'runs/mdetect/train69/weights/best.pt')
+    # model_val(r'runs/mdetect/train70/weights/best.pt')
+    # model_val(r'runs/mdetect/train71/weights/best.pt')
+
+    myolo8_modifiy('yolov8x-mdetect-gat22-n2.yaml')
+    myolo8_modifiy('yolov8x-mdetect-gat22-n3.yaml')
