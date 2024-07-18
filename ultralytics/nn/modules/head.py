@@ -179,6 +179,7 @@ class GAT11(nn.Module):
             if self.training:
                 outputs = torch.matmul(feature_proj, attention)
             else:
+                # outputs = torch.matmul(feature_proj, attention)
                 outputs = torch.matmul(feature_proj, attention.half())
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
@@ -379,6 +380,7 @@ class GAT22(GAT12):
             if self.training:
                 outputs = torch.matmul(feature_proj, attention)
             else:
+                # outputs = torch.matmul(feature_proj, attention)
                 outputs = torch.matmul(feature_proj, attention.half())
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
