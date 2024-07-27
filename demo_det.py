@@ -4,7 +4,7 @@ BATCH_SIZE = 16
 EPOCHS = 500
 IMGSZ = 640
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_det5.yaml"
+DATA = "mm.yaml"
 
 
 def yolo8_x():
@@ -42,8 +42,24 @@ def rtdetr_x():
     model.train(data=DATA, device=DEVICE,
                 epochs=EPOCHS, imgsz=640, val=True, batch=BATCH_SIZE, patience=EPOCHS)
 
+def predict(weight_path, img_dir, conf=0.5):
+    model = YOLO(weight_path, task='detect')
+    model.predict(
+        img_dir,
+        save=True,
+        conf=conf,
+        device=DEVICE,
+    )
+
+def export_onnx(weight_path):
+    model = YOLO(weight_path, task='detect')
+    model.save('yolov8.pt')
+
+
 if __name__ == '__main__':
     pass
+    predict(r'runs/detect/train20/weights/best.pt', r'/nfsv4/23039356r/data/mmdet/mm/infer_img')
+    # export_onnx(r'runs/detect/train20/weights/best.pt')
     # yolo8_x()
     # yolo9_e()
     # yolo10_x()
@@ -52,4 +68,4 @@ if __name__ == '__main__':
     # yolo8_modifiy(r'yolov8x-n2.yaml')
     # yolo8_modifiy(r'yolov8x-n3.yaml')
 
-    yolo8_modifiy(r'yolov8x-n1.yaml')
+    # yolo8_modifiy(r'yolov8x-n1.yaml')

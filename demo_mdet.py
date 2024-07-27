@@ -62,4 +62,4 @@ if __name__ == '__main__':
 
     # myolo8_modifiy('yolov8x-mdetect-gat22-n0.yaml')
     # myolo8_modifiy('yolov8x-mdetect-gat22-n1.yaml')
-    model_val(r'runs/mdetect/train76/weights/best.pt')
+    # model_val(r'runs/mdetect/train76/weights/best.pt')
