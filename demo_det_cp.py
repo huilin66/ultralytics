@@ -1,9 +1,9 @@
 import torch
 from ultralytics import YOLO, RTDETR
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 EPOCHS = 500
-IMGSZ = 640
-DEVICE = torch.device('cuda:0')
+IMGSZ = 1280
+DEVICE = torch.device('cuda:1')
 DATA = "mm.yaml"
 
 
@@ -59,12 +59,12 @@ def export_onnx(weight_path):
 
 if __name__ == '__main__':
     pass
-    predict(r'runs/detect/train20/weights/best.pt', r'/nfsv4/23039356r/data/mmdet/mm/infer_img')
+    # predict(r'runs/detect/train20/weights/best.pt', r'/nfsv4/23039356r/data/mmdet/mm/infer_img')
     # export_onnx(r'runs/detect/train20/weights/best.pt')
-    # yolo8_x()
-    # yolo9_e()
-    # yolo10_x()
-    # rtdetr_x()
+    yolo8_x()
+    yolo9_e()
+    yolo10_x()
+    rtdetr_x()
     # yolo8_modifiy(r'yolov8x-n1.yaml')
     # yolo8_modifiy(r'yolov8x-n2.yaml')
     # yolo8_modifiy(r'yolov8x-n3.yaml')
