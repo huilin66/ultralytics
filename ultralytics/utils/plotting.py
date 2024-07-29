@@ -306,9 +306,11 @@ class Annotator:
                 )
                 # self.draw.text((box[0], box[1]), label, fill=txt_color, font=self.font, anchor='ls')  # for PIL>8.0
                 # self.draw.text((p1[0], p1[1] - h if outside else p1[1]), label, fill=txt_color, font=self.font)
-                p0 = p1[0]
-                p1 = p1[1] - h if outside else p1[1]
-                self.draw.text((p0, p1), label, fill=txt_color, font=self.font)
+                pp0 = p1[0]
+                pp1 = p1[1] - h if outside else p1[1]
+                self.draw.text((pp0, pp1), label, fill=txt_color, font=self.font)
+            else:
+                pp0, pp1 = 0, 0
         else:  # cv2
             if rotated:
                 p1 = [int(b) for b in box[0]]
@@ -336,6 +338,8 @@ class Annotator:
                     thickness=self.tf,
                     lineType=cv2.LINE_AA,
                 )
+            else:
+                pp0, pp1 = 0, 0
         return pp0, pp1
 
     def masks(self, masks, colors, im_gpu, alpha=0.5, retina_masks=False):
