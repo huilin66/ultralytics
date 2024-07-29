@@ -306,8 +306,8 @@ class Annotator:
                 )
                 # self.draw.text((box[0], box[1]), label, fill=txt_color, font=self.font, anchor='ls')  # for PIL>8.0
                 # self.draw.text((p1[0], p1[1] - h if outside else p1[1]), label, fill=txt_color, font=self.font)
-                pp0 = p1[0]
-                pp1 = p1[1] - h if outside else p1[1]
+                p0 = p1[0]
+                p1 = p1[1] - h if outside else p1[1]
                 self.draw.text((p0, p1), label, fill=txt_color, font=self.font)
         else:  # cv2
             if rotated:
