@@ -162,11 +162,287 @@ class SPP(nn.Module):
         x = self.cv1(x)
         return self.cv2(torch.cat([x] + [m(x) for m in self.m], 1))
 
+# region code for tfd
+import math
+from copy import deepcopy
 
+def linear_init_(module):
+    bound = 1 / math.sqrt(module.weight.shape[0])
+    torch.nn.init.uniform_(module.weight, -bound, bound)
+    if hasattr(module, "bias") and module.bias is not None:
+        torch.nn.init.uniform_(module.bias, -bound, bound)
+
+class MultiHeadAttention(nn.Module):
+    """
+    Attention mapps queries and a set of key-value pairs to outputs, and
+    Multi-Head Attention performs multiple parallel attention to jointly attending
+    to information from different representation subspaces.
+
+    Please refer to `Attention Is All You Need <https://arxiv.org/pdf/1706.03762.pdf>`_
+    for more details.
+
+    Parameters:
+        embed_dim (int): The expected feature size in the input and output.
+        num_heads (int): The number of heads in multi-head attention.
+        dropout (float, optional): The dropout probability used on attention
+            weights to drop some attention targets. 0 for no dropout. Default 0
+        kdim (int, optional): The feature size in key. If None, assumed equal to
+            `embed_dim`. Default None.
+        vdim (int, optional): The feature size in value. If None, assumed equal to
+            `embed_dim`. Default None.
+        need_weights (bool, optional): Indicate whether to return the attention
+            weights. Default False.
+
+    Examples:
+
+        .. code-block:: python
+
+            import paddle
+
+            # encoder input: [batch_size, sequence_length, d_model]
+            query = paddle.rand((2, 4, 128))
+            # self attention mask: [batch_size, num_heads, query_len, query_len]
+            attn_mask = paddle.rand((2, 2, 4, 4))
+            multi_head_attn = paddle.nn.MultiHeadAttention(128, 2)
+            output = multi_head_attn(query, None, None, attn_mask=attn_mask)  # [2, 4, 128]
+    """
+
+
+
+    def __init__(self,
+                 embed_dim,
+                 num_heads,
+                 dropout=0.,
+                 kdim=None,
+                 vdim=None,
+                 need_weights=False):
+        super(MultiHeadAttention, self).__init__()
+        from torch.nn.parameter import Parameter
+        self.embed_dim = embed_dim
+        self.kdim = kdim if kdim is not None else embed_dim
+        self.vdim = vdim if vdim is not None else embed_dim
+        self._qkv_same_embed_dim = self.kdim == embed_dim and self.vdim == embed_dim
+
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.need_weights = need_weights
+
+        self.head_dim = embed_dim // num_heads
+        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
+
+        if not self._qkv_same_embed_dim:
+            self.q_proj_weight = Parameter(torch.empty((embed_dim, embed_dim), ))
+            self.k_proj_weight = Parameter(torch.empty((embed_dim, self.kdim), ))
+            self.v_proj_weight = Parameter(torch.empty((embed_dim, self.vdim), ))
+            self.register_parameter('in_proj_weight', None)
+        else:
+            self.in_proj_weight = Parameter(torch.empty((embed_dim, 3 * embed_dim), ))
+            self.in_proj_bias = Parameter(torch.empty((3 * embed_dim), ))
+            self.register_parameter('q_proj_weight', None)
+            self.register_parameter('k_proj_weight', None)
+            self.register_parameter('v_proj_weight', None)
+
+
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+        self._type_list = ('q_proj', 'k_proj', 'v_proj')
+
+        self._reset_parameters()
+
+    def _reset_parameters(self):
+        from torch.nn.init import constant_, xavier_uniform_
+
+        for p in self.parameters():
+            if p.dim() > 1:
+                xavier_uniform_(p)
+            else:
+                constant_(p, 0)
+
+    def compute_qkv(self, tensor, index):
+        if self._qkv_same_embed_dim:
+            tensor = F.linear(
+                x=tensor,
+                weight=self.in_proj_weight[:, index * self.embed_dim:(index + 1)
+                                           * self.embed_dim],
+                bias=self.in_proj_bias[index * self.embed_dim:(index + 1) *
+                                       self.embed_dim]
+                if self.in_proj_bias is not None else None)
+        else:
+            tensor = getattr(self, self._type_list[index])(tensor)
+        tensor = tensor.reshape(
+            [tensor.shape[0], tensor.shape[1], self.num_heads, self.head_dim]).transpose(1, 2)
+        return tensor
+
+    def forward(self, query, key=None, value=None, attn_mask=None):
+        r"""
+        Applies multi-head attention to map queries and a set of key-value pairs
+        to outputs.
+
+        Parameters:
+            query (Tensor): The queries for multi-head attention. It is a
+                tensor with shape `[batch_size, query_length, embed_dim]`. The
+                data type should be float32 or float64.
+            key (Tensor, optional): The keys for multi-head attention. It is
+                a tensor with shape `[batch_size, key_length, kdim]`. The
+                data type should be float32 or float64. If None, use `query` as
+                `key`. Default None.
+            value (Tensor, optional): The values for multi-head attention. It
+                is a tensor with shape `[batch_size, value_length, vdim]`.
+                The data type should be float32 or float64. If None, use `query` as
+                `value`. Default None.
+            attn_mask (Tensor, optional): A tensor used in multi-head attention
+                to prevents attention to some unwanted positions, usually the
+                paddings or the subsequent positions. It is a tensor with shape
+                broadcasted to `[batch_size, n_head, sequence_length, sequence_length]`.
+                When the data type is bool, the unwanted positions have `False`
+                values and the others have `True` values. When the data type is
+                int, the unwanted positions have 0 values and the others have 1
+                values. When the data type is float, the unwanted positions have
+                `-INF` values and the others have 0 values. It can be None when
+                nothing wanted or needed to be prevented attention to. Default None.
+
+        Returns:
+            Tensor|tuple: It is a tensor that has the same shape and data type \
+                as `query`, representing attention output. Or a tuple if \
+                `need_weights` is True or `cache` is not None. If `need_weights` \
+                is True, except for attention output, the tuple also includes \
+                the attention weights tensor shaped `[batch_size, num_heads, query_length, key_length]`. \
+                If `cache` is not None, the tuple then includes the new cache \
+                having the same type as `cache`, and if it is `StaticCache`, it \
+                is same as the input `cache`, if it is `Cache`, the new cache \
+                reserves tensors concatanating raw tensors with intermediate \
+                results of current query.
+        """
+
+        key = query if key is None else key
+        value = query if value is None else value
+        # compute q ,k ,v
+        q = query.reshape([query.shape[0], query.shape[1], 4, -1]).transpose(1, 2)
+        k = key.reshape([query.shape[0], query.shape[1], 4, -1]).transpose(1, 2)
+        v = value.reshape([query.shape[0], query.shape[1], 4, -1]).transpose(1, 2)
+
+        # scale dot product attention
+        product = torch.matmul(q, k.transpose(2, 3))
+        scaling = float(self.head_dim)**-0.5
+        product = product * scaling
+
+        if attn_mask is not None:
+            # Support bool or int mask
+            attn_mask = attn_mask.type_as(product.dtype)
+            product = product + attn_mask
+        weights = F.softmax(product)
+        if self.dropout:
+            weights = F.dropout(
+                weights,
+                self.dropout,
+                training=self.training)
+        # out = torch.matmul(weights, v)
+        out = torch.matmul(weights if self.training else weights.half(), v)
+
+        # combine heads
+        out = torch.transpose(out, 1, 2)
+        out = torch.reshape(out, [out.shape[0], out.shape[1], out.shape[2] * out.shape[3]])
+
+        # project to output
+        out = self.out_proj(out)
+
+        outs = [out]
+        if self.need_weights:
+            outs.append(weights)
+        return out if len(outs) == 1 else tuple(outs)
+
+
+class TransformerEncoderLayer(nn.Module):
+    def __init__(self,
+                 d_model,
+                 nhead,
+                 dim_feedforward=2048,
+                 dropout=0.1,
+                 activation="relu",
+                 attn_dropout=None,
+                 act_dropout=None,
+                 normalize_before=False):
+        super(TransformerEncoderLayer, self).__init__()
+        attn_dropout = dropout if attn_dropout is None else attn_dropout
+        act_dropout = dropout if act_dropout is None else act_dropout
+        self.normalize_before = normalize_before
+
+        self.self_attn = MultiHeadAttention(d_model, nhead, attn_dropout)
+        # Implementation of Feedforward model
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(act_dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.activation = getattr(F, activation)
+        # self._reset_parameters()
+
+    def _reset_parameters(self):
+        linear_init_(self.linear1)
+        linear_init_(self.linear2)
+
+    @staticmethod
+    def with_pos_embed(tensor, pos_embed):
+        return tensor if pos_embed is None else tensor + pos_embed
+
+    def forward(self, src, src_mask=None, pos_embed=None):
+        residual = src
+        if self.normalize_before:
+            src = self.norm1(src)
+        q = k = self.with_pos_embed(src, pos_embed)
+        src = self.self_attn(q, k, value=src, attn_mask=src_mask)
+
+        src = residual + self.dropout1(src)
+        if not self.normalize_before:
+            src = self.norm1(src)
+
+        residual = src
+        if self.normalize_before:
+            src = self.norm2(src)
+        src = self.linear2(self.dropout(self.activation(self.linear1(src))))
+        src = residual + self.dropout2(src)
+        if not self.normalize_before:
+            src = self.norm2(src)
+        return src
+
+def _get_clones(module, N):
+    return nn.ModuleList([deepcopy(module) for _ in range(N)])
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, encoder_layer, num_layers, norm=None):
+        super(TransformerEncoder, self).__init__()
+        self.layers = _get_clones(encoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+
+    def forward(self, src, src_mask=None, pos_embed=None):
+        output = src
+        for layer in self.layers:
+            output = layer(output, src_mask=src_mask, pos_embed=pos_embed)
+
+        if self.norm is not None:
+            output = self.norm(output)
+
+        return output
+# endregion
 class SPPF(nn.Module):
     """Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher."""
 
-    def __init__(self, c1, c2, k=5):
+    def __init__(self, c1, c2, k=5,
+                 add_tf=False,
+                 res=False,
+                 eval_size=[640, 640],
+                 dim_feedforward=2048,
+                 dropout=0.1,
+                 activation='gelu',
+                 nhead=4,
+                 num_layers=4,
+                 attn_dropout=None,
+                 act_dropout=None,
+                 normalize_before=False,
+                 ):
         """
         Initializes the SPPF layer with given input/output channels and kernel size.
 
@@ -178,11 +454,79 @@ class SPPF(nn.Module):
         self.cv2 = Conv(c_ * 4, c2, 1, 1)
         self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
 
+        self.add_tf = add_tf
+        self.res = res
+        self.eval_size = eval_size
+        self.hidden_dim = 640
+        self.pos_embed = self.build_2d_sincos_position_embedding(
+            20,
+            20,
+            embed_dim=self.hidden_dim)
+
+        encoder_layer = TransformerEncoderLayer(
+            self.hidden_dim, nhead, dim_feedforward, dropout, activation,
+            attn_dropout, act_dropout, normalize_before)
+        encoder_norm = nn.LayerNorm(
+            self.hidden_dim) if normalize_before else None
+        self.encoder = TransformerEncoder(encoder_layer, num_layers,
+                                          encoder_norm)
+        self.act = nn.GELU()
+        self.drop = nn.Dropout(dropout)
+
+    def build_2d_sincos_position_embedding(
+            self,
+            w,
+            h,
+            embed_dim=1024,
+            temperature=10000., ):
+        grid_w = torch.arange(int(w), dtype=torch.float32)
+        grid_h = torch.arange(int(h), dtype=torch.float32)
+        grid_w, grid_h = torch.meshgrid(grid_w, grid_h)
+        assert embed_dim % 4 == 0, 'Embed dimension must be divisible by 4 for 2D sin-cos position embedding'
+        pos_dim = embed_dim // 4
+        omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
+        omega = 1. / (temperature ** omega)
+
+        out_w = grid_w.flatten()[..., None] @ omega[None]
+        out_h = grid_h.flatten()[..., None] @ omega[None]
+
+        pos_emb = torch.concat([
+                                torch.sin(out_w), torch.cos(out_w), torch.sin(out_h),
+                                torch.cos(out_h)
+                                ],axis=1)[None, :, :]
+        return pos_emb
+
     def forward(self, x):
+        if self.add_tf==1:
+            n, c, h, w = x.shape
+            src_flatten = x.flatten(2).transpose(1, 2)
+            pos_embed = self.build_2d_sincos_position_embedding(
+                    w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
+            memory = self.encoder(src_flatten,pos_embed=pos_embed.to(src_flatten.device))
+            memory = memory.transpose(1, 2).reshape([n, c, h, w])
+            memory = self.drop(self.act(memory))
+            if self.res:
+                x = x + memory
+            else:
+                x = memory
         """Forward pass through Ghost Convolution block."""
         y = [self.cv1(x)]
         y.extend(self.m(y[-1]) for _ in range(3))
-        return self.cv2(torch.cat(y, 1))
+        x = self.cv2(torch.cat(y, 1))
+        if self.add_tf==2:
+            if self.add_tf == 1:
+                n, c, h, w = x.shape
+                src_flatten = x.flatten(2).transpose(1, 2)
+                pos_embed = self.build_2d_sincos_position_embedding(
+                    w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
+                memory = self.encoder(src_flatten, pos_embed=pos_embed.to(src_flatten.device))
+                memory = memory.transpose(1, 2).reshape([n, c, h, w])
+                memory = self.drop(self.act(memory))
+                if self.res:
+                    x = x + memory
+                else:
+                    x = memory
+        return x
 
 
 class C1(nn.Module):
