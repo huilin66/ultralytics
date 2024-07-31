@@ -45,15 +45,15 @@ def predict_app(weight_path, input_dir, output_dir, temp_dir, conf=0.5):
 
 if __name__ == '__main__':
     pass
-    predict_app(
-        # r'/model_path',
-        # r'/input_path',
-        # r'/output_path',
-        r'v1_0729_01.pt',
-        r'E:\data\tp\multi_modal_airplane_train\infer_img',
-        r'E:\data\tp\multi_modal_airplane_train\infer_result',
-        r'E:\data\tp\multi_modal_airplane_train\temp'
-    )
+    # predict_app(
+    #     # r'/model_path',
+    #     # r'/input_path',
+    #     # r'/output_path',
+    #     r'v1_0729_01.pt',
+    #     r'E:\data\tp\multi_modal_airplane_train\infer_img',
+    #     r'E:\data\tp\multi_modal_airplane_train\infer_result',
+    #     r'E:\data\tp\multi_modal_airplane_train\temp'
+    # )
     predict_app(
         weight_path=sys.argv[3],
         input_dir=sys.argv[1],
