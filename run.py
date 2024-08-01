@@ -5,7 +5,7 @@ from ultralytics import YOLO
 from tz2yolo import convert_yolo_to_tz, result_check
 BATCH_SIZE = 16
 EPOCHS = 500
-IMGSZ = 640
+IMGSZ = 1280
 DEVICE = torch.device('cuda:0')
 DATA = "mm.yaml"
 
@@ -34,7 +34,8 @@ def predict(weight_path, img_dir, save_dir, conf=0.5):
         conf=conf,
         device=DEVICE,
         save_dir=save_dir,
-        save_txt=True
+        save_txt=True,
+        imgsz=IMGSZ,
     )
 
 def predict_app(input_dir, output_dir, weight_path, temp_dir, conf=0.5):
@@ -50,9 +51,10 @@ if __name__ == '__main__':
     #     # r'/model_path',
     #     # r'/input_path',
     #     # r'/output_path',
-    #     r'v1_0729_01.pt',
+    #
     #     r'E:\data\tp\multi_modal_airplane_train\infer_img',
     #     r'E:\data\tp\multi_modal_airplane_train\infer_result',
+    #     r'v2_0801_01.pt',
     #     r'E:\data\tp\multi_modal_airplane_train\temp'
     # )
     predict_app(
