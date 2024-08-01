@@ -126,19 +126,23 @@ def convert_tz_to_yolo(gt_dir, label_dir, img_dir, image_dir, class_mapping):
 
             df.to_csv(label_path, header=False, index=False, sep=' ')
 
+
+def prettify_xml(elem):
+    """Return a pretty-printed XML string for the Element."""
+    rough_string = ET.tostring(elem, encoding='utf-8')
+    reparsed = minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
+
+
 def convert_yolo_to_tz(input_dir, output_dir, image_dir, mapping_class):
-    def prettify_xml(elem):
-        """Return a pretty-printed XML string for the Element."""
-        rough_string = ET.tostring(elem, encoding='utf-8')
-        reparsed = minidom.parseString(rough_string)
-        return reparsed.toprettyxml(indent="  ")
+
     os.makedirs(output_dir, exist_ok=True)
 
     input_list = os.listdir(input_dir)
     for input_file in tqdm(input_list):
         input_path = os.path.join(input_dir, input_file)
-        output_path = os.path.join(output_dir, input_file.replace('txt', 'xml'))
-        image_path = os.path.join(image_dir, input_file.replace('txt', 'tif'))
+        output_path = os.path.join(output_dir, input_file.replace('.txt', '.xml'))
+        image_path = os.path.join(image_dir, input_file.replace('.txt', '.tif'))
         img = io.imread(image_path)
         width, height, depth = img.shape[1], img.shape[0], img.shape[2]
 
@@ -179,6 +183,40 @@ def convert_yolo_to_tz(input_dir, output_dir, image_dir, mapping_class):
         xml_str = prettify_xml(annotation)
         with open(output_path, "w") as f:
             f.write(xml_str)
+
+
+def empty_xml(input_path, output_path):
+    img = io.imread(input_path)
+    width, height = img.shape[1], img.shape[0]
+    if len(img.shape) == 2:
+        depth = 1
+    else:
+        depth = img.shape[2]
+    annotation = ET.Element("annotation")
+    source = ET.SubElement(annotation, "source")
+    ET.SubElement(source, "filename").text = os.path.basename(input_path)
+    ET.SubElement(source, "origin").text = 'Optical' if depth == 3 else 'SAR'
+    research = ET.SubElement(annotation, "research")
+    size = ET.SubElement(annotation, "size")
+    ET.SubElement(size, "width").text = str(width)
+    ET.SubElement(size, "height").text = str(height)
+    ET.SubElement(size, "depth").text = str(depth)
+    objects = ET.SubElement(annotation, "objects")
+
+    xml_str = prettify_xml(annotation)
+    with open(output_path, "w") as f:
+        f.write(xml_str)
+    print('build', output_path)
+
+def result_check(input_dir, output_dir):
+    input_list = os.listdir(input_dir)
+    for input_file in tqdm(input_list):
+        input_path = os.path.join(input_dir, input_file)
+        output_path = os.path.join(output_dir, input_file.replace('.tif', '.xml'))
+        if os.path.exists(output_path):
+            continue
+        else:
+            empty_xml(input_path, output_path)
 
 if __name__ == '__main__':
     pass

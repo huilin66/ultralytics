@@ -2,7 +2,7 @@ import os
 import sys
 import torch
 from ultralytics import YOLO
-from tz2yolo import convert_yolo_to_tz
+from tz2yolo import convert_yolo_to_tz, result_check
 BATCH_SIZE = 16
 EPOCHS = 500
 IMGSZ = 640
@@ -37,9 +37,10 @@ def predict(weight_path, img_dir, save_dir, conf=0.5):
         save_txt=True
     )
 
-def predict_app(weight_path, input_dir, output_dir, temp_dir, conf=0.5):
+def predict_app(input_dir, output_dir, weight_path, temp_dir, conf=0.5):
     predict(weight_path, input_dir, temp_dir, conf=conf)
     convert_yolo_to_tz(os.path.join(temp_dir, 'labels'), output_dir, temp_dir, mapping_class)
+    result_check(input_dir, output_dir)
 
 
 
@@ -55,8 +56,8 @@ if __name__ == '__main__':
     #     r'E:\data\tp\multi_modal_airplane_train\temp'
     # )
     predict_app(
-        weight_path=sys.argv[3],
         input_dir=sys.argv[1],
         output_dir=sys.argv[2],
+        weight_path="v1_0729_01.pt",
         temp_dir='temp_result'
     )
