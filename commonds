@@ -1,5 +1,5 @@
 # build
-docker build -t mmdet:v1.4 .
+docker build -t mmdet:v1.6 .
 
 
 # run
@@ -10,8 +10,8 @@ docker login --username=18271899387 registry.cn-hangzhou.aliyuncs.com
 
 
 # link
-docker tag mmdet:v1.4 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.4
+docker tag mmdet:v1.6 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.6
 
 
 # push
-docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.4
+docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.6

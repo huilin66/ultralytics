@@ -60,6 +60,6 @@ if __name__ == '__main__':
     predict_app(
         input_dir=sys.argv[1],
         output_dir=sys.argv[2],
-        weight_path="v1_0729_01.pt",
+        weight_path="v2_0801_01.pt",
         temp_dir='temp_result'
     )
