@@ -508,7 +508,7 @@ class Results(SimpleClass):
         return json.dumps(self.summary(normalize=normalize, decimals=decimals), indent=2)
 
 
-class MdetResults(SimpleClass):
+class MResults(SimpleClass):
     """
     A class for storing and manipulating inference results.
 

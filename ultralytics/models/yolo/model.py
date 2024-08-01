@@ -4,7 +4,7 @@ from pathlib import Path
 
 from ultralytics.engine.model import Model
 from ultralytics.models import yolo
-from ultralytics.nn.tasks import ClassificationModel, DetectionModel, MDetectionModel, OBBModel, PoseModel, SegmentationModel, WorldModel
+from ultralytics.nn.tasks import ClassificationModel, DetectionModel, MDetectionModel, OBBModel, PoseModel, SegmentationModel, MSegmentationModel, WorldModel
 from ultralytics.utils import ROOT, yaml_load
 from huggingface_hub import PyTorchModelHubMixin
 
@@ -50,6 +50,12 @@ class YOLO(Model):
                 "trainer": yolo.segment.SegmentationTrainer,
                 "validator": yolo.segment.SegmentationValidator,
                 "predictor": yolo.segment.SegmentationPredictor,
+            },
+            "msegment": {
+                "model": MSegmentationModel,
+                "trainer": yolo.msegment.MSegmentationTrainer,
+                "validator": yolo.msegment.MSegmentationValidator,
+                "predictor": yolo.msegment.MSegmentationPredictor,
             },
             "pose": {
                 "model": PoseModel,

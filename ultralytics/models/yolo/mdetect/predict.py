@@ -1,7 +1,7 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
 from ultralytics.engine.predictor import BasePredictor
-from ultralytics.engine.results import MdetResults
+from ultralytics.engine.results import MResults
 from ultralytics.utils import ops
 
 
@@ -41,7 +41,7 @@ class MDetectionPredictor(BasePredictor):
             pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
             img_path = self.batch[0][i]
             results.append(
-                MdetResults(
+                MResults(
                     orig_img,
                     path=img_path,
                     names=self.model.model.names,
