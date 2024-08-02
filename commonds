@@ -1,6 +1,6 @@
 # build
 docker build -t mmdet:v1.6 .
-docker build -t mmdet:v2.1 .
+docker build -t mmdet:v2.2 .
 
 
 # login
@@ -9,11 +9,11 @@ docker login --username=18271899387 registry.cn-hangzhou.aliyuncs.com
 
 # link
 docker tag mmdet:v1.6 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.6
-docker tag mmdet:v2.1 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v2.1
+docker tag mmdet:v2.2 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v2.2
 
 # push
 docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.6
-docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v2.1
+docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v2.2
 
 # run
 docker run --gpus all --rm -v /E/data/tp/multi_modal_airplane_train/infer_img:/input_path -v /E/data/tp/multi_modal_airplane_train/infer_result:/output_path mmdet:v1.3
