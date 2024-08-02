@@ -4,10 +4,10 @@ BATCH_SIZE = 32
 EPOCHS = 500
 IMGSZ = 640
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_mdet5_10.yaml"
+DATA = "billboard_mseg2.yaml"
 
 def myolo8_x():
-    model = YOLO("yolov8x-mdetect.yaml", task = 'mdetect')
+    model = YOLO("yolov8x-mseg.yaml", task = 'msegment')
     model.load('yolov8x.pt')
 
     model.train(data=DATA, device=DEVICE,
@@ -16,25 +16,12 @@ def myolo8_x():
 
 
 def myolo8_modifiy(model_path):
-    model = YOLO(model_path, task = 'mdetect')
+    model = YOLO(model_path, task = 'msegment')
     model.load('yolov8x.pt')
 
     model.train(data=DATA, device=DEVICE,
                 optimizer='AdamW', lr0=0.0001,
                 epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS)
-
-
-def myolo8_m(weight_path):
-    model = YOLO(weight_path, task = 'mdetect')
-
-    model.train(data=DATA, device=DEVICE,
-                epochs=200, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS,
-                freeze=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,],
-                freeze_head=['.cv2', '.cv3'],
-                freeze_bn=True,
-                mdet=10.0,
-                lrf=0.001,
-                )
 
 
 def model_val(weight_path):

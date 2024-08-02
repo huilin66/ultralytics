@@ -1,35 +1,20 @@
 import torch
 from ultralytics import YOLO
-BATCH_SIZE = 32
-EPOCHS = 500
-IMGSZ = 640
-DEVICE = torch.device('cuda:1')
-DATA = "billboard_mdet5_10.yaml"
+BATCH_SIZE = 1
+EPOCHS = 5
+IMGSZ = 320
+DEVICE = torch.device('cuda:0')
+DATA = "billboard_mseg2.yaml"
 
 
 def myolo8_x():
-    model = YOLO("yolov8x-mdetect.yaml", task = 'msegment')
+    model = YOLO("yolov8x-mseg.yaml", task = 'msegment')
     model.load('yolov8x.pt')
 
     model.train(data=DATA, device=DEVICE,
                 epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS)
     model.val()
 
-def myolo8_modifiy(model_path):
-    model = YOLO(model_path, task = 'msegment')
-    model.load('yolov8x.pt')
-
-    model.train(data=DATA, device=DEVICE,
-                optimizer='AdamW', lr0=0.0001,
-                epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS)
-
-def myolo9_e():
-    model = YOLO("yolov9e-mdetect.yaml", task = 'msegment')
-    model.load('yolov9e.pt')
-
-    model.train(data=DATA, device=DEVICE,
-                epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS)
-    model.val()
 
 
 def model_val(weight_path):
@@ -48,7 +33,7 @@ def model_predict(weight_path, img_dir, conf=0.5):
 
 if __name__ == '__main__':
     pass
-    # myolo8_x()
+    myolo8_x()
     # myolo9_e()
     # model_val(r'best.pt')
     # myolo8_modifiy('yolov8x-mdetect10-n1-gat1.yaml')

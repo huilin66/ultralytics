@@ -3,11 +3,11 @@ from ultralytics import YOLO
 BATCH_SIZE = 1
 EPOCHS = 500
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_seg2.yaml"
+DATA = "billboard_seg1.yaml"
 
 
 def myolo8_x():
-    model = YOLO("yolov8x-mseg.yaml", task = 'msegment')
+    model = YOLO("yolov8x-seg.yaml", task = 'segment')
     model.load('yolov8x.pt')
 
     model.train(data=DATA, device=DEVICE,
@@ -18,7 +18,7 @@ def myolo8_x():
 
 
 def model_predict(weight_path):
-    model = YOLO(weight_path, task='mdetect')
+    model = YOLO(weight_path, task='segment')
     model.val()  # evaluate model performance on the validation set
 
     model.predict(

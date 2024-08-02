@@ -192,6 +192,12 @@ def verify_image_label_mdet(args):
             nf = 1  # label found
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
+                na = int(lb[0][1])
+                if any(len(x) > 1+1+na+4 for x in lb) and (not keypoint):  # is segment
+                    classes = np.array([x[0] for x in lb], dtype=np.float32)
+                    attributes = np.array([x[1:1+1+na] for x in lb], dtype=np.float32)
+                    segments = [np.array(x[1+1+na:], dtype=np.float32).reshape(-1, 2) for x in lb]  # (cls, xy1...)
+                    lb = np.concatenate((classes.reshape(-1, 1), attributes, segments2boxes(segments)), 1)  # (cls, xywh)
                 lb = np.array(lb, dtype=np.float32)
             nl = len(lb)
             if nl:
@@ -222,6 +228,11 @@ def verify_image_label_mdet(args):
         else:
             nm = 1  # label missing
             lb = np.zeros((0, (5 + nkpt * ndim) if keypoints else 5), dtype=np.float32)
+        if keypoint:
+            keypoints = lb[:, 5:].reshape(-1, nkpt, ndim)
+            if ndim == 2:
+                kpt_mask = np.where((keypoints[..., 0] < 0) | (keypoints[..., 1] < 0), 0.0, 1.0).astype(np.float32)
+                keypoints = np.concatenate([keypoints, kpt_mask[..., None]], axis=-1)  # (nl, nkpt, 3)
         # lb = lb[:, :5]
         return im_file, lb, shape, segments, keypoints, mdet_attributes, nm, nf, ne, nc, msg
     except Exception as e:

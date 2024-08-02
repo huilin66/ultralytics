@@ -139,8 +139,8 @@ class MSegmentationValidator(MDetectionValidator):
             # Evaluate
             if nl:
                 stat["tp"], stat["ap"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
-                stat["tp_m"] = self._process_batch(
-                    predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True
+                stat["tp_m"], _ = self._process_batch(
+                    predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True, gt_attributes=mdet_attributes
                 )
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
@@ -192,7 +192,7 @@ class MSegmentationValidator(MDetectionValidator):
         else:  # boxes
             iou = box_iou(gt_bboxes, detections[:, :4])
 
-        return self.match_predictions(detections[:, 5], gt_cls, iou, detections[:, 6:], gt_attributes)
+        return self.match_predictions(detections[:, 5], gt_cls, iou, detections[:, 6:6+self.na], gt_attributes)
 
     def plot_val_samples(self, batch, ni):
         """Plots validation samples with bounding box labels."""
