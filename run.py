@@ -25,7 +25,18 @@ mapping_class = {
     12: 'Boeing737-800',
     13: 'other',
 }
-
+mapping_class2 = {
+    0: 'Small Car',
+    1: 'Bus',
+    2: 'Cargo Truck',
+    3: 'Dump Truck',
+    4: 'Van',
+    5: 'Trailer',
+    6: 'Tractor',
+    7: 'Excavator',
+    8: 'Truck Tractor',
+    9: 'other-vehicle',
+}
 def predict(weight_path, img_dir, save_dir, conf=0.5):
     model = YOLO(weight_path, task='detect')
     model.predict(
@@ -40,7 +51,7 @@ def predict(weight_path, img_dir, save_dir, conf=0.5):
 
 def predict_app(input_dir, output_dir, weight_path, temp_dir, conf=0.5):
     predict(weight_path, input_dir, temp_dir, conf=conf)
-    convert_yolo_to_tz(os.path.join(temp_dir, 'labels'), output_dir, temp_dir, mapping_class)
+    convert_yolo_to_tz(os.path.join(temp_dir, 'labels'), output_dir, temp_dir, mapping_class2)
     result_check(input_dir, output_dir)
 
 
