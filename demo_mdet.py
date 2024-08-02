@@ -1,9 +1,9 @@
 import torch
 from ultralytics import YOLO
-BATCH_SIZE = 32
+BATCH_SIZE = 1
 EPOCHS = 500
 IMGSZ = 640
-DEVICE = torch.device('cuda:1')
+DEVICE = torch.device('cuda:0')
 DATA = "billboard_mdet5_10.yaml"
 
 
@@ -48,7 +48,7 @@ def model_predict(weight_path, img_dir, conf=0.5):
 
 if __name__ == '__main__':
     pass
-    # myolo8_x()
+    myolo8_x()
     # myolo9_e()
     # model_val(r'best.pt')
     # myolo8_modifiy('yolov8x-mdetect10-n1-gat1.yaml')

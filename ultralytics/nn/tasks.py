@@ -55,6 +55,7 @@ from ultralytics.nn.modules import (
     RTDETRDecoder,
     SCDown,
     Segment,
+    MSegment,
     WorldDetect,
     v10Detect,
 )
@@ -1067,7 +1068,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in {Detect, MDetect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}:
+        elif m in {Detect, MDetect, WorldDetect, Segment, MSegment, Pose, OBB, ImagePoolingAttn, v10Detect}:
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
