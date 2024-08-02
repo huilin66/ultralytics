@@ -57,9 +57,19 @@ if __name__ == '__main__':
     #     r'v2_0801_01.pt',
     #     r'E:\data\tp\multi_modal_airplane_train\temp'
     # )
+    # predict_app(
+    #     # r'/model_path',
+    #     # r'/input_path',
+    #     # r'/output_path',
+    #
+    #     r'E:\data\tp\car_det_train\car_det_train\infer_img',
+    #     r'E:\data\tp\car_det_train\car_det_train\infer_result',
+    #     r'v1_0802_02.pt',
+    #     r'E:\data\tp\car_det_train\car_det_train\temp'
+    # )
     predict_app(
         input_dir=sys.argv[1],
         output_dir=sys.argv[2],
-        weight_path="v2_0801_01.pt",
+        weight_path="v1_0802_02.pt",
         temp_dir='temp_result'
     )

@@ -57,7 +57,7 @@ RUN rm -rf tmp
 COPY ultralytics ultralytics
 COPY tz2yolo.py tz2yolo.py
 COPY run.py run.py
-COPY v2_0801_01.pt v2_0801_01.pt
+COPY v1_0802_02.pt v1_0802_02.pt
 
 CMD ["python", "run.py", "/input_path", "/output_path"]
 # Usage Examples -------------------------------------------------------------------------------------------------------
