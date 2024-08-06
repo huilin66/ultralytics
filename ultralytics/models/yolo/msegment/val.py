@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from ultralytics.models.yolo.mdetect import MDetectionValidator
 from ultralytics.utils import LOGGER, NUM_THREADS, ops
 from ultralytics.utils.checks import check_requirements
-from ultralytics.utils.metrics import SegmentMetrics, box_iou, mask_iou
+from ultralytics.utils.metrics import MSegmentMetrics, box_iou, mask_iou
 from ultralytics.utils.plotting import output_to_target, plot_images
 
 
@@ -34,7 +34,7 @@ class MSegmentationValidator(MDetectionValidator):
         self.plot_masks = None
         self.process = None
         self.args.task = "msegment"
-        self.metrics = SegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
+        self.metrics = MSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
 
     def preprocess(self, batch):
         """Preprocesses batch by converting masks to float and sending to device."""
@@ -51,7 +51,7 @@ class MSegmentationValidator(MDetectionValidator):
             self.process = ops.process_mask_upsample  # more accurate
         else:
             self.process = ops.process_mask  # faster
-        self.stats = dict(tp_m=[], tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
+        self.stats = dict(tp_m=[], tp=[], ap=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""

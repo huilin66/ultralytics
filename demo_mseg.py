@@ -1,7 +1,7 @@
 import torch
 from ultralytics import YOLO
 BATCH_SIZE = 1
-EPOCHS = 5
+EPOCHS = 500
 IMGSZ = 320
 DEVICE = torch.device('cuda:0')
 DATA = "billboard_mseg2.yaml"
