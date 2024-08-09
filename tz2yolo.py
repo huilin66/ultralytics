@@ -6,63 +6,63 @@ from skimage import io
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-# class_mapping = {
-#     'Boeing737': 0,
-#     'Boeing747': 1,
-#     'Boeing777': 2,
-#     'Boeing787': 3,
-#     'C919': 4,
-#     'A220': 5,
-#     'A321': 6,
-#     'A330': 7,
-#     'A350': 8,
-#     'ARJ21': 9,
-#     'other-airplane': 10,
-#     'A320/321': 11,
-#     'Boeing737-800': 12,
-#     'other': 13,
-# }
-# mapping_class = {
-#     0: 'Boeing737',
-#     1: 'Boeing747',
-#     2: 'Boeing777',
-#     3: 'Boeing787',
-#     4: 'C919',
-#     5: 'A220',
-#     6: 'A321',
-#     7: 'A330',
-#     8: 'A350',
-#     9: 'ARJ21',
-#     10: 'other-airplane',
-#     11: 'A320/321',
-#     12: 'Boeing737-800',
-#     13: 'other',
-# }
-
 class_mapping = {
-    'Small Car': 0,
-    'Bus': 1,
-    'Cargo Truck': 2,
-    'Dump Truck': 3,
-    'Van': 4,
-    'Trailer': 5,
-    'Tractor': 6,
-    'Excavator': 7,
-    'Truck Tractor': 8,
-    'other-vehicle': 9,
+    'Boeing737': 0,
+    'Boeing747': 1,
+    'Boeing777': 2,
+    'Boeing787': 3,
+    'C919': 4,
+    'A220': 5,
+    'A321': 6,
+    'A330': 7,
+    'A350': 8,
+    'ARJ21': 9,
+    'other-airplane': 10,
+    'A320/321': 11,
+    'Boeing737-800': 12,
+    'other': 13,
 }
 mapping_class = {
-    0: 'Small Car',
-    1: 'Bus',
-    2: 'Cargo Truck',
-    3: 'Dump Truck',
-    4: 'Van',
-    5: 'Trailer',
-    6: 'Tractor',
-    7: 'Excavator',
-    8: 'Truck Tractor',
-    9: 'other-vehicle',
+    0: 'Boeing737',
+    1: 'Boeing747',
+    2: 'Boeing777',
+    3: 'Boeing787',
+    4: 'C919',
+    5: 'A220',
+    6: 'A321',
+    7: 'A330',
+    8: 'A350',
+    9: 'ARJ21',
+    10: 'other-airplane',
+    11: 'A320/321',
+    12: 'Boeing737-800',
+    13: 'other',
 }
+
+# class_mapping = {
+#     'Small Car': 0,
+#     'Bus': 1,
+#     'Cargo Truck': 2,
+#     'Dump Truck': 3,
+#     'Van': 4,
+#     'Trailer': 5,
+#     'Tractor': 6,
+#     'Excavator': 7,
+#     'Truck Tractor': 8,
+#     'other-vehicle': 9,
+# }
+# mapping_class = {
+#     0: 'Small Car',
+#     1: 'Bus',
+#     2: 'Cargo Truck',
+#     3: 'Dump Truck',
+#     4: 'Van',
+#     5: 'Trailer',
+#     6: 'Tractor',
+#     7: 'Excavator',
+#     8: 'Truck Tractor',
+#     9: 'other-vehicle',
+# }
 
 def convert_tz_to_yolo(gt_dir, label_dir, img_dir, image_dir, class_mapping):
     def coord_str2num(coord_str):
@@ -180,6 +180,71 @@ def convert_yolo_to_tz(input_dir, output_dir, image_dir, mapping_class):
             ET.SubElement(points, "point").text = '%.6f,%.6f'%(xmax, ymax)
             ET.SubElement(points, "point").text = '%.6f,%.6f'%(xmin, ymax)
             ET.SubElement(points, "point").text = '%.6f,%.6f'%(xmin, ymin)
+
+        # tree = ET.ElementTree(annotation)
+        # tree.write(output_path)
+        xml_str = prettify_xml(annotation)
+        with open(output_path, "w") as f:
+            f.write(xml_str)
+
+
+def convert_yolo_to_tz_seg(input_dir, output_dir, image_dir, mapping_class):
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    input_list = os.listdir(input_dir)
+    for input_file in tqdm(input_list):
+        input_path = os.path.join(input_dir, input_file)
+        output_path = os.path.join(output_dir, input_file.replace('.txt', '.xml'))
+        image_path = os.path.join(image_dir, input_file.replace('.txt', '.tif'))
+        img = io.imread(image_path)
+        width, height, depth = img.shape[1], img.shape[0], img.shape[2]
+
+        with open(input_path, 'r') as f:
+            lb = [x.split() for x in f.read().strip().splitlines()]
+        annotation = ET.Element("annotation")
+        source = ET.SubElement(annotation, "source")
+        ET.SubElement(source, "filename").text = str(input_file)
+        ET.SubElement(source, "origin").text = 'Optical' if depth==3 else 'SAR'
+        research = ET.SubElement(annotation, "research")
+        size = ET.SubElement(annotation, "size")
+        ET.SubElement(size, "width").text = str(width)
+        ET.SubElement(size, "height").text = str(height)
+        ET.SubElement(size, "depth").text = str(depth)
+        objects = ET.SubElement(annotation, "objects")
+        for idx, x in enumerate(lb):
+            if len(x)<= 5:
+                continue
+            cat_name, polypos = mapping_class[int(float(x[0]))],x[1:]
+            polys = []
+            for i in range(0, len(polypos), 2):
+                pos1 = float(polypos[i]) * width
+                pos2 = float(polypos[i + 1]) * height
+                polys.append([pos1, pos2])
+            polys = np.array(polys)
+
+            max_0_index = np.argmax(polys[:, 0])
+            min_0_index = np.argmin(polys[:, 0])
+            max_1_index = np.argmax(polys[:, 1])
+            min_1_index = np.argmin(polys[:, 1])
+
+            max_0_coord = polys[max_0_index]
+            min_0_coord = polys[min_0_index]
+            max_1_coord = polys[max_1_index]
+            min_1_coord = polys[min_1_index]
+
+            object = ET.SubElement(objects, "object")
+            ET.SubElement(object, "coordinate").text = 'pixel'
+            ET.SubElement(object, "type").text = 'rectangle'
+            ET.SubElement(object, "description").text = 'None'
+            possibleresult = ET.SubElement(object, "possibleresult")
+            ET.SubElement(possibleresult, "name").text = cat_name
+            points = ET.SubElement(object, "points")
+            ET.SubElement(points, "point").text = '%.6f,%.6f'%(min_0_coord[0], min_0_coord[1])
+            ET.SubElement(points, "point").text = '%.6f,%.6f'%(max_1_coord[0], max_1_coord[1])
+            ET.SubElement(points, "point").text = '%.6f,%.6f'%(max_0_coord[0], max_0_coord[1])
+            ET.SubElement(points, "point").text = '%.6f,%.6f'%(min_1_coord[0], min_1_coord[1])
+            ET.SubElement(points, "point").text = '%.6f,%.6f'%(min_0_coord[0], min_0_coord[1])
 
         # tree = ET.ElementTree(annotation)
         # tree.write(output_path)

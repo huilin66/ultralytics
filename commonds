@@ -1,18 +1,17 @@
-# build
-docker build -t mmdet:v1.6 .
-docker build -t mmdet:v2.3 .
-
-
 # login
 docker login --username=18271899387 registry.cn-hangzhou.aliyuncs.com
 
+# build
+docker build -t mmdet:v1.7 .
+docker build -t mmdet:v2.3 .
+
 
 # link
-docker tag mmdet:v1.6 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.6
+docker tag mmdet:v1.7 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.7
 docker tag mmdet:v2.3 registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v2.3
 
 # push
-docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.6
+docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v1.7
 docker push registry.cn-hangzhou.aliyuncs.com/test_spacename/mmdet:v2.3
 
 # run
