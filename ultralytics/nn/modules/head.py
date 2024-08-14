@@ -1097,3 +1097,39 @@ class v10Detect(Detect):
             for x in ch
         )
         self.one2one_cv3 = copy.deepcopy(self.cv3)
+
+
+class v10MDetect(MDetect):
+    """
+    v10 Detection head from https://arxiv.org/pdf/2405.14458
+
+    Args:
+        nc (int): Number of classes.
+        ch (tuple): Tuple of channel sizes.
+
+    Attributes:
+        max_det (int): Maximum number of detections.
+
+    Methods:
+        __init__(self, nc=80, ch=()): Initializes the v10Detect object.
+        forward(self, x): Performs forward pass of the v10Detect module.
+        bias_init(self): Initializes biases of the Detect module.
+
+    """
+
+    end2end = True
+
+    def __init__(self, nc=80, na=14, sep=True, c4=None, gat=None, ch=()):
+        """Initializes the v10Detect object with the specified number of classes and input channels."""
+        super().__init__(nc, na, sep, c4, gat, ch)
+        c3 = max(ch[0], min(self.nc, 100))  # channels
+        # Light cls head
+        self.cv3 = nn.ModuleList(
+            nn.Sequential(
+                nn.Sequential(Conv(x, x, 3, g=x), Conv(x, c3, 1)),
+                nn.Sequential(Conv(c3, c3, 3, g=c3), Conv(c3, c3, 1)),
+                nn.Conv2d(c3, self.nc, 1),
+            )
+            for x in ch
+        )
+        self.one2one_cv3 = copy.deepcopy(self.cv3)
