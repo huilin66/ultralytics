@@ -1,9 +1,10 @@
 import torch
 from ultralytics import YOLO
-BATCH_SIZE = 4
+BATCH_SIZE = 32
 EPOCHS = 500
+IMGSZ = 640
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_seg1.yaml"
+DATA = "mm.yaml"
 
 
 def myolo8_x():
@@ -11,7 +12,7 @@ def myolo8_x():
     model.load('yolov8x.pt')
 
     model.train(data=DATA, device=DEVICE,
-                epochs=EPOCHS, imgsz=640, val=True, batch=BATCH_SIZE, patience=EPOCHS,
+                epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS,
                 )
     model.val()
 
@@ -21,7 +22,7 @@ def myolo9_e():
     model.load('yolov9e.pt')
 
     model.train(data=DATA, device=DEVICE,
-                epochs=EPOCHS, imgsz=640, val=True, batch=BATCH_SIZE, patience=EPOCHS)
+                epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS)
     model.val()
 
 
@@ -41,7 +42,6 @@ def model_predict(weight_path):
 if __name__ == '__main__':
     pass
     myolo8_x()
-    # myolo8_x()
-    # myolo9_e()
+    myolo9_e()
 
     # model_predict(weight_path)
