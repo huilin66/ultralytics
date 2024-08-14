@@ -47,8 +47,8 @@ if __name__ == '__main__':
     pass
     # myolo10_x('yolov10x-mdetect0.yaml')
     # myolo10_x('yolov10x-mdetect0.yaml', auto_optim=False)
-    myolo10_x('yolov8x-mdetect0-sephead.yaml', auto_optim=False)
-    myolo10_x('yolov8x-mdetect0-sppftf0.yaml', auto_optim=False)
-    myolo10_x('yolov8x-mdetect0-sppftf0-sephead.yaml', auto_optim=False)
-    myolo10_x('yolov8x-mdetect0-sppftf1.yaml', auto_optim=False)
-    myolo10_x('yolov8x-mdetect0-sppftf1-sephead.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sephead.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sppftf0.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sppftf0-sephead.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sppftf1.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sppftf1-sephead.yaml', auto_optim=False)
