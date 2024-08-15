@@ -38,7 +38,6 @@ __all__ = (
     "ADown",
     "AConv",
     "SPPELAN",
-    "SPPELAN_TFd",
     "CBFuse",
     "CBLinear",
     "RepVGGDW",
@@ -239,7 +238,7 @@ class SPPF(nn.Module):
             src_flatten = x.flatten(2).transpose(1, 2)
             pos_embed = self.build_2d_sincos_position_embedding(
                     w=w, h=h, embed_dim=self.hidden_dim).to(x.device).to(x.dtype)
-            memory = self.encoder(src_flatten,pos_embed=pos_embed.to(src_flatten.device))
+            memory = self.encoder(src_flatten,pos_embed=pos_embed)
             memory = memory.transpose(1, 2).reshape([n, c, h, w])
             memory = self.drop(self.act(memory))
             if self.res:
@@ -254,8 +253,8 @@ class SPPF(nn.Module):
             n, c, h, w = x.shape
             src_flatten = x.flatten(2).transpose(1, 2)
             pos_embed = self.build_2d_sincos_position_embedding(
-                w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
-            memory = self.encoder(src_flatten, pos_embed=pos_embed.to(src_flatten.device))
+                w=w, h=h, embed_dim=self.hidden_dim).to(x.device).to(x.dtype)
+            memory = self.encoder(src_flatten, pos_embed=pos_embed)
             memory = memory.transpose(1, 2).reshape([n, c, h, w])
             memory = self.drop(self.act(memory))
             if self.res:
@@ -811,8 +810,8 @@ class SPPELAN(nn.Module):
             n, c, h, w = x.shape
             src_flatten = x.flatten(2).transpose(1, 2)
             pos_embed = self.build_2d_sincos_position_embedding(
-                    w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
-            memory = self.encoder(src_flatten,pos_embed=pos_embed.to(src_flatten.device))
+                    w=w, h=h, embed_dim=self.hidden_dim).to(x.device).to(x.dtype)
+            memory = self.encoder(src_flatten,pos_embed=pos_embed)
             memory = memory.transpose(1, 2).reshape([n, c, h, w])
             memory = self.drop(self.act(memory))
             if self.res:
@@ -827,8 +826,8 @@ class SPPELAN(nn.Module):
             n, c, h, w = x.shape
             src_flatten = x.flatten(2).transpose(1, 2)
             pos_embed = self.build_2d_sincos_position_embedding(
-                w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
-            memory = self.encoder(src_flatten, pos_embed=pos_embed.to(src_flatten.device))
+                w=w, h=h, embed_dim=self.hidden_dim).to(x.device).to(x.dtype)
+            memory = self.encoder(src_flatten, pos_embed=pos_embed)
             memory = memory.transpose(1, 2).reshape([n, c, h, w])
             memory = self.drop(self.act(memory))
             if self.res:
@@ -836,94 +835,6 @@ class SPPELAN(nn.Module):
             else:
                 x = memory
         return x
-
-class SPPELAN_TFd(nn.Module):
-    # spp-elan
-    def __init__(self, c1, c2, c3, k=5,
-                 res=False,
-                 eval_size=[640, 640],
-                 dim_feedforward=2048,
-                 dropout=0.1,
-                 activation='gelu',
-                 nhead=4,
-                 num_layers=4,
-                 attn_dropout=None,
-                 act_dropout=None,
-                 normalize_before=False,
-                 ):  # ch_in, ch_out, number, shortcut, groups, expansion
-        super().__init__()
-        self.c = c3
-        self.cv1 = Conv(c1, c3, 1, 1)
-        self.cv2 = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
-        self.cv3 = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
-        self.cv4 = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
-        self.cv5 = Conv(4*c3, c2, 1, 1)
-
-        self.res = res
-        self.eval_size = eval_size
-        self.hidden_dim=1024
-        self.pos_embed = self.build_2d_sincos_position_embedding(
-            20,
-            20,
-            embed_dim=self.hidden_dim)
-
-        encoder_layer = TransformerEncoderLayer(
-            self.hidden_dim, nhead, dim_feedforward, dropout, activation,
-            attn_dropout, act_dropout, normalize_before)
-        encoder_norm = nn.LayerNorm(
-            self.hidden_dim) if normalize_before else None
-        self.encoder = TransformerEncoder(encoder_layer, num_layers,
-                                          encoder_norm)
-        self.act = nn.GELU()
-        self.drop = nn.Dropout(dropout)
-
-    def build_2d_sincos_position_embedding(
-            self,
-            w,
-            h,
-            embed_dim=1024,
-            temperature=10000., ):
-        grid_w = torch.arange(int(w), dtype=torch.float32)
-        grid_h = torch.arange(int(h), dtype=torch.float32)
-        grid_w, grid_h = torch.meshgrid(grid_w, grid_h)
-        assert embed_dim % 4 == 0, 'Embed dimension must be divisible by 4 for 2D sin-cos position embedding'
-        pos_dim = embed_dim // 4
-        omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
-        omega = 1. / (temperature**omega)
-
-        out_w = grid_w.flatten()[..., None] @omega[None]
-        out_h = grid_h.flatten()[..., None] @omega[None]
-
-        pos_emb = torch.concat(
-            [
-                torch.sin(out_w), torch.cos(out_w), torch.sin(out_h),
-                torch.cos(out_h)
-            ],
-            axis=1)[None, :, :]
-
-        return pos_emb
-
-    def forward(self, x):
-        n, c, h, w = x.shape
-        src_flatten = x.flatten(2).transpose(1, 2)
-        # if self.eval_size is not None and not self.training:
-        #     pos_embed = self.pos_embed
-        # else:
-        #     pos_embed = self.build_2d_sincos_position_embedding(
-        #         w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
-        pos_embed = self.build_2d_sincos_position_embedding(
-                w=w, h=h, embed_dim=self.hidden_dim).to(x.device)
-        memory = self.encoder(src_flatten,pos_embed=pos_embed.to(src_flatten.device))
-        memory = memory.transpose(1, 2).reshape([n, c, h, w])
-        memory = self.drop(self.act(memory))
-        if self.res:
-            x = x + memory
-        else:
-            x = memory
-
-        y = [self.cv1(x)]
-        y.extend(m(y[-1]) for m in [self.cv2, self.cv3, self.cv4])
-        return self.cv5(torch.cat(y, 1))
 
 # region code for tfd
 import math
