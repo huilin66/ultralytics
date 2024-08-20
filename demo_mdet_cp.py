@@ -58,3 +58,12 @@ if __name__ == '__main__':
     # model_val(r'runs/mdetect/train100/weights/best.pt')
     # model_val(r'runs/mdetect/train101/weights/best.pt')
     # model_val(r'runs/mdetect/train102/weights/best.pt')
+    # model_val(r'runs/mdetect/train103/weights/best.pt')
+    # model_val(r'runs/mdetect/train106/weights/best.pt')
+    # model_val(r'runs/mdetect/train107/weights/best.pt')
+    # model_val(r'runs/mdetect/train108/weights/best.pt')
+    # model_val(r'runs/mdetect/train109/weights/best.pt')
+
+    myolo10_x('yolov10x-mdetect0-sppftf0-sephead-gat21.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sppftf0-sephead-gat22.yaml', auto_optim=False)
+    myolo10_x('yolov10x-mdetect0-sppftf0-sephead-gat23.yaml', auto_optim=False)

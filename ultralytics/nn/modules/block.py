@@ -766,7 +766,7 @@ class SPPELAN(nn.Module):
         self.add_tf = add_tf
         self.res = res
         self.eval_size = eval_size
-        self.hidden_dim = 640
+        self.hidden_dim = 1024
         self.pos_embed = self.build_2d_sincos_position_embedding(
             20,
             20,

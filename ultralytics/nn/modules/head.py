@@ -116,11 +116,8 @@ class GAT10(nn.Module):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)
         else:
-            attention = self.correlation.to(inputs.device)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                outputs = torch.matmul(feature_proj, attention.half())
+            attention = self.correlation.to(inputs.device).to(inputs.dtype)
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -175,12 +172,8 @@ class GAT11(nn.Module):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)
         else:
-            attention = self.correlation.to(inputs.device)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                # outputs = torch.matmul(feature_proj, attention)
-                outputs = torch.matmul(feature_proj, attention.half())
+            attention = self.correlation.to(inputs.device).to(inputs.dtype)
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -235,11 +228,8 @@ class GAT12(nn.Module):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)
         else:
-            attention = self.correlation.to(inputs.device)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                outputs = torch.matmul(feature_proj, attention.half())
+            attention = self.correlation.to(inputs.device).to(inputs.dtype)
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -294,11 +284,8 @@ class GAT13(nn.Module):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)
         else:
-            attention = self.correlation.to(inputs.device)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                outputs = torch.matmul(feature_proj, attention.half())
+            attention = self.correlation.to(inputs.device).to(inputs.dtype)
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -320,13 +307,10 @@ class GAT20(GAT10):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
         else:
-            correlation = self.correlation.to(inputs.device)
+            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
             attention = self.softmax(correlation)  # size(n, self, self)
             attention = self.dropout(attention)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                outputs = torch.matmul(feature_proj, attention.half())
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -347,13 +331,10 @@ class GAT21(GAT11):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
         else:
-            correlation = self.correlation.to(inputs.device)
+            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
             attention = self.softmax(correlation)  # size(n, self, self)
             attention = self.dropout(attention)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                outputs = torch.matmul(feature_proj, attention.half())
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -374,14 +355,10 @@ class GAT22(GAT12):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
         else:
-            correlation = self.correlation.to(inputs.device)
+            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
             attention = self.softmax(correlation)  # size(n, self, self)
             attention = self.dropout(attention)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                # outputs = torch.matmul(feature_proj, attention)
-                outputs = torch.matmul(feature_proj, attention.half())
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
@@ -402,13 +379,10 @@ class GAT23(GAT13):
             attention = self.dropout(attention)
             outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
         else:
-            correlation = self.correlation.to(inputs.device)
+            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
             attention = self.softmax(correlation)  # size(n, self, self)
             attention = self.dropout(attention)
-            if self.training:
-                outputs = torch.matmul(feature_proj, attention)
-            else:
-                outputs = torch.matmul(feature_proj, attention.half())
+            outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
