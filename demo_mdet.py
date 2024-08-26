@@ -1,12 +1,12 @@
 import torch
 from ultralytics import YOLO
-BATCH_SIZE = 2
-EPOCHS = 5
+BATCH_SIZE = 32
+EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
+TASK = 'mdetect'
 DEVICE = torch.device('cuda:0')
-# DATA = "billboard_mdet5_10_0806m.yaml"
-DATA = "billboard_mdet5_10.yaml"
+DATA = "billboard_mdet5_10_0806m.yaml"
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -17,7 +17,7 @@ FREEZE_NUMS = {
 # region meta tools
 
 def myolo_train(cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwargs):
-    model = YOLO(cfg_path, task='mdetect')
+    model = YOLO(cfg_path, task=TASK)
     model.load(pretrain_path)
 
     train_params = {
@@ -48,11 +48,11 @@ def myolo_train(cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwarg
     model.train(**train_params)
 
 def model_val(network, weight_path):
-    model = network(weight_path, task='mdetect')
+    model = network(weight_path, task=TASK)
     model.val(data=DATA, device=DEVICE)
 
 def model_predict(network, weight_path, img_dir):
-    model = network(weight_path, task='mdetect')
+    model = network(weight_path, task=TASK)
     model.predict(
         img_dir,
         save=True,
@@ -62,7 +62,7 @@ def model_predict(network, weight_path, img_dir):
     )
 
 def model_export(network, weight_path):
-    model = network(weight_path, task='mdetect')
+    model = network(weight_path, task=TASK)
     model.export(format='onnx')
 
 # endregion
@@ -95,12 +95,7 @@ def myolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False
 
 if __name__ == '__main__':
     pass
-    # myolo8x(r'yolov8x-mdetect.yaml')
-    # myolo9e(r'yolov9e-mdetect.yaml')
-    # myolo10x(r'yolov10x-mdetect.yaml')
+    myolo8x(r'yolov8x-mdetect.yaml')
+    myolo9e(r'yolov9e-mdetect.yaml')
+    myolo10x(r'yolov10x-mdetect.yaml')
 
-    # myolo10x(r'yolov10x-mdetect-sppftf1.yaml')
-    # myolo10x(r'yolov10x-mdetect-sppftf1res.yaml')
-    # myolo10x(r'yolov10x-mdetect-sppftf2.yaml')
-    # myolo10x(r'yolov10x-mdetect-sppftf2res.yaml')
-    myolo10x(r'yolov10x-mdetect-sppftf1res-sephead-gat23.yaml')

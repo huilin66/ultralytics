@@ -1,47 +1,106 @@
 import torch
-from ultralytics import YOLO
+from ultralytics import YOLO, RTDETR
 BATCH_SIZE = 32
 EPOCHS = 500
 IMGSZ = 640
+CONF = 0.5
+TASK = 'segment'
 DEVICE = torch.device('cuda:0')
-DATA = "mm.yaml"
 
+DATA = None
+FREEZE_NUMS = {
+    'yolov8' : 22,
+    'yolov9e': 42,
+    'yolov9' : 22,
+    'yolov10': 23,
+}
 
-def myolo8_x():
-    model = YOLO("yolov8x-seg.yaml", task = 'segment')
-    model.load('yolov8x.pt')
+# region meta tools
 
-    model.train(data=DATA, device=DEVICE,
-                epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS,
-                )
-    model.val()
+def model_train(network, cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwargs):
+    model = network(cfg_path, task=TASK)
+    model.load(pretrain_path)
 
+    train_params = {
+        'data': DATA,
+        'device': DEVICE,
+        'epochs': EPOCHS,
+        'imgsz': IMGSZ,
+        'val': True,
+        'batch': BATCH_SIZE,
+        'patience': EPOCHS
+    }
 
-def myolo9_e():
-    model = YOLO("yolov9e-seg.yaml", task = 'segment')
-    model.load('yolov9e.pt')
+    if not auto_optim:
+        train_params.update({
+            'optimizer': 'AdamW',
+            'lr0': 0.0001
+        })
+    if retrain:
+        train_params.update(
+            {
+                'freeze':get_freeze_num(cfg_path),
+                'freeze_head':['.cv2', '.cv3'],
+                'freeze_bn':True,
+            }
+        )
 
-    model.train(data=DATA, device=DEVICE,
-                epochs=EPOCHS, imgsz=IMGSZ, val=True, batch=BATCH_SIZE, patience=EPOCHS)
-    model.val()
+    train_params.update(kwargs)
+    model.train(**train_params)
 
+def model_val(network, weight_path):
+    model = network(weight_path, task=TASK)
+    model.val(data=DATA, device=DEVICE)
 
-def model_predict(weight_path):
-    model = YOLO(weight_path, task='mdetect')
-    model.val()  # evaluate model performance on the validation set
-
+def model_predict(network, weight_path, img_dir):
+    model = network(weight_path, task=TASK)
     model.predict(
-        r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection3\images",
+        img_dir,
         save=True,
-        conf=0.25,
-        # iou=0.2
+        conf=CONF,
         device=DEVICE,
+        imgsz=IMGSZ,
     )
+
+def model_export(network, weight_path, format='onnx'):
+    model = network(weight_path, task=TASK)
+    model.export(format=format)
+
+# endregion
+
+
+# region other tools
+
+def get_freeze_num(cfg_path):
+    for k,v in FREEZE_NUMS.items():
+        if k in cfg_path:
+            return v
+    print('freeze num error for cfg_path {}'.format(cfg_path))
+    return None
+
+# endregion
+
+
+# region run tools
+
+def yolo8x(cfg_path, weight_path='yolov8x.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(YOLO, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+def yolo9e(cfg_path, weight_path='yolov9e.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(YOLO, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+def yolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(YOLO, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+def rtdetrx(cfg_path, weight_path='rtdetr-x.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(RTDETR, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+# endregion
 
 
 if __name__ == '__main__':
     pass
-    myolo8_x()
-    myolo9_e()
-
-    # model_predict(weight_path)
+    yolo8x('yolov8x.yaml', auto_optim=False)
+    yolo9e('yolov9e.yaml', auto_optim=False)
+    yolo10x('yolov10x.yaml', auto_optim=False)
+    rtdetrx('rtdetr-x.yaml', auto_optim=False)
