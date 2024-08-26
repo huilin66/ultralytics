@@ -95,4 +95,12 @@ def myolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False
 
 if __name__ == '__main__':
     pass
-    myolo8x(r'yolov8x-mdetect.yaml')
+    # myolo8x(r'yolov8x-mdetect.yaml')
+    # myolo9e(r'yolov9e-mdetect.yaml')
+    # myolo10x(r'yolov10x-mdetect.yaml')
+
+    # myolo10x(r'yolov10x-mdetect-sppftf1.yaml')
+    # myolo10x(r'yolov10x-mdetect-sppftf1res.yaml')
+    # myolo10x(r'yolov10x-mdetect-sppftf2.yaml')
+    # myolo10x(r'yolov10x-mdetect-sppftf2res.yaml')
+    myolo10x(r'yolov10x-mdetect-sppftf1res-sephead-gat23.yaml')

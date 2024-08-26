@@ -4,10 +4,10 @@
 
 # parameters
 nc: 80 # number of classes
-na: 14 # number of attributes
+na: 10 # number of attributes
 # gelan backbone
 backbone:
-  - [-1, 1, Silence, []]
+  - [-1, 1, nn.Identity, []]
   - [-1, 1, Conv, [64, 3, 2]] # 1-P1/2
   - [-1, 1, Conv, [128, 3, 2]] # 2-P2/4
   - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]] # 3
@@ -58,4 +58,4 @@ head:
   - [[-1, 29], 1, Concat, [1]] # cat head P5
   - [-1, 1, RepNCSPELAN4, [512, 1024, 512, 2]] # 41 (P5/32-large)
 
-  - [[35, 38, 41], 1, MDetect, [nc, na]] # Detect(P3, P4, P5)
+  - [[35, 38, 41], 1, MDetect, [nc, na, [False, None, None]]] # Detect(P3, P4, P5)

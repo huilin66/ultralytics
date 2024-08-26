@@ -18,6 +18,7 @@ from .utils import bias_init_with_prob, linear_init
 __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
 
 # region added gat
+
 class GAT(nn.Module):
     def __init__(self, input_chs, output_chs, drop=0, leaky_rate=0.1, att_type='adj_head_layer', bias=False):
         super().__init__()
@@ -66,8 +67,9 @@ class GAT(nn.Module):
         # print(outputs.shape, inputs.shape)
         outputs = outputs + inputs
         return outputs
+
 class GAT10(nn.Module):
-    def __init__(self, input_chs, output_chs, drop=0, leaky_rate=0.1, att_type='com', bias=False):
+    def __init__(self, input_chs, output_chs, com_path, drop=0, leaky_rate=0.1, att_type='com', bias=False):
         super().__init__()
         self.input_chs = input_chs
         self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
@@ -78,7 +80,7 @@ class GAT10(nn.Module):
             self.proj_a = self.proj_cos
         else:
             import pandas as pd
-            com = pd.read_csv(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\co_occurrence_matrix.csv', header=0, index_col=0)
+            com = pd.read_csv(com_path, header=0, index_col=0)
             com = com.to_numpy()
             self.correlation = torch.tensor(com).float()
 
@@ -88,174 +90,6 @@ class GAT10(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         self.elu = nn.ELU()
 
-    def data_prepare(self, x):
-        b, n, c = x.shape
-        x_rep1 = x.tile((1, n, 1))
-        x_rep2 = torch.repeat_interleave(x, n, 1)
-        x_rep = torch.concat([x_rep1, x_rep2], dim=-1)
-        x_rep = x_rep.reshape((b, n, n, -1))
-        return x_rep
-
-    def proj_cos(self, feature_repeat):
-        feature_1 = feature_repeat[:, :, :, :self.input_chs]
-        feature_2 = feature_repeat[:, :, :, self.input_chs:]
-        return F.cosine_similarity(feature_1, feature_2, dim=-1)
-
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)
-        else:
-            attention = self.correlation.to(inputs.device).to(inputs.dtype)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-class GAT11(nn.Module):
-    def __init__(self, input_chs, output_chs, drop=0, leaky_rate=0.1, att_type='com', bias=False):
-        super().__init__()
-        self.input_chs = input_chs
-        self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
-        self.att_type = att_type
-        if att_type == 'adj_head_layer':
-            self.proj_a = nn.Linear(output_chs * 2, 1, bias=bias)
-        elif att_type == 'cos':
-            self.proj_a = self.proj_cos
-        else:
-            import pandas as pd
-            com = pd.read_csv(r'/nfsv4/23039356r/data/billboard/data0521_m/yolo_rgb_detection5_10/co_occurrence_matrix1.csv',
-                              header=0, index_col=0)
-            com = com.to_numpy()
-            self.correlation = torch.tensor(com).float()
-
-        self.act = nn.ReLU()
-        self.dropout = nn.Dropout(drop)
-        self.leakyrelu = nn.LeakyReLU(leaky_rate, )
-        self.softmax = nn.Softmax(dim=1)
-        self.elu = nn.ELU()
-    def data_prepare(self, x):
-        b, n, c = x.shape
-        x_rep1 = x.tile((1, n, 1))
-        x_rep2 = torch.repeat_interleave(x, n, 1)
-        x_rep = torch.concat([x_rep1, x_rep2], dim=-1)
-        x_rep = x_rep.reshape((b, n, n, -1))
-        return x_rep
-
-    def proj_cos(self, feature_repeat):
-        feature_1 = feature_repeat[:, :, :, :self.input_chs]
-        feature_2 = feature_repeat[:, :, :, self.input_chs:]
-        return F.cosine_similarity(feature_1, feature_2, dim=-1)
-
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)
-        else:
-            attention = self.correlation.to(inputs.device).to(inputs.dtype)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-class GAT12(nn.Module):
-    def __init__(self, input_chs, output_chs, drop=0, leaky_rate=0.1, att_type='com', bias=False):
-        super().__init__()
-        self.input_chs = input_chs
-        self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
-        self.att_type = att_type
-        if att_type == 'adj_head_layer':
-            self.proj_a = nn.Linear(output_chs * 2, 1, bias=bias)
-        elif att_type == 'cos':
-            self.proj_a = self.proj_cos
-        else:
-            import pandas as pd
-            com = pd.read_csv(r'/nfsv4/23039356r/data/billboard/data0521_m/yolo_rgb_detection5_10/co_occurrence_matrix2.csv',
-                              header=0, index_col=0)
-            com = com.to_numpy()
-            self.correlation = torch.tensor(com).float()
-
-        self.act = nn.ReLU()
-        self.dropout = nn.Dropout(drop)
-        self.leakyrelu = nn.LeakyReLU(leaky_rate, )
-        self.softmax = nn.Softmax(dim=1)
-        self.elu = nn.ELU()
-    def data_prepare(self, x):
-        b, n, c = x.shape
-        x_rep1 = x.tile((1, n, 1))
-        x_rep2 = torch.repeat_interleave(x, n, 1)
-        x_rep = torch.concat([x_rep1, x_rep2], dim=-1)
-        x_rep = x_rep.reshape((b, n, n, -1))
-        return x_rep
-
-    def proj_cos(self, feature_repeat):
-        feature_1 = feature_repeat[:, :, :, :self.input_chs]
-        feature_2 = feature_repeat[:, :, :, self.input_chs:]
-        return F.cosine_similarity(feature_1, feature_2, dim=-1)
-
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)
-        else:
-            attention = self.correlation.to(inputs.device).to(inputs.dtype)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-class GAT13(nn.Module):
-    def __init__(self, input_chs, output_chs, drop=0, leaky_rate=0.1, att_type='com', bias=False):
-        super().__init__()
-        self.input_chs = input_chs
-        self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
-        self.att_type = att_type
-        if att_type == 'adj_head_layer':
-            self.proj_a = nn.Linear(output_chs * 2, 1, bias=bias)
-        elif att_type == 'cos':
-            self.proj_a = self.proj_cos
-        else:
-            import pandas as pd
-            com = pd.read_csv(r'/nfsv4/23039356r/data/billboard/data0521_m/yolo_rgb_detection5_10/co_occurrence_matrix3.csv',
-                              header=0, index_col=0)
-            com = com.to_numpy()
-            self.correlation = torch.tensor(com).float()
-
-        self.act = nn.ReLU()
-        self.dropout = nn.Dropout(drop)
-        self.leakyrelu = nn.LeakyReLU(leaky_rate, )
-        self.softmax = nn.Softmax(dim=1)
-        self.elu = nn.ELU()
     def data_prepare(self, x):
         b, n, c = x.shape
         x_rep1 = x.tile((1, n, 1))
@@ -315,78 +149,7 @@ class GAT20(GAT10):
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         outputs = outputs + inputs
         return outputs
-class GAT21(GAT11):
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
 
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
-        else:
-            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-class GAT22(GAT12):
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
-        else:
-            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-class GAT23(GAT13):
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
-        else:
-            correlation = self.correlation.to(inputs.device).to(inputs.dtype)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
 # endregion
 
 class Detect(nn.Module):
@@ -543,7 +306,7 @@ class MDetect(nn.Module):
     anchors = torch.empty(0)  # init
     strides = torch.empty(0)  # init
 
-    def __init__(self, nc=80, na=14, sep=True, c4=None, gat=None, ch=()):
+    def __init__(self, nc=80, na=14, params=(), ch=()):
         """Initializes the YOLOv8 detection layer with specified number of classes and channels."""
         super().__init__()
         self.nc = nc  # number of classes
@@ -557,32 +320,35 @@ class MDetect(nn.Module):
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch
         )
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
-        self.sep=sep
+        self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
+
+        params = [None if v == 'None' else v for v in params]
+        if len(params) == 3:
+            sep, c4, gat = params
+            com_path = None
+        elif len(params) == 4:
+            sep, c4, gat, com_path = params
+        else:
+            raise ValueError("the length (%d) of params is not correct!"%len(params))
+        self.sep = sep
+        self.gat = gat
+        self.com_path = com_path
         c4 = c3 if c4 is None else c4
         if not self.sep:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
         else:
             self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
-        self.gat = gat
-        if self.gat==11:
-            self.gat_head = nn.ModuleList(GAT11(self.na, self.na) for x in ch)
-        elif self.gat==12:
-            self.gat_head = nn.ModuleList(GAT12(self.na, self.na) for x in ch)
-        elif self.gat==13:
-            self.gat_head = nn.ModuleList(GAT13(self.na, self.na) for x in ch)
-        elif self.gat==21:
-            self.gat_head = nn.ModuleList(GAT21(self.na, self.na) for x in ch)
-        elif self.gat==22:
-            self.gat_head = nn.ModuleList(GAT22(self.na, self.na) for x in ch)
-        elif self.gat==23:
-            self.gat_head = nn.ModuleList(GAT23(self.na, self.na) for x in ch)
-        self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
+
+        if self.gat in [10, 11, 12, 13]:
+            self.gat_head = nn.ModuleList(GAT10(self.na, self.na, self.com_path) for x in ch)
+        elif self.gat in [20, 21, 22, 23]:
+            self.gat_head = nn.ModuleList(GAT20(self.na, self.na, self.com_path) for x in ch)
+        else:
+            self.gat_head = None
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         for i in range(self.nl):
-            if self.gat==1:
-                x[i] = self.gat_head[i](x[i])
             if not self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
             else:
@@ -634,7 +400,6 @@ class MDetect(nn.Module):
     def decode_bboxes(self, bboxes, anchors):
         """Decode bounding boxes."""
         return dist2bbox(bboxes, anchors, xywh=True, dim=1)
-
 
 
 class Segment(Detect):
@@ -1093,9 +858,9 @@ class v10MDetect(MDetect):
 
     end2end = True
 
-    def __init__(self, nc=80, na=14, sep=True, c4=None, gat=None, ch=()):
+    def __init__(self, nc=80, na=14, params=(), ch=()):
         """Initializes the v10Detect object with the specified number of classes and input channels."""
-        super().__init__(nc, na, sep, c4, gat, ch)
+        super().__init__(nc, na, params, ch)
         c3 = max(ch[0], min(self.nc, 100))  # channels
         # Light cls head
         self.cv3 = nn.ModuleList(
