@@ -6,7 +6,7 @@ IMGSZ = 640
 CONF = 0.5
 TASK = 'mdetect'
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_mdet5_10_0806m.yaml"
+DATA = "billboard_mdet5_10_c_0806m.yaml"
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -95,7 +95,12 @@ def myolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False
 
 if __name__ == '__main__':
     pass
-    myolo8x(r'yolov8x-mdetect.yaml')
-    myolo9e(r'yolov9e-mdetect.yaml')
-    myolo10x(r'yolov10x-mdetect.yaml')
-
+    # myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
+    # myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-elantf1.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-elantf1res.yaml', auto_optim=False)
+    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)

@@ -169,6 +169,7 @@ class SPPF(nn.Module):
     def __init__(self, c1, c2, k=5,
                  add_tf=False,
                  res=False,
+                 hidden_dim=640,
                  eval_size=[640, 640],
                  dim_feedforward=2048,
                  dropout=0.1,
@@ -193,7 +194,7 @@ class SPPF(nn.Module):
         self.add_tf = add_tf
         self.res = res
         self.eval_size = eval_size
-        self.hidden_dim = 640
+        self.hidden_dim = hidden_dim
         self.pos_embed = self.build_2d_sincos_position_embedding(
             20,
             20,
@@ -744,6 +745,7 @@ class SPPELAN(nn.Module):
     def __init__(self, c1, c2, c3, k=5,
                  add_tf=False,
                  res=False,
+                 hidden_dim=1024,
                  eval_size=[640, 640],
                  dim_feedforward=2048,
                  dropout=0.1,
@@ -766,7 +768,7 @@ class SPPELAN(nn.Module):
         self.add_tf = add_tf
         self.res = res
         self.eval_size = eval_size
-        self.hidden_dim = 1024
+        self.hidden_dim = hidden_dim
         self.pos_embed = self.build_2d_sincos_position_embedding(
             20,
             20,
@@ -1336,7 +1338,20 @@ class PSA(nn.Module):
         ffn (nn.Sequential): Feed-forward network module.
     """
 
-    def __init__(self, c1, c2, e=0.5):
+    def __init__(self, c1, c2, e=0.5,
+                 add_tf=False,
+                 res=False,
+                 hidden_dim=1024,
+                 eval_size=[640, 640],
+                 dim_feedforward=2048,
+                 dropout=0.1,
+                 activation='gelu',
+                 nhead=4,
+                 num_layers=4,
+                 attn_dropout=None,
+                 act_dropout=None,
+                 normalize_before=False,
+                 ):
         """Initializes convolution layers, attention module, and feed-forward network with channel reduction."""
         super().__init__()
         assert c1 == c2
@@ -1346,6 +1361,48 @@ class PSA(nn.Module):
 
         self.attn = Attention(self.c, attn_ratio=0.5, num_heads=self.c // 64)
         self.ffn = nn.Sequential(Conv(self.c, self.c * 2, 1), Conv(self.c * 2, self.c, 1, act=False))
+
+        self.add_tf = add_tf
+        self.res = res
+        self.eval_size = eval_size
+        self.hidden_dim = hidden_dim
+        self.pos_embed = self.build_2d_sincos_position_embedding(
+            20,
+            20,
+            embed_dim=self.hidden_dim)
+
+        encoder_layer = TransformerEncoderLayer(
+            self.hidden_dim, nhead, dim_feedforward, dropout, activation,
+            attn_dropout, act_dropout, normalize_before)
+        encoder_norm = nn.LayerNorm(
+            self.hidden_dim) if normalize_before else None
+        self.encoder = TransformerEncoder(encoder_layer, num_layers,
+                                          encoder_norm)
+        self.act = nn.GELU()
+        self.drop = nn.Dropout(dropout)
+
+    def build_2d_sincos_position_embedding(
+            self,
+            w,
+            h,
+            embed_dim=1024,
+            temperature=10000., ):
+        grid_w = torch.arange(int(w), dtype=torch.float32)
+        grid_h = torch.arange(int(h), dtype=torch.float32)
+        grid_w, grid_h = torch.meshgrid(grid_w, grid_h)
+        assert embed_dim % 4 == 0, 'Embed dimension must be divisible by 4 for 2D sin-cos position embedding'
+        pos_dim = embed_dim // 4
+        omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
+        omega = 1. / (temperature ** omega)
+
+        out_w = grid_w.flatten()[..., None] @ omega[None]
+        out_h = grid_h.flatten()[..., None] @ omega[None]
+
+        pos_emb = torch.concat([
+                                torch.sin(out_w), torch.cos(out_w), torch.sin(out_h),
+                                torch.cos(out_h)
+                                ],axis=1)[None, :, :]
+        return pos_emb
 
     def forward(self, x):
         """
@@ -1357,10 +1414,36 @@ class PSA(nn.Module):
         Returns:
             (torch.Tensor): Output tensor.
         """
+        if self.add_tf==1:
+            n, c, h, w = x.shape
+            src_flatten = x.flatten(2).transpose(1, 2)
+            pos_embed = self.build_2d_sincos_position_embedding(
+                    w=w, h=h, embed_dim=self.hidden_dim).to(x.device).to(x.dtype)
+            memory = self.encoder(src_flatten,pos_embed=pos_embed)
+            memory = memory.transpose(1, 2).reshape([n, c, h, w])
+            memory = self.drop(self.act(memory))
+            if self.res:
+                x = x + memory
+            else:
+                x = memory
         a, b = self.cv1(x).split((self.c, self.c), dim=1)
         b = b + self.attn(b)
         b = b + self.ffn(b)
-        return self.cv2(torch.cat((a, b), 1))
+        x = self.cv2(torch.cat((a, b), 1))
+
+        if self.add_tf == 2:
+            n, c, h, w = x.shape
+            src_flatten = x.flatten(2).transpose(1, 2)
+            pos_embed = self.build_2d_sincos_position_embedding(
+                w=w, h=h, embed_dim=self.hidden_dim).to(x.device).to(x.dtype)
+            memory = self.encoder(src_flatten, pos_embed=pos_embed)
+            memory = memory.transpose(1, 2).reshape([n, c, h, w])
+            memory = self.drop(self.act(memory))
+            if self.res:
+                x = x + memory
+            else:
+                x = memory
+        return x
 
 
 class SCDown(nn.Module):
