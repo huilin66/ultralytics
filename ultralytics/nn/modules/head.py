@@ -339,9 +339,9 @@ class MDetect(nn.Module):
         else:
             self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
 
-        if self.gat in [10, 11, 12, 13]:
+        if self.gat in [1, 10, 11, 12, 13]:
             self.gat_head = nn.ModuleList(GAT10(self.na, self.na, self.com_path) for x in ch)
-        elif self.gat in [20, 21, 22, 23]:
+        elif self.gat in [2, 20, 21, 22, 23]:
             self.gat_head = nn.ModuleList(GAT20(self.na, self.na, self.com_path) for x in ch)
         else:
             self.gat_head = None

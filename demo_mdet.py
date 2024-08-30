@@ -17,8 +17,11 @@ FREEZE_NUMS = {
 # region meta tools
 
 def myolo_train(cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwargs):
-    model = YOLO(cfg_path, task=TASK)
-    model.load(pretrain_path)
+    if 'runs' in pretrain_path:
+        model = YOLO(pretrain_path, task=TASK)
+    else:
+        model = YOLO(cfg_path, task=TASK)
+        model.load(pretrain_path)
 
     train_params = {
         'data': DATA,
@@ -47,7 +50,7 @@ def myolo_train(cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwarg
     train_params.update(kwargs)
     model.train(**train_params)
 
-def model_val(network, weight_path):
+def model_val(network=YOLO, weight_path=None):
     model = network(weight_path, task=TASK)
     model.val(data=DATA, device=DEVICE)
 
@@ -100,7 +103,18 @@ if __name__ == '__main__':
     # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
     # myolo10x(r'yolov10x-mdetect-elantf1.yaml', auto_optim=False)
     # myolo10x(r'yolov10x-mdetect-elantf1res.yaml', auto_optim=False)
-    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
-    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
-    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+
+    # myolo10x(r'yolov10x-mdetect-psa_c3tr_1.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3tr_1_res.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3ghost_1.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3ghost_1_res.yaml', auto_optim=False)
+
+    myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
+    myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
     myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
