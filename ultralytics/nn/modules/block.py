@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad
-from .transformer import TransformerBlock, TransformerEncoder, TransformerEncoderLayer, SwinTransformerBlock
+from .transformer import TransformerBlock, SwinTransformerBlock, MultiHeadAttention, TransformerEncoder, TransformerEncoderLayer
 
 __all__ = (
     "DFL",
@@ -205,21 +205,21 @@ class SPPF(nn.Module):
             self.layer_module = None
 
     def forward(self, x):
-        if self.pos_module==1:
+        if hasattr(self, 'pos_module') and self.pos_module==1:
             memory = self.layer_module(x)
             x = memory + x if self.res_module else memory
 
         """Forward pass through Ghost Convolution block."""
         y = [self.cv1(x)]
 
-        if self.pos_module==2:
+        if hasattr(self, 'pos_module') and self.pos_module==2:
             memory = self.layer_module(y[0])
             y = [memory + y[0]] if self.res_module else [memory]
 
         y.extend(self.m(y[-1]) for _ in range(3))
         z = self.cv2(torch.cat(y, 1))
 
-        if self.pos_module==3:
+        if hasattr(self, 'pos_module') and self.pos_module==3:
             memory = self.layer_module(z)
             z = memory + z if self.res_module else memory
         return z
@@ -747,21 +747,21 @@ class SPPELAN(nn.Module):
 
 
     def forward(self, x):
-        if self.pos_module == 1:
+        if hasattr(self, 'pos_module') and self.pos_module == 1:
             memory = self.layer_module(x)
             x = memory + x if self.res_module else memory
 
         """Forward pass through SPPELAN layer."""
         y = [self.cv1(x)]
 
-        if self.pos_module == 2:
+        if hasattr(self, 'pos_module') and self.pos_module == 2:
             memory = self.layer_module(y[0])
             y = [memory + y[0]] if self.res_module else [memory]
 
         y.extend(m(y[-1]) for m in [self.cv2, self.cv3, self.cv4])
         z = self.cv5(torch.cat(y, 1))
 
-        if self.pos_module==3:
+        if hasattr(self, 'pos_module') and self.pos_module==3:
             memory = self.layer_module(z)
             z = memory + z if self.res_module else memory
         return z
@@ -1049,12 +1049,12 @@ class PSA(nn.Module):
         Returns:
             (torch.Tensor): Output tensor.
         """
-        if self.pos_module==1:
+        if hasattr(self, 'pos_module') and self.pos_module==1:
             memory = self.layer_module(x)
             x = memory + x if self.res_module else memory
 
         y = self.cv1(x)
-        if self.pos_module==2:
+        if hasattr(self, 'pos_module') and self.pos_module==2:
             memory = self.layer_module(y)
             y = memory + y if self.res_module else memory
 
@@ -1063,7 +1063,7 @@ class PSA(nn.Module):
         b = b + self.ffn(b)
         z = self.cv2(torch.cat((a, b), 1))
 
-        if self.pos_module==3:
+        if hasattr(self, 'pos_module') and self.pos_module==3:
             memory = self.layer_module(z)
             z = memory + z if self.res_module else memory
         return z

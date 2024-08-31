@@ -115,6 +115,23 @@ if __name__ == '__main__':
     # myolo10x(r'yolov10x-mdetect-psa_c3ghost_1.yaml', auto_optim=False)
     # myolo10x(r'yolov10x-mdetect-psa_c3ghost_1_res.yaml', auto_optim=False)
 
-    myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
-    myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
-    myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
+    # myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+
+    # myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
+    # myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
+    # myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+    # myolo8x(r'yolov8x-mdetect.yaml', auto_optim=False)
+    # myolo9e(r'yolov9e-mdetect.yaml', auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect.yaml', auto_optim=False)
+
+
+    # model_val(weight_path=r'runs/mdetect/train204/weights/best.pt')
+    # model_val(weight_path=r'runs/mdetect/train205/weights/best.pt')
+    # model_val(weight_path=r'runs/mdetect/train207/weights/best.pt')
+    # model_val(weight_path=r'runs/mdetect/train208/weights/best.pt')
+    model_val(weight_path=r'runs/mdetect/train155/weights/best.pt')
