@@ -19,55 +19,6 @@ __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10D
 
 # region added gat
 
-class GAT(nn.Module):
-    def __init__(self, input_chs, output_chs, drop=0, leaky_rate=0.1, att_type='adj_head_layer', bias=False):
-        super().__init__()
-        self.input_chs = input_chs
-        self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
-        if att_type == 'adj_head_layer':
-            self.proj_a = nn.Linear(output_chs * 2, 1, bias=bias)
-        elif att_type == 'cos':
-            self.proj_a = self.proj_cos
-
-        self.act = nn.ReLU()
-        self.dropout = nn.Dropout(drop)
-        self.leakyrelu = nn.LeakyReLU(leaky_rate, )
-        self.softmax = nn.Softmax(dim=1)
-        self.elu = nn.ELU()
-
-    def data_prepare(self, x):
-        b, n, c = x.shape
-        x_rep1 = x.tile((1, n, 1))
-        x_rep2 = torch.repeat_interleave(x, n, 1)
-        x_rep = torch.concat([x_rep1, x_rep2], dim=-1)
-        x_rep = x_rep.reshape((b, n, n, -1))
-        return x_rep
-
-    def proj_cos(self, feature_repeat):
-        feature_1 = feature_repeat[:, :, :, :self.input_chs]
-        feature_2 = feature_repeat[:, :, :, self.input_chs:]
-        return F.cosine_similarity(feature_1, feature_2, dim=-1)
-
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-        feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-        # print(feature_repeat.shape)
-        # print(self.proj_a)
-        correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-        correlation = self.leakyrelu(correlation)
-
-        attention = self.softmax(correlation)  # size(n, self, self)
-        attention = self.dropout(attention)
-        outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        # print(outputs.shape, inputs.shape)
-        outputs = outputs + inputs
-        return outputs
-
 class GAT10(nn.Module):
     def __init__(self, input_chs, output_chs, com_path, drop=0, leaky_rate=0.1, att_type='com', bias=False):
         super().__init__()
@@ -345,6 +296,7 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(GAT20(self.na, self.na, self.com_path) for x in ch)
         else:
             self.gat_head = None
+        # TODO: end2end
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
