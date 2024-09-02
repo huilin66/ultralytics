@@ -1137,6 +1137,8 @@ def guess_model_task(model):
             return "classify"
         if "detect" in m:
             return "detect"
+        if "mdetect" in m:
+            return "mdetect"
         if m == "segment":
             return "segment"
         if m == "pose":
