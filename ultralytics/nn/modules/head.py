@@ -12,7 +12,7 @@ from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
 from .block import DFL, BNContrastiveHead, ContrastiveHead, Proto
 from .conv import Conv
-from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
+from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer, MLP
 from .utils import bias_init_with_prob, linear_init
 
 __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
@@ -23,7 +23,8 @@ class GAT10(nn.Module):
     def __init__(self, input_chs, output_chs, com_path, drop=0, leaky_rate=0.1, att_type='com', bias=False):
         super().__init__()
         self.input_chs = input_chs
-        self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
+        # self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
+        self.proj_w = MLP(input_chs, output_chs*2, output_chs, 2)
         self.att_type = att_type
         if att_type == 'adj_head_layer':
             self.proj_a = nn.Linear(output_chs * 2, 1, bias=bias)
@@ -288,7 +289,9 @@ class MDetect(nn.Module):
         if not self.sep:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
         else:
-            self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+            # self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
 
         if self.gat in [1, 10, 11, 12, 13]:
             self.gat_head = nn.ModuleList(GAT10(self.na, self.na, self.com_path) for x in ch)
@@ -305,11 +308,18 @@ class MDetect(nn.Module):
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
             else:
                 if self.gat is not None:
-                    att = [self.cv4[j][i](x[i]) for j in range(self.na)]
-                    att = self.gat_head[i](torch.cat(att, 1))
-                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + [att], 1)
+                    # att = [self.cv4[j][i](x[i]) for j in range(self.na)]
+                    # att = self.gat_head[i](torch.cat(att, 1))
+                    # x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + [att], 1)
+                    attribute_feature = self.cv4[i](x[i])
+                    attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    attribute_logits = [self.gat_head[i](torch.cat(attribute_logits, 1))]
+                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
-                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])]+[self.cv4[j][i](x[i]) for j in range(self.na)], 1)
+                    # x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + [self.cv4[j][i](x[i]) for j in range(self.na)], 1)
+                    attribute_feature = self.cv4[i](x[i])
+                    attribute_logits =  [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])]+attribute_logits, 1)
         if self.training:  # Training path
             return x
 
