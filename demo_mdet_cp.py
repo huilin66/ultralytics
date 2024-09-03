@@ -77,3 +77,9 @@ if __name__ == '__main__':
     # demo_mdet.myolo9e(r'yolov9e-mdetect-sppelan_c3str_3.yaml', auto_optim=False)
     # demo_mdet.myolo9e(r'yolov9e-mdetect-sppelan_c3str_3_res.yaml', auto_optim=False)
 
+    demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead.yaml', auto_optim=False)
+    demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat41.yaml', auto_optim=False)
+    demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat42.yaml', auto_optim=False)
+    demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat43.yaml', auto_optim=False)
+    demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat44.yaml', auto_optim=False)
+    demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat45.yaml', auto_optim=False)

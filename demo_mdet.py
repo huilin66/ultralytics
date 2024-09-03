@@ -1,7 +1,7 @@
 import torch
 from ultralytics import YOLO
 BATCH_SIZE = 32
-EPOCHS = 100
+EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
 TASK = 'mdetect'
@@ -16,8 +16,8 @@ FREEZE_NUMS = {
 
 # region meta tools
 
-def myolo_train(cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwargs):
-    model = YOLO(cfg_path, task=TASK)
+def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
+    model = network(cfg_path, task=TASK)
     model.load(pretrain_path)
 
     train_params = {
@@ -48,12 +48,13 @@ def myolo_train(cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwarg
     train_params.update(kwargs)
     model.train(**train_params)
 
-def model_val(network=YOLO, weight_path=None):
+def model_val(weight_path, network=YOLO):
     model = network(weight_path, task=TASK)
     print(weight_path)
+    print(model.info(detailed=False))
     model.val(data=DATA, device=DEVICE)
 
-def model_predict(network, weight_path, img_dir):
+def model_predict(weight_path, img_dir, network=YOLO):
     model = network(weight_path, task=TASK)
     model.predict(
         img_dir,
@@ -63,9 +64,9 @@ def model_predict(network, weight_path, img_dir):
         imgsz=IMGSZ,
     )
 
-def model_export(network, weight_path):
+def model_export(weight_path, format='onnx', network=YOLO):
     model = network(weight_path, task=TASK)
-    model.export(format='onnx')
+    model.export(format=format)
 
 # endregion
 
@@ -136,31 +137,72 @@ if __name__ == '__main__':
     # model_val(weight_path=r'runs/mdetect/train155/weights/best.pt')
 
 
-    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res.yaml',
-    #            weight_path='runs/mdetect/train188/weights/best.pt',
-    #            retrain=True, auto_optim=False)
+    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res.yaml',
+               weight_path='runs/mdetect/train188/weights/best.pt',
+               retrain=True, auto_optim=False)
     myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead.yaml',
                weight_path='runs/mdetect/train188/weights/best.pt',
                retrain=True, auto_optim=False)
-    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat11.yaml',
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat11.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat12.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat13.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat14.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat15.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat21.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat22.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat23.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat24.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat25.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat31.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat32.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat33.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat34.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat35.yaml',
+    #            weight_path='runs/mdetect/train188/weights/best.pt',
+    #            retrain=True, auto_optim=False)
+    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat41.yaml',
                weight_path='runs/mdetect/train188/weights/best.pt',
                retrain=True, auto_optim=False)
-    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat12.yaml',
+    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat42.yaml',
                weight_path='runs/mdetect/train188/weights/best.pt',
                retrain=True, auto_optim=False)
-    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat13.yaml',
+    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat43.yaml',
                weight_path='runs/mdetect/train188/weights/best.pt',
                retrain=True, auto_optim=False)
-    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat21.yaml',
+    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat44.yaml',
                weight_path='runs/mdetect/train188/weights/best.pt',
                retrain=True, auto_optim=False)
-    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat22.yaml',
+    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat45.yaml',
                weight_path='runs/mdetect/train188/weights/best.pt',
                retrain=True, auto_optim=False)
-    myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat23.yaml',
-               weight_path='runs/mdetect/train188/weights/best.pt',
-               retrain=True, auto_optim=False)
-
 
     # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead.yaml', auto_optim=False)
     # myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat11.yaml', auto_optim=False)

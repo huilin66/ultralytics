@@ -102,6 +102,50 @@ class GAT20(GAT10):
         outputs = outputs + inputs
         return outputs
 
+class GAT30(GAT10):
+    def forward(self, inputs):
+        b, c, h, w = inputs.shape
+        n = h * w
+        feature = inputs.view((b, c, n)).permute((0, 2, 1))
+        feature_proj = feature  # size(n, self, c')
+
+        if self.att_type in ['adj_head_layer', 'cos']:
+            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
+
+            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
+            correlation = self.leakyrelu(correlation)
+            attention = self.softmax(correlation)  # size(n, self, self)
+            attention = self.dropout(attention)
+            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
+        else:
+            attention = self.correlation.to(inputs.device).to(inputs.dtype)
+            outputs = torch.matmul(feature_proj, attention)
+
+        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
+        outputs = outputs + inputs
+        return outputs
+
+class GAT40(GAT10):
+    def forward(self, inputs):
+        b, c, h, w = inputs.shape
+        n = h * w
+        feature = inputs.view((b, c, n)).permute((0, 2, 1))
+        feature_proj = feature  # size(n, self, c')
+
+        if self.att_type in ['adj_head_layer', 'cos']:
+            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
+
+            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
+            correlation = self.leakyrelu(correlation)
+            attention = self.softmax(correlation)  # size(n, self, self)
+            attention = self.dropout(attention)
+            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
+        else:
+            attention = self.correlation.to(inputs.device).to(inputs.dtype)
+            outputs = torch.matmul(feature_proj, attention)
+
+        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
+        return outputs
 # endregion
 
 class Detect(nn.Module):
@@ -297,6 +341,10 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(GAT10(self.na, self.na, self.com_path) for x in ch)
         elif self.gat in [2, 20, 21, 22, 23]:
             self.gat_head = nn.ModuleList(GAT20(self.na, self.na, self.com_path) for x in ch)
+        elif self.gat in [3, 30, 31, 32, 33]:
+            self.gat_head = nn.ModuleList(GAT30(self.na, self.na, self.com_path) for x in ch)
+        elif self.gat in [4, 40, 41, 42, 43]:
+            self.gat_head = nn.ModuleList(GAT40(self.na, self.na, self.com_path) for x in ch)
         else:
             self.gat_head = None
         # TODO: end2end

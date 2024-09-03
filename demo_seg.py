@@ -6,7 +6,6 @@ IMGSZ = 640
 CONF = 0.5
 TASK = 'segment'
 DEVICE = torch.device('cuda:0')
-
 DATA = None
 FREEZE_NUMS = {
     'yolov8' : 22,
@@ -17,7 +16,7 @@ FREEZE_NUMS = {
 
 # region meta tools
 
-def model_train(network, cfg_path, pretrain_path, auto_optim=True, retrain=False, **kwargs):
+def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
     model = network(cfg_path, task=TASK)
     model.load(pretrain_path)
 
@@ -48,11 +47,11 @@ def model_train(network, cfg_path, pretrain_path, auto_optim=True, retrain=False
     train_params.update(kwargs)
     model.train(**train_params)
 
-def model_val(network, weight_path):
+def model_val(weight_path, network=YOLO):
     model = network(weight_path, task=TASK)
     model.val(data=DATA, device=DEVICE)
 
-def model_predict(network, weight_path, img_dir):
+def model_predict(weight_path, img_dir, network=YOLO):
     model = network(weight_path, task=TASK)
     model.predict(
         img_dir,
@@ -62,7 +61,7 @@ def model_predict(network, weight_path, img_dir):
         imgsz=IMGSZ,
     )
 
-def model_export(network, weight_path, format='onnx'):
+def model_export(weight_path, format='onnx', network=YOLO):
     model = network(weight_path, task=TASK)
     model.export(format=format)
 
