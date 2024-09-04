@@ -84,16 +84,16 @@ def get_freeze_num(cfg_path):
 # region run tools
 
 def yolo8x(cfg_path, weight_path='yolov8x.pt', auto_optim=True, retrain=False, **kwargs):
-    model_train(YOLO, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def yolo9e(cfg_path, weight_path='yolov9e.pt', auto_optim=True, retrain=False, **kwargs):
-    model_train(YOLO, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def yolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False, **kwargs):
-    model_train(YOLO, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def rtdetrx(cfg_path, weight_path='rtdetr-x.pt', auto_optim=True, retrain=False, **kwargs):
-    model_train(RTDETR, cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    model_train(cfg_path, pretrain_path=weight_path, network=RTDETR, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 # endregion
 
