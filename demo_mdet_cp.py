@@ -85,28 +85,55 @@ if __name__ == '__main__':
     # demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat45.yaml', auto_optim=False)
 
 
+    # demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat41.yaml',
+    #                    weight_path='runs/mdetect/train188/weights/best.pt',
+    #                    retrain=True, auto_optim=False,
+    #                    mosaic=0,
+    #                    hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
+    # demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat42.yaml',
+    #                    weight_path='runs/mdetect/train188/weights/best.pt',
+    #                    retrain=True, auto_optim=False,
+    #                    mosaic=0,
+    #                    hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
+    # demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat43.yaml',
+    #                    weight_path='runs/mdetect/train188/weights/best.pt',
+    #                    retrain=True, auto_optim=False,
+    #                    mosaic=0,
+    #                    hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
+    # demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat44.yaml',
+    #                    weight_path='runs/mdetect/train188/weights/best.pt',
+    #                    retrain=True, auto_optim=False,
+    #                    mosaic=0,
+    #                    hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
+    # demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat45.yaml',
+    #                    weight_path='runs/mdetect/train188/weights/best.pt',
+    #                    retrain=True, auto_optim=False,
+    #                    mosaic=0,
+    #                    hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
+
+
     demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat41.yaml',
                        weight_path='runs/mdetect/train188/weights/best.pt',
                        retrain=True, auto_optim=False,
-                       mosaic=0,
+                       name='nomosaic1',
                        hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
     demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat42.yaml',
                        weight_path='runs/mdetect/train188/weights/best.pt',
                        retrain=True, auto_optim=False,
-                       mosaic=0,
+                       name='nomosaic2',
                        hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
     demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat43.yaml',
                        weight_path='runs/mdetect/train188/weights/best.pt',
                        retrain=True, auto_optim=False,
-                       mosaic=0,
+                       name='nomosaic3',
                        hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
     demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat44.yaml',
                        weight_path='runs/mdetect/train188/weights/best.pt',
                        retrain=True, auto_optim=False,
-                       mosaic=0,
+                       name='nomosaic4',
                        hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
     demo_mdet.myolo10x(r'yolov10x-mdetect-psa_c3str_1_res-sephead-gat45.yaml',
                        weight_path='runs/mdetect/train188/weights/best.pt',
                        retrain=True, auto_optim=False,
-                       mosaic=0,
+                       name='nomosaic5',
                        hsv_h=0, hsv_s=0, hsv_v=0, erasing=0, crop_fraction=0)
