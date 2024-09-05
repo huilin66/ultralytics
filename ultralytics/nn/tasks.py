@@ -400,6 +400,9 @@ class MDetectionModel(BaseModel):
         if nc and nc != self.yaml["nc"]:
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml["nc"] = nc  # override YAML value
+        if na and na != self.yaml["na"]:
+            LOGGER.info(f"Overriding model.yaml na={self.yaml['na']} with na={na}")
+            self.yaml["na"] = na  # override YAML value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
         self.attribute_names = {i: f"{i}" for i in range(self.yaml["na"])}

@@ -95,12 +95,15 @@ def myolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False
     myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def myolo8(cfg_path, weight_path='yolov8x.pt', auto_optim=True, retrain=False, **kwargs):
+    assert 'yolov8' in cfg_path, ValueError(cfg_path, 'is not yolov8 config!')
     myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def myolo9(cfg_path, weight_path='yolov9e.pt', auto_optim=True, retrain=False, **kwargs):
+    assert 'yolov9' in cfg_path, ValueError(cfg_path, 'is not yolov9 config!')
     myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def myolo10(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False, **kwargs):
+    assert 'yolov10' in cfg_path, ValueError(cfg_path, 'is not yolov10 config!')
     myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 
@@ -108,17 +111,21 @@ def myolo10(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False,
 
 if __name__ == '__main__':
     pass
-    myolo8('yolov8n-mdetect.yaml', 'yolov8n.pt',auto_optim=False, name='exp_yolov8n')
-    myolo8('yolov8s-mdetect.yaml', 'yolov8s.pt',auto_optim=False, name='exp_yolov8s')
-    myolo8('yolov8m-mdetect.yaml', 'yolov8m.pt',auto_optim=False, name='exp_yolov8m')
-    myolo8('yolov8l-mdetect.yaml', 'yolov8l.pt',auto_optim=False, name='exp_yolov8l')
+    # myolo8('yolov8x-mdetect.yaml', 'yolov8x.pt', auto_optim=False, name='exp_yolov8x')
+    # myolo9('yolov9e-mdetect.yaml', 'yolov9e.pt',auto_optim=False, name='exp_yolov9e')
+    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_yolov10x')
 
-    myolo9('yolov9s-mdetect.yaml', 'yolov9s.pt',auto_optim=False, name='exp_yolov9s')
-    myolo9('yolov9m-mdetect.yaml', 'yolov9m.pt',auto_optim=False, name='exp_yolov9m')
-    myolo9('yolov9c-mdetect.yaml', 'yolov9c.pt',auto_optim=False, name='exp_yolov9c')
-    
-    myolo10('yolov10n-mdetect.yaml', 'yolov10n.pt',auto_optim=False, name='exp_yolov10n')
-    myolo10('yolov10s-mdetect.yaml', 'yolov10s.pt', auto_optim=False, name='exp_yolov10s')
-    myolo10('yolov10m-mdetect.yaml', 'yolov10m.pt', auto_optim=False, name='exp_yolov10m')
-    myolo10('yolov10b-mdetect.yaml', 'yolov10b.pt', auto_optim=False, name='exp_yolov10b')
-    myolo10('yolov10l-mdetect.yaml', 'yolov10l.pt', auto_optim=False, name='exp_yolov10l')
+    myolo8('yolov8n-mdetect.yaml', 'yolov8n.pt',auto_optim=False, name='exp_yolov8n', mloss_enlarge=0.4)
+    myolo8('yolov8s-mdetect.yaml', 'yolov8s.pt',auto_optim=False, name='exp_yolov8s', mloss_enlarge=0.4)
+    myolo8('yolov8m-mdetect.yaml', 'yolov8m.pt',auto_optim=False, name='exp_yolov8m', mloss_enlarge=0.4)
+    myolo8('yolov8l-mdetect.yaml', 'yolov8l.pt',auto_optim=False, name='exp_yolov8l', mloss_enlarge=0.4)
+
+    myolo9('yolov9s-mdetect.yaml', 'yolov9s.pt',auto_optim=False, name='exp_yolov9s', mloss_enlarge=0.4)
+    myolo9('yolov9m-mdetect.yaml', 'yolov9m.pt',auto_optim=False, name='exp_yolov9m', mloss_enlarge=0.4)
+    myolo9('yolov9c-mdetect.yaml', 'yolov9c.pt',auto_optim=False, name='exp_yolov9c', mloss_enlarge=0.4)
+
+    myolo10('yolov10n-mdetect.yaml', 'yolov10n.pt',auto_optim=False, name='exp_yolov10n', mloss_enlarge=0.4)
+    myolo10('yolov10s-mdetect.yaml', 'yolov10s.pt', auto_optim=False, name='exp_yolov10s', mloss_enlarge=0.4)
+    myolo10('yolov10m-mdetect.yaml', 'yolov10m.pt', auto_optim=False, name='exp_yolov10m', mloss_enlarge=0.4)
+    myolo10('yolov10b-mdetect.yaml', 'yolov10b.pt', auto_optim=False, name='exp_yolov10b', mloss_enlarge=0.4)
+    myolo10('yolov10l-mdetect.yaml', 'yolov10l.pt', auto_optim=False, name='exp_yolov10l', mloss_enlarge=0.4)

@@ -737,7 +737,7 @@ class E2EDetectLoss:
 
 class v8MDetectionLoss(v8DetectionLoss):
     """Criterion class for computing training losses."""
-    def __init__(self, model, mloss_enlarge=0.4, epsilon=None, size_sum=False, weight_ratio=False):
+    def __init__(self, model, mloss_enlarge=0.0, epsilon=None, size_sum=False, weight_ratio=False):
         super().__init__(model)
         if epsilon is not None and (epsilon <= 0 or epsilon >= 1):
             epsilon = None
@@ -749,7 +749,7 @@ class v8MDetectionLoss(v8DetectionLoss):
         self.na = m.na
         self.no = m.nc + m.na + m.reg_max * 4
         self.assigner = TaskAlignedAssignerMdet(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
-        self.mloss_enlarge=mloss_enlarge
+        self.mloss_enlarge = max(mloss_enlarge, model.args.mloss_enlarge)
 
     def _labelsmoothing(self, target, class_num):
         # if target.ndim == 1 or target.shape[-1] != class_num:
