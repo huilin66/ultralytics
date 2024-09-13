@@ -33,6 +33,7 @@ class MDetectionValidator(BaseValidator):
         """Initialize detection model with necessary variables and settings."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         self.nt_per_class = None
+        self.nt_per_image = None
         self.is_coco = False
         self.is_lvis = False
         self.class_map = None
@@ -82,8 +83,6 @@ class MDetectionValidator(BaseValidator):
             self.nc = model.model.nc
             self.attribute_names = model.model.attribute_names
             self.na = model.model.na
-        # self.nc = len(model.names)
-        # self.na = self.data['na']
         self.metrics.names = self.names
         self.metrics.plot = self.args.plots
         self.metrics.attribute_names = self.attribute_names
@@ -92,7 +91,7 @@ class MDetectionValidator(BaseValidator):
         self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], ap=[], conf=[], pred_cls=[], target_cls=[], pred_attributes=[], target_attributes=[])
+        self.stats = dict(tp=[], ap=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -150,6 +149,7 @@ class MDetectionValidator(BaseValidator):
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
             nl = len(cls)
             stat["target_cls"] = cls
+            stat["target_img"] = cls.unique()
             stat["target_attributes"] = mdet_attributes
             if npr == 0:
                 if nl:
@@ -191,13 +191,14 @@ class MDetectionValidator(BaseValidator):
         """Returns metrics statistics and results dictionary."""
         stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()}  # to numpy
         self.metrics.get_attribute_names()
+
+        self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
+        self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
+        stats.pop("target_img", None)
         if len(stats) and stats["tp"].any():
             self.metrics.process(**stats)
         else:
             self.metrics.attributes.all_ap = np.zeros(self.metrics.na)
-        self.nt_per_class = np.bincount(
-            stats["target_cls"].astype(int), minlength=self.nc
-        )  # number of targets per class
         return self.metrics.results_dict
 
     def print_results(self):
@@ -210,7 +211,7 @@ class MDetectionValidator(BaseValidator):
         # Print results per class
         if self.args.verbose and not self.training and self.nc > 1 and len(self.stats):
             for i, c in enumerate(self.metrics.ap_class_index):
-                LOGGER.info(pf % (self.names[c], self.seen, self.nt_per_class[c], *self.metrics.class_result(i)))
+                LOGGER.info(pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i)))
             LOGGER.info('-'*20*(3+len(self.metrics.keys)))
             for i in range(self.nc, self.nc+self.na):
                 LOGGER.info(pf % (self.metrics.attribute_names[i-self.nc], 0, self.nt_per_class[0], *self.metrics.class_result(i)))

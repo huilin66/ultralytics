@@ -885,7 +885,14 @@ class Metric(SimpleClass):
             else:
                 return map
         else:
-            return self.all_ap.mean() if len(self.all_ap) else 0.0
+            if len(self.all_ap)> 0:
+                assert isinstance(self.all_ap, np.ndarray), ValueError(self.all_ap)
+                ap_class = self.all_ap.mean(axis=0)
+                ap_mean = ap_class.mean()
+            else:
+                ap_mean = 0
+            return ap_mean
+
 
     def mean_results(self):
         """Mean of results, return mp, mr, map50, map."""

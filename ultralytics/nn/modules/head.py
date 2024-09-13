@@ -298,6 +298,8 @@ class MDetect(nn.Module):
 
     dynamic = False  # force grid reconstruction
     export = False  # export mode
+    end2end = False  # end2end
+    max_det = 300  # max_det
     shape = None
     anchors = torch.empty(0)  # init
     strides = torch.empty(0)  # init
@@ -332,8 +334,8 @@ class MDetect(nn.Module):
         c4 = c3 if c4 is None else c4
         if not self.sep:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
         else:
-            # self.cv4 = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
 
@@ -347,30 +349,88 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(GAT40(self.na, self.na, self.com_path) for x in ch)
         else:
             self.gat_head = None
-        # TODO: end2end
+
+        if self.end2end:
+            self.one2one_cv2 = copy.deepcopy(self.cv2)
+            self.one2one_cv3 = copy.deepcopy(self.cv3)
+            self.one2one_cv4 = copy.deepcopy(self.cv4)
+            self.one2one_cv4_out = copy.deepcopy(self.cv4_out) if self.cv4_out is not None else None
+            self.one2one_gat_head = copy.deepcopy(self.gat_head) if self.gat_head is not None else None
+
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
+        if self.end2end:
+            return self.forward_end2end(x)
+
         for i in range(self.nl):
             if not self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
             else:
                 if self.gat is not None:
-                    # att = [self.cv4[j][i](x[i]) for j in range(self.na)]
-                    # att = self.gat_head[i](torch.cat(att, 1))
-                    # x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + [att], 1)
                     attribute_feature = self.cv4[i](x[i])
                     attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                     attribute_logits = [self.gat_head[i](torch.cat(attribute_logits, 1))]
                     x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
-                    # x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + [self.cv4[j][i](x[i]) for j in range(self.na)], 1)
                     attribute_feature = self.cv4[i](x[i])
                     attribute_logits =  [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
-                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])]+attribute_logits, 1)
+                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
         if self.training:  # Training path
             return x
 
+        y = self._inference(x)
+        return y if self.export else (y, x)
+
+    def forward_end2end(self, x):
+        """
+        Performs forward pass of the v10Detect module.
+
+        Args:
+            x (tensor): Input tensor.
+
+        Returns:
+            (dict, tensor): If not in training mode, returns a dictionary containing the outputs of both one2many and one2one detections.
+                           If in training mode, returns a dictionary containing the outputs of one2many and one2one detections separately.
+        """
+        x_detach = [xi.detach() for xi in x]
+        for i in range(self.nl):
+            if not self.sep:
+                x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.one2one_cv4[i](x_detach[i])), 1)
+            else:
+                if self.gat is not None:
+                    attribute_feature = self.one2one_cv4[i](x_detach[i])
+                    attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    attribute_logits = [self.one2one_gat_head[i](torch.cat(attribute_logits, 1))]
+                    x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
+                else:
+                    attribute_feature = self.one2one_cv4[i](x_detach[i])
+                    attribute_logits =  [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
+        one2one = x_detach
+
+        for i in range(self.nl):
+            if not self.sep:
+                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+            else:
+                if self.gat is not None:
+                    attribute_feature = self.cv4[i](x[i])
+                    attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    attribute_logits = [self.gat_head[i](torch.cat(attribute_logits, 1))]
+                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
+                else:
+                    attribute_feature = self.cv4[i](x[i])
+                    attribute_logits =  [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
+        if self.training:  # Training path
+            return {"one2many": x, "one2one": one2one}
+
+        y = self._inference(one2one)
+        y = self.postprocess(y.permute(0, 2, 1), self.max_det, self.nc, self.na)
+        return y if self.export else (y, {"one2many": x, "one2one": one2one})
+
+    def _inference(self, x):
+        """Decode predicted bounding boxes and class probabilities based on multiple-level feature maps."""
         # Inference path
         shape = x[0].shape  # BCHW
         x_cat = torch.cat([xi.view(shape[0], self.no, -1) for xi in x], 2)
@@ -380,7 +440,8 @@ class MDetect(nn.Module):
 
         if self.export and self.format in {"saved_model", "pb", "tflite", "edgetpu", "tfjs"}:  # avoid TF FlexSplitV ops
             box = x_cat[:, : self.reg_max * 4]
-            cls = x_cat[:, self.reg_max * 4 :]
+            cls = x_cat[:, self.reg_max * 4 : self.reg_max * 4 + self.nc]
+            att = x_cat[:, self.reg_max * 4 + self.nc : ]
         else:
             box, cls, att = x_cat.split((self.reg_max * 4, self.nc, self.na), 1)
 
@@ -395,22 +456,78 @@ class MDetect(nn.Module):
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
 
-        y = torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
-        return y if self.export else (y, x)
+        return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
 
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""
         m = self  # self.model[-1]  # Detect() module
         # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1
         # ncf = math.log(0.6 / (m.nc - 0.999999)) if cf is None else torch.log(cf / cf.sum())  # nominal class frequency
-        for a, b, s in zip(m.cv2, m.cv3, m.stride):  # from
-            a[-1].bias.data[:] = 1.0  # box
-            b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+        if self.sep:
+            for a, b, c, cc, s in zip(m.cv2, m.cv3, m.cv4, m.cv4_out, m.stride):  # from
+                a[-1].bias.data[:] = 1.0  # box
+                b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                cc[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+        else:
+            for a, b, c, s in zip(m.cv2, m.cv3, m.cv4, m.stride):  # from
+                a[-1].bias.data[:] = 1.0  # box
+                b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+        if self.end2end:
+            if self.sep:
+                for a, b, c, cc, s in zip(m.one2one_cv2, m.one2one_cv3, m.one2one_cv4, m.one2one_cv4_out, m.stride):  # from
+                    a[-1].bias.data[:] = 1.0  # box
+                    b[-1].bias.data[: m.nc] = math.log(
+                        5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                    c[-1].bias.data[: m.na] = math.log(
+                        5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                    cc[-1].bias.data[: m.na] = math.log(
+                        5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+            else:
+                for a, b, c, s in zip(m.one2one_cv2, m.one2one_cv3, m.one2one_cv4, m.stride):  # from
+                    a[-1].bias.data[:] = 1.0  # box
+                    b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                    c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
 
     def decode_bboxes(self, bboxes, anchors):
         """Decode bounding boxes."""
-        return dist2bbox(bboxes, anchors, xywh=True, dim=1)
+        return dist2bbox(bboxes, anchors, xywh=not self.end2end, dim=1)
 
+    @staticmethod
+    def postprocess(preds: torch.Tensor, max_det: int, nc: int = 80, na: int = 10):
+        """
+        Post-processes the predictions obtained from a YOLOv10 model.
+
+        Args:
+            preds (torch.Tensor): The predictions obtained from the model. It should have a shape of (batch_size, num_boxes, 4 + num_classes).
+            max_det (int): The maximum number of detections to keep.
+            nc (int, optional): The number of classes. Defaults to 80.
+
+        Returns:
+            (torch.Tensor): The post-processed predictions with shape (batch_size, max_det, 6),
+                including bounding boxes, scores and cls.
+        """
+        assert 4 + nc + na == preds.shape[-1]
+        boxes, scores, attributes = preds.split([4, nc, na], dim=-1)
+        max_scores = scores.amax(dim=-1)
+        max_scores, index = torch.topk(max_scores, min(max_det, max_scores.shape[1]), axis=-1)
+        index = index.unsqueeze(-1)
+        boxes = torch.gather(boxes, dim=1, index=index.repeat(1, 1, boxes.shape[-1]))
+        scores = torch.gather(scores, dim=1, index=index.repeat(1, 1, scores.shape[-1]))
+        attributes = torch.gather(attributes, dim=1, index=index.repeat(1, 1, attributes.shape[-1]))
+
+        # NOTE: simplify but result slightly lower mAP
+        # scores, labels = scores.max(dim=-1)
+        # return torch.cat([boxes, scores.unsqueeze(-1), labels.unsqueeze(-1)], dim=-1)
+
+        scores, index = torch.topk(scores.flatten(1), max_det, axis=-1)
+        labels = index % nc
+        index = index // nc
+        boxes = boxes.gather(dim=1, index=index.unsqueeze(-1).repeat(1, 1, boxes.shape[-1]))
+        attributes = attributes.gather(dim=1, index=index.unsqueeze(-1).repeat(1, 1, attributes.shape[-1]))
+
+        return torch.cat([boxes, scores.unsqueeze(-1), labels.unsqueeze(-1).to(boxes.dtype), attributes], dim=-1)
 
 class Segment(Detect):
     """YOLOv8 Segment head for segmentation models."""

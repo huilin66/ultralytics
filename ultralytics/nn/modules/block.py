@@ -329,6 +329,40 @@ class RepC3(nn.Module):
         """Forward pass of RT-DETR neck layer."""
         return self.cv3(self.m(self.cv1(x)) + self.cv2(x))
 
+class C3STRPP(nn.Module):
+    def __init__(self, c1, c2, n=3):
+        """Initialize CSP Bottleneck with a single convolution using input channels, output channels, and number."""
+        super().__init__()
+        c_ = c2//2  # hidden channels
+        self.cv1 = Conv(c1, c2*2, 1, 1)
+        self.cv2 = Conv(c2, c_, 1, 1)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c2, c_, num_heads, n)
+        self.cv3 = nn.Identity()
+    def forward(self, x):
+        """Forward pass of RT-DETR neck layer."""
+        y1,y2 = list(self.cv1(x).chunk(2, 1))
+        z1 = self.m(y1)
+        z2 = self.cv2(y2)
+        return self.cv3(torch.cat([z1, z2], 1))
+
+class C3STRP(nn.Module):
+    def __init__(self, c1, c2, n=3):
+        """Initialize CSP Bottleneck with a single convolution using input channels, output channels, and number."""
+        super().__init__()
+        c_ = c2//2  # hidden channels
+        self.cv1 = Conv(c1, c2*2, 1, 1)
+        self.cv2 = Conv(c2, c_, 1, 1)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c2, c_, num_heads, n)
+        self.cv3 = nn.Identity()
+
+    def forward(self, x):
+        """Forward pass of RT-DETR neck layer."""
+        y = list(self.cv1(x))
+        z1 = self.m(y)
+        z2 = self.cv2(y)
+        return self.cv3(torch.cat([z1, z2], 1))
 
 class C3TR(C3):
     """C3 module with TransformerBlock()."""
@@ -1034,6 +1068,12 @@ class PSA(nn.Module):
             self.layer_module = C3TR(self.c1_module, self.c2_module)
         elif self.add_module == 'c3str':
             self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3str2':
+            self.layer_module = C3STR(self.c1_module, self.c2_module, n=2)
+        elif self.add_module == 'c3strpp':
+            self.layer_module = C3STRPP(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3strp':
+            self.layer_module = C3STRP(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c3ghost':
             self.layer_module = C3Ghost(self.c1_module, self.c2_module)
         else:

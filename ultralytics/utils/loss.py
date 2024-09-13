@@ -734,11 +734,28 @@ class E2EDetectLoss:
         loss_one2one = self.one2one(one2one, batch)
         return loss_one2many[0] + loss_one2one[0], loss_one2many[1] + loss_one2one[1]
 
+class E2EMDetectLoss:
+    """Criterion class for computing training losses."""
+
+    def __init__(self, model):
+        """Initialize E2EDetectLoss with one-to-many and one-to-one detection losses using the provided model."""
+        self.one2many = v8MDetectionLoss(model, tal_topk=10)
+        self.one2one = v8MDetectionLoss(model, tal_topk=1)
+
+    def __call__(self, preds, batch):
+        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
+        preds = preds[1] if isinstance(preds, tuple) else preds
+        one2many = preds["one2many"]
+        loss_one2many = self.one2many(one2many, batch)
+        one2one = preds["one2one"]
+        loss_one2one = self.one2one(one2one, batch)
+        return loss_one2many[0] + loss_one2one[0], loss_one2many[1] + loss_one2one[1]
+
 
 class v8MDetectionLoss(v8DetectionLoss):
     """Criterion class for computing training losses."""
-    def __init__(self, model, mloss_enlarge=0.0, epsilon=None, size_sum=False, weight_ratio=False):
-        super().__init__(model)
+    def __init__(self, model, tal_topk=10, epsilon=None, size_sum=False, weight_ratio=False):
+        super().__init__(model, tal_topk)
         if epsilon is not None and (epsilon <= 0 or epsilon >= 1):
             epsilon = None
         self.epsilon = epsilon
@@ -748,15 +765,10 @@ class v8MDetectionLoss(v8DetectionLoss):
         m = model.model[-1]
         self.na = m.na
         self.no = m.nc + m.na + m.reg_max * 4
-        self.assigner = TaskAlignedAssignerMdet(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
-        self.mloss_enlarge = max(mloss_enlarge, model.args.mloss_enlarge)
+        self.assigner = TaskAlignedAssignerMdet(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
+        self.mloss_enlarge = model.args.mloss_enlarge
 
     def _labelsmoothing(self, target, class_num):
-        # if target.ndim == 1 or target.shape[-1] != class_num:
-        #     one_hot_target = F.one_hot(target, class_num)
-        # else:
-        #     one_hot_target = target
-
         confidence = 1.0 - self.epsilon
         label_shape = torch.Size((target.size(0), class_num))
         with torch.no_grad():
@@ -767,32 +779,6 @@ class v8MDetectionLoss(v8DetectionLoss):
         soft_target = soft_target.reshape((-1, class_num))
         return soft_target
 
-    def ratio2weight(self, targets, ratio):
-        pos_weights = targets * (1. - ratio)
-        neg_weights = (1. - targets) * ratio
-        weights = torch.exp(neg_weights + pos_weights)
-
-        # for RAP dataloader, targets element may be 2, with or without smooth, some element must great than 1
-        weights = weights - weights * (targets > 1)
-
-        return weights
-
-    def preprocess(self, targets, batch_size, scale_tensor):
-        """Preprocesses the target counts and matches with the input batch size to output a tensor."""
-        if targets.shape[0] == 0:
-            out = torch.zeros(batch_size, 0, 5, device=self.device)
-        else:
-            i = targets[:, 0]  # image index
-            _, counts = i.unique(return_counts=True)
-            counts = counts.to(dtype=torch.int32)
-            out = torch.zeros(batch_size, counts.max(), 5+self.na, device=self.device)
-            for j in range(batch_size):
-                matches = i == j
-                n = matches.sum()
-                if n:
-                    out[j, :n] = targets[matches, 1:]
-            out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
-        return out
 
     def __call__(self, preds, batch):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
@@ -845,11 +831,11 @@ class v8MDetectionLoss(v8DetectionLoss):
             )
 
         gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
-
         loss[3] = F.binary_cross_entropy_with_logits(
                                                      input=pred_attributes,
                                                      target=gt_attributes,
                                                      )
+
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain

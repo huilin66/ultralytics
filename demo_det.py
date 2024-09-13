@@ -95,12 +95,28 @@ def yolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False,
 def rtdetrx(cfg_path, weight_path='rtdetr-x.pt', auto_optim=True, retrain=False, **kwargs):
     model_train(cfg_path, pretrain_path=weight_path, network=RTDETR, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
+
+def yolo8(cfg_path, weight_path='yolov8x.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+def yolo9(cfg_path, weight_path='yolov9e.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+def yolo10(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
+def rtdetr(cfg_path, weight_path='rtdetr-x.pt', auto_optim=True, retrain=False, **kwargs):
+    model_train(cfg_path, pretrain_path=weight_path, network=RTDETR, auto_optim=auto_optim, retrain=retrain, **kwargs)
+
 # endregion
 
 
 if __name__ == '__main__':
     pass
-    yolo8x('yolov8x.yaml', auto_optim=False)
-    yolo9e('yolov9e.yaml', auto_optim=False)
-    yolo10x('yolov10x.yaml', auto_optim=False)
-    rtdetrx('rtdetr-x.yaml', auto_optim=False)
+    # yolo8x('yolov8x.yaml', auto_optim=False)
+    # yolo9e('yolov9e.yaml', auto_optim=False)
+    # yolo10x('yolov10x.yaml', auto_optim=False)
+    # rtdetrx('rtdetr-x.yaml', auto_optim=False)
+    # yolo10('yolov8n.yaml', 'yolov8n.pt', auto_optim=False, name='debug', mloss_enlarge=0.4)
+    # yolo10('yolov10n.yaml', 'yolov10n.pt', auto_optim=False, name='debug', mloss_enlarge=0.4)
+
