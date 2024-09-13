@@ -1,11 +1,10 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
-# YOLOv10 object detection model. For Usage examples see https://docs.ultralytics.com/tasks/detect
-
 # Parameters
 nc: 80 # number of classes
 scales: # model compound scaling constants, i.e. 'model=yolov10n.yaml' will call yolov10.yaml with scale 'n'
   # [depth, width, max_channels]
   m: [0.67, 0.75, 768]
+
 
 backbone:
   # [from, repeats, module, args]

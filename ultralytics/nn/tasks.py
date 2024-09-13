@@ -277,6 +277,8 @@ class BaseModel(nn.Module):
                         usd.append([k, v.shape, da[k].shape])
                     else:
                         usd.append([k, v.shape])
+            for k in usd:
+                print(k)
             return usd
 
         model = weights["model"] if isinstance(weights, dict) else weights  # torchvision models are not dicts

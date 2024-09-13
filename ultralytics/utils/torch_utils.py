@@ -364,16 +364,20 @@ def get_flops_with_torch_profiler(model, imgsz=640):
 
 def initialize_weights(model):
     init_seeds()
+
     """Initialize model weights to random values."""
     for m in model.modules():
         t = type(m)
         if t is nn.Conv2d:
             pass  # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
             if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                if fan_in != 0:
+                    bound = 1 / math.sqrt(fan_in)
+                    nn.init.uniform_(m.bias, -bound, bound)
         elif t is nn.Linear:
-            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
             nn.init.constant_(m.bias, 0)
         elif t is nn.BatchNorm2d:
             m.eps = 1e-3
