@@ -378,7 +378,10 @@ def initialize_weights(model):
                     nn.init.uniform_(m.bias, -bound, bound)
         elif t is nn.Linear:
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
-            nn.init.constant_(m.bias, 0)
+            if m.bias is not None:
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                nn.init.uniform_(m.bias, -bound, bound)
         elif t is nn.BatchNorm2d:
             m.eps = 1e-3
             m.momentum = 0.03
