@@ -1201,7 +1201,7 @@ class PSA(nn.Module):
         elif self.add_module == 'c3strsp':
             self.layer_module = C3STRSP(self.c1_module, self.c2_module)
         elif self.add_module == 'c3strcp':
-            self.layer_module = C3STRCP(self.c1_module, self.c2_module, n=2)
+            self.layer_module = C3STRCP(self.c1_module, self.c2_module)
         elif self.add_module == 'c4str':
             self.layer_module = C4STR(self.c1_module, self.c2_module)
         elif self.add_module == 'c4str2':
