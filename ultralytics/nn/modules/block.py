@@ -302,6 +302,134 @@ class C3(nn.Module):
         """Forward pass through the CSP bottleneck with 2 convolutions."""
         return self.cv3(torch.cat((self.m(self.cv1(x)), self.cv2(x)), 1))
 
+class C4(nn.Module):
+    """CSP Bottleneck with 3 convolutions."""
+
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        """Initialize the CSP Bottleneck with given channels, number, shortcut, groups, and expansion values."""
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c1, c_, 1, 1)
+        self.cv3 = Conv(3 * c_, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.Sequential(*(Bottleneck(c_, c_, shortcut, g, k=((1, 1), (3, 3)), e=1.0) for _ in range(n)))
+        self.n = Conv(c_, c_, 1, 1)
+
+    def forward(self, x):
+        """Forward pass through the CSP bottleneck with 2 convolutions."""
+        y1 = self.cv1(x)
+        y2 = self.cv2(x)
+        z1 = self.m(y1)
+        z2 = self.n(y1)
+        z = torch.cat((z1, z2, y2), 1)
+        return self.cv3(z)
+
+class C4STR(C4):
+    '''C4 module with SwinTransformerBlock()'''
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c_, c_, num_heads, n)
+
+class C4STR2(C4):
+    '''C4 module with SwinTransformerBlock()'''
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c_, c_, num_heads, n)
+        self.cv3 = Conv(2 * c_, c2, 1)  # optional act=FReLU(c2)
+
+    def forward(self, x):
+        """Forward pass through the CSP bottleneck with 2 convolutions."""
+        y1 = self.cv1(x)
+        z = self.cv2(x)
+        y2 = self.n(y1)
+        y3 = self.m(y2)
+        yz = torch.cat((y3, z), 1)
+        return self.cv3(yz)
+
+
+class C4STR3(C4):
+    '''C4 module with SwinTransformerBlock()'''
+
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c_, c_, num_heads, n)
+        self.cv3 = Conv(2 * c_, c2, 1)  # optional act=FReLU(c2)
+
+    def forward(self, x):
+        """Forward pass through the CSP bottleneck with 2 convolutions."""
+        y1 = self.cv1(x)
+        z = self.cv2(x)
+        y2 = self.m(y1)
+        y3 = self.n(y2)
+        yz = torch.cat((y3, z), 1)
+        return self.cv3(yz)
+
+class ChannelAttention(nn.Module):
+    def __init__(self, in_planes):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+        self.fc = nn.Sequential(nn.Conv2d(in_planes, in_planes // 16, 1, bias=False),
+                                nn.ReLU(),
+                                nn.Conv2d(in_planes // 16, in_planes, 1, bias=False))
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = self.fc(self.avg_pool(x))
+        max_out = self.fc(self.max_pool(x))
+        out = avg_out + max_out
+        return self.sigmoid(out)*x
+
+class C4STR_CBAM(C4):
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c_, c_, num_heads, n)
+        self.n = ChannelAttention(c_)
+
+class C4STR_CBAM2(C4):
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c_, c_, num_heads, n)
+        self.n = ChannelAttention(c_)
+        self.cv3 = Conv(2 * c_, c2, 1)  # optional act=FReLU(c2)
+
+    def forward(self, x):
+        """Forward pass through the CSP bottleneck with 2 convolutions."""
+        y1 = self.cv1(x)
+        z = self.cv2(x)
+        y2 = self.n(y1)
+        y3 = self.m(y2)
+        yz = torch.cat((y3, z), 1)
+        return self.cv3(yz)
+
+class C4STR_CBAM3(C4):
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c_, c_, num_heads, n)
+        self.n = ChannelAttention(c_)
+        self.cv3 = Conv(2 * c_, c2, 1)  # optional act=FReLU(c2)
+
+    def forward(self, x):
+        """Forward pass through the CSP bottleneck with 2 convolutions."""
+        y1 = self.cv1(x)
+        z = self.cv2(x)
+        y2 = self.m(y1)
+        y3 = self.n(y2)
+        yz = torch.cat((y3, z), 1)
+        return self.cv3(yz)
 
 class C3x(C3):
     """C3 module with cross-convolutions."""
@@ -1068,10 +1196,24 @@ class PSA(nn.Module):
             self.layer_module = C3TR(self.c1_module, self.c2_module)
         elif self.add_module == 'c3str':
             self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3str2':
+            self.layer_module = C3STR(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c3strsp':
             self.layer_module = C3STRSP(self.c1_module, self.c2_module)
         elif self.add_module == 'c3strcp':
             self.layer_module = C3STRCP(self.c1_module, self.c2_module, n=2)
+        elif self.add_module == 'c4str':
+            self.layer_module = C4STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str2':
+            self.layer_module = C4STR2(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str3':
+            self.layer_module = C4STR3(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str_cbam':
+            self.layer_module = C4STR_CBAM(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str_cbam2':
+            self.layer_module = C4STR_CBAM2(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str_cbam3':
+            self.layer_module = C4STR_CBAM3(self.c1_module, self.c2_module)
         else:
             self.layer_module = None
 

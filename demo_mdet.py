@@ -102,53 +102,68 @@ def myolo10(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False,
 
 if __name__ == '__main__':
     pass
-    # myolo8('yolov8x-mdetect.yaml', 'yolov8x.pt', auto_optim=False, name='debug', mloss_enlarge=0.4)
-    # myolo9('yolov9e-mdetect.yaml', 'yolov9e.pt',auto_optim=False, name='debug', mloss_enlarge=0.4)
-    myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='debug', mloss_enlarge=0.4)
-    # myolo10('yolov10n-mdetect.yaml', 'yolov10n.pt',auto_optim=False, name='debug', mloss_enlarge=0.4)
+    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_mloss_enlarge', mloss_enlarge=0.00)
+    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_mloss_enlarge', mloss_enlarge=0.05)
+    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_mloss_enlarge', mloss_enlarge=0.10)
+    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_mloss_enlarge', mloss_enlarge=0.15)
+    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_mloss_enlarge', mloss_enlarge=0.20)
 
-    # myolo8('yolov8n-mdetect.yaml', 'yolov8n.pt',auto_optim=False, name='debug', mloss_enlarge=0.4)
-    # myolo8('yolov8s-mdetect.yaml', 'yolov8s.pt',auto_optim=False, name='exp_yolov8s', mloss_enlarge=0.4)
-    # myolo8('yolov8m-mdetect.yaml', 'yolov8m.pt',auto_optim=False, name='exp_yolov8m', mloss_enlarge=0.4)
-    # myolo8('yolov8l-mdetect.yaml', 'yolov8l.pt',auto_optim=False, name='exp_yolov8l', mloss_enlarge=0.4)
-    #
-    # myolo9('yolov9s-mdetect.yaml', 'yolov9s.pt',auto_optim=False, name='exp_yolov9s', mloss_enlarge=0.4)
-    # myolo9('yolov9m-mdetect.yaml', 'yolov9m.pt',auto_optim=False, name='exp_yolov9m', mloss_enlarge=0.4)
-    # myolo9('yolov9c-mdetect.yaml', 'yolov9c.pt',auto_optim=False, name='exp_yolov9c', mloss_enlarge=0.4)
-    #
-    # myolo10('yolov10n-mdetect.yaml', 'yolov10n.pt',auto_optim=False, name='exp_yolov10n', mloss_enlarge=0.4)
-    # myolo10('yolov10s-mdetect.yaml', 'yolov10s.pt', auto_optim=False, name='exp_yolov10s', mloss_enlarge=0.4)
-    # myolo10('yolov10m-mdetect.yaml', 'yolov10m.pt', auto_optim=False, name='exp_yolov10m', mloss_enlarge=0.4)
-    # myolo10('yolov10b-mdetect.yaml', 'yolov10b.pt', auto_optim=False, name='exp_yolov10b', mloss_enlarge=0.4)
-    # myolo10('yolov10l-mdetect.yaml', 'yolov10l.pt', auto_optim=False, name='exp_yolov10l', mloss_enlarge=0.4)
+    # myolo8('yolov8n-mdetect.yaml', 'yolov8n.pt',auto_optim=False, name='exp_yolo8n', mloss_enlarge=0.35)
+    # myolo8('yolov8s-mdetect.yaml', 'yolov8s.pt',auto_optim=False, name='exp_yolo8s', mloss_enlarge=0.35)
+    # myolo8('yolov8m-mdetect.yaml', 'yolov8m.pt',auto_optim=False, name='exp_yolo8m', mloss_enlarge=0.35)
+    # myolo8('yolov8l-mdetect.yaml', 'yolov8l.pt',auto_optim=False, name='exp_yolo8l', mloss_enlarge=0.35)
+    # myolo8('yolov8x-mdetect.yaml', 'yolov8x.pt',auto_optim=False, name='exp_yolo8x', mloss_enlarge=0.35)
+    # 
+    # myolo9('yolov9m-mdetect.yaml', 'yolov9m.pt',auto_optim=False, name='exp_yolo9m', mloss_enlarge=0.35)
+    # myolo9('yolov9s-mdetect.yaml', 'yolov9s.pt',auto_optim=False, name='exp_yolo9s', mloss_enlarge=0.35)
 
-    # myolo8('yolov8x-mdetect.yaml', 'yolov8x.pt',auto_optim=False, name='exp_yolov8x', mloss_enlarge=0.4)
-    # myolo9('yolov9e-mdetect.yaml', 'yolov9e.pt',auto_optim=False, name='exp_yolov9e', mloss_enlarge=0.4)
-    # myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt',auto_optim=False, name='exp_yolov10x', mloss_enlarge=0.4)
-    # myolo10('yolov10x-mdetect-psa_c3str_1_res.yaml', 'yolov10x.pt', auto_optim=False, name='exp_mayolox',
-    #         mloss_enlarge=0.4)
-    # myolo10('yolov10n-mdetect-psa_c3strpp_1_res.yaml', 'yolov10n.pt', auto_optim=False, name='debug',
-    #         mloss_enlarge=0.4)
-    # myolo10('yolov10s-mdetect-psa_c3strpp_1_res.yaml', 'yolov10s.pt', auto_optim=False, name='exp_mayolops',
-    #         mloss_enlarge=0.4)
-    # myolo10('yolov10m-mdetect-psa_c3strpp_1_res.yaml', 'yolov10m.pt', auto_optim=False, name='exp_mayolopm',
-    #         mloss_enlarge=0.4)
-    # myolo10('yolov10b-mdetect-psa_c3strpp_1_res.yaml', 'yolov10b.pt', auto_optim=False, name='exp_mayolopb',
-    #         mloss_enlarge=0.4)
-    # myolo10('yolov10l-mdetect-psa_c3strpp_1_res.yaml', 'yolov10l.pt', auto_optim=False, name='exp_mayolopl',
-    #         mloss_enlarge=0.4)
+    # myolo10('yolov10x-mdetect-psa_c3tr_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3str_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3strsp_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3tr_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3str_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3strsp_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    #
+    # myolo10('yolov10x-mdetect-psa_c3tr_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3str_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3strsp_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
 
-    # model_val(r'runs/mdetect/exp_yolov8n/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov8s/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov8m/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov8l/weights/best.pt')
+    # myolo10('yolov10x-mdetect-psa_c4str_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # 
+    # myolo10('yolov10x-mdetect-psa_c4str_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str_2_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    
+    # myolo10('yolov10x-mdetect-psa_c4strcbam_2_res.yaml', 'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m',mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam_3_res.yaml', 'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    
+    
+    
+    # myolo10('yolov10x-mdetect-psa_c4str2_1.yaml',  'yolov10x.pt', auto_optim=False, name='debug', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str3_1.yaml',  'yolov10x.pt', auto_optim=False, name='debug', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam2_1.yaml',  'yolov10x.pt', auto_optim=False, name='debug', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam3_1.yaml',  'yolov10x.pt', auto_optim=False, name='debug', mloss_enlarge=0.35)
+
+    # myolo10('yolov10x-mdetect-psa_c4str2_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str3_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam2_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam3_1.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str2_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str3_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam2_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam3_1_res.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
     #
-    # model_val(r'runs/mdetect/exp_yolov9s/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov9m/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov9c/weights/best.pt')
-    #
-    # model_val(r'runs/mdetect/exp_yolov10n/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov10s/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov10m/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov10b/weights/best.pt')
-    # model_val(r'runs/mdetect/exp_yolov10l/weights/best.pt')
+    # myolo10('yolov10x-mdetect-psa_c4str2_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4str3_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam2_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    # myolo10('yolov10x-mdetect-psa_c4strcbam3_2.yaml',  'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+
+    myolo10('yolov10x-mdetect-psa_c3str2_1.yaml', 'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+    myolo10('yolov10x-mdetect-psa_c3str2_1_res.yaml', 'yolov10x.pt', auto_optim=False, name='exp_yolo10x_m', mloss_enlarge=0.35)
+
