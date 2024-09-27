@@ -1198,20 +1198,30 @@ class PSA(nn.Module):
             self.layer_module = C3STR(self.c1_module, self.c2_module)
         elif self.add_module == 'c3str2':
             self.layer_module = C3STR(self.c1_module, self.c2_module, n=2)
+        elif self.add_module == 'c3strn2':
+            self.layer_module = C3STR(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c3strsp':
             self.layer_module = C3STRSP(self.c1_module, self.c2_module)
         elif self.add_module == 'c3strcp':
             self.layer_module = C3STRCP(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3strcpn2':
+            self.layer_module = C3STRCP(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c4str':
             self.layer_module = C4STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4strn2':
+            self.layer_module = C4STR(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c4str2':
             self.layer_module = C4STR2(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str2n2':
+            self.layer_module = C4STR2(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c4str3':
             self.layer_module = C4STR3(self.c1_module, self.c2_module)
         elif self.add_module == 'c4str_cbam':
             self.layer_module = C4STR_CBAM(self.c1_module, self.c2_module)
         elif self.add_module == 'c4str_cbam2':
             self.layer_module = C4STR_CBAM2(self.c1_module, self.c2_module)
+        elif self.add_module == 'c4str_cbam2n2':
+            self.layer_module = C4STR_CBAM2(self.c1_module, self.c2_module, n=2)
         elif self.add_module == 'c4str_cbam3':
             self.layer_module = C4STR_CBAM3(self.c1_module, self.c2_module)
         else:
