@@ -335,9 +335,15 @@ class MDetect(nn.Module):
         if not self.sep:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
             self.cv4_out = None
-        else:
+        elif self.sep==1:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==2:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3), Conv(c4*self.na, c4*self.na, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        else:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
 
         if self.gat in [1, 10, 11, 12, 13]:
             self.gat_head = nn.ModuleList(GAT10(self.na, self.na, self.com_path) for x in ch)
@@ -374,7 +380,7 @@ class MDetect(nn.Module):
                     x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
                     attribute_feature = self.cv4[i](x[i])
-                    attribute_logits =  [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                     x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
         if self.training:  # Training path
             return x
@@ -405,7 +411,7 @@ class MDetect(nn.Module):
                     x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
                 else:
                     attribute_feature = self.one2one_cv4[i](x_detach[i])
-                    attribute_logits =  [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
                     x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
         one2one = x_detach
 
@@ -420,7 +426,7 @@ class MDetect(nn.Module):
                     x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
                     attribute_feature = self.cv4[i](x[i])
-                    attribute_logits =  [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                    attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                     x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
         if self.training:  # Training path
             return {"one2many": x, "one2one": one2one}
@@ -463,27 +469,20 @@ class MDetect(nn.Module):
         m = self  # self.model[-1]  # Detect() module
         # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1
         # ncf = math.log(0.6 / (m.nc - 0.999999)) if cf is None else torch.log(cf / cf.sum())  # nominal class frequency
-        if self.sep:
-            for a, b, c, cc, s in zip(m.cv2, m.cv3, m.cv4, m.cv4_out, m.stride):  # from
+        if self.sep==1 or self.sep==2:
+            for a, b, c, s in zip(m.cv2, m.cv3, m.cv4_out, m.stride):  # from
                 a[-1].bias.data[:] = 1.0  # box
-                b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-                c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-                cc[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img) # cls (.01 objects, 80 classes, 640 img)
         else:
             for a, b, c, s in zip(m.cv2, m.cv3, m.cv4, m.stride):  # from
                 a[-1].bias.data[:] = 1.0  # box
                 b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
                 c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
         if self.end2end:
-            if self.sep:
-                for a, b, c, cc, s in zip(m.one2one_cv2, m.one2one_cv3, m.one2one_cv4, m.one2one_cv4_out, m.stride):  # from
+            if self.sep==1 or self.sep==2:
+                for a, b, c, s in zip(m.one2one_cv2, m.one2one_cv3, m.one2one_cv4_out, m.stride):  # from
                     a[-1].bias.data[:] = 1.0  # box
-                    b[-1].bias.data[: m.nc] = math.log(
-                        5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-                    c[-1].bias.data[: m.na] = math.log(
-                        5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-                    cc[-1].bias.data[: m.na] = math.log(
-                        5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                    b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
             else:
                 for a, b, c, s in zip(m.one2one_cv2, m.one2one_cv3, m.one2one_cv4, m.stride):  # from
                     a[-1].bias.data[:] = 1.0  # box

@@ -32,6 +32,16 @@ if __name__ == '__main__':
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9c/weights/best.pt')
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9e/weights/best.pt')
 
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9s2/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9c2/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9m2/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9s3/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9c3/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9m3/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9s4/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9c4/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo9m4/weights/best.pt')
+
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_m1/weights/best.pt')
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_m12/weights/best.pt')
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_m13/weights/best.pt')
@@ -84,4 +94,10 @@ if __name__ == '__main__':
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mm4/weights/best.pt')
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mm5/weights/best.pt')
     # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mm6/weights/best.pt')
-    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mm7/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mm7/weights/best.pt')
+
+    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm/weights/best.pt')
+    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm2/weights/best.pt')
+    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm3/weights/best.pt')
+    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm4/weights/best.pt')
+    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm5/weights/best.pt')
