@@ -63,6 +63,7 @@ def model_predict(weight_path, img_dir, network=YOLO):
         conf=CONF,
         device=DEVICE,
         imgsz=IMGSZ,
+        save_txt=True,
     )
 
 def model_export(weight_path, format='onnx', network=YOLO):

@@ -814,6 +814,7 @@ class MdetResults(SimpleClass):
         """
         is_obb = self.obb is not None
         boxes = self.obb if is_obb else self.boxes
+        attributes = self.attributes
         masks = self.masks
         probs = self.probs
         kpts = self.keypoints
@@ -824,8 +825,10 @@ class MdetResults(SimpleClass):
         elif boxes:
             # Detect/segment/pose
             for j, d in enumerate(boxes):
+                att = attributes.data[j]
+                # atts = *(att)
                 c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
-                line = (c, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
+                line = (c, len(att), *att, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
                 if masks:
                     seg = masks[j].xyn[0].copy().reshape(-1)  # reversed mask.xyn, (n,2) to (n*2)
                     line = (c, *seg)
