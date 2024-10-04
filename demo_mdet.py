@@ -16,7 +16,7 @@ FREEZE_NUMS = {
 # MLOSS_ENLARGE = 0.3
 # region meta tools
 
-def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain=False, **kwargs):
+def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain=False, fine_tune=False, **kwargs):
     model = network(cfg_path, task=TASK)
     model.load(pretrain_path)
 
@@ -28,8 +28,6 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
         'val': True,
         'batch': BATCH_SIZE,
         'patience': EPOCHS,
-        # 'runs_dir': r'/nfsv4/23039356r/repository/ultralytics/runs/mdetect1'
-
     }
 
     if not auto_optim:
@@ -37,6 +35,7 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
             'optimizer': 'AdamW',
             'lr0': 0.0001
         })
+
     if retrain:
         train_params.update(
             {
@@ -152,13 +151,13 @@ if __name__ == '__main__':
     # myolo10('yolov10x-mdetect-psa_c4strn2_3_res.yaml', 'yolov10x.pt', name='exp_yolo10x_mm', mloss_enlarge=0.3)
     # myolo10('yolov10x-mdetect-psa_c4str2n2_3_res.yaml', 'yolov10x.pt', name='exp_yolo10x_mm', mloss_enlarge=0.3)
 
-    myolo10('yolov10x-mdetect-psa_c3strcp_3.yaml', 'yolov10x.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
-    myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32.yaml', 'yolov10x.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
-    myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head100.yaml', 'yolov10x.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
-    myolo10('yolov10x-mdetect-psa_c3strcp_3_sep2head32.yaml', 'yolov10x.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
-    myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head100.yaml', 'yolov10x.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_3.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True, fine_tune=True)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True, fine_tune=True)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head100.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True, fine_tune=True)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_3_sep2head32.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True, fine_tune=True)
+    # myolo10('yolov10x-mdetect-psa_c3strcp_3_sep2head100.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True, fine_tune=True)

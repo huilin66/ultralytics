@@ -32,4 +32,7 @@ def compare_c4():
 if __name__ == '__main__':
     pass
     # remove_c4()
-    compare_c4()
+    # compare_c4()
+    import time
+    print('hello')
+    print(time.ctime())

@@ -100,4 +100,4 @@ if __name__ == '__main__':
     demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm2/weights/best.pt')
     demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm3/weights/best.pt')
     demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm4/weights/best.pt')
-    demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm5/weights/best.pt')
+    # demo_mdet.model_val(weight_path=r'runs/mdetect/exp_yolo10x_mmm5/weights/best.pt')
