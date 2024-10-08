@@ -1,7 +1,7 @@
 import demo_mdet
 import torch
 demo_mdet.DEVICE = torch.device('cuda:1')
-# demo_mdet.EPOCHS = 1
+demo_mdet.EPOCHS = 100
 if __name__ == '__main__':
     pass
     # demo_mdet.myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt', name='exp_mloss_enlarge', mloss_enlarge=0.25)
@@ -68,6 +68,8 @@ if __name__ == '__main__':
 
     # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
     #         mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True)
     # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
     #         mloss_enlarge=0.3, retrain=True)
     # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head100.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
@@ -76,9 +78,113 @@ if __name__ == '__main__':
     #         mloss_enlarge=0.3, retrain=True)
     # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep2head100.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
     #         mloss_enlarge=0.3, retrain=True)
-    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep3head.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
-    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep4head.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
-    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep5head.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
-            mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep3head.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep4head.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep5head.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt', name='exp_yolo10x_mmm',
+    #         mloss_enlarge=0.3, retrain=True)
+
+
+
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_res.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_res_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_res_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom6_res_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_res.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_res_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_res_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom1_res_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_res.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_res_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_res_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom2_res_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_res.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_res_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_res_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom3_res_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res_nosf.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep1head32_gatcom4_res_nosf_pure.yaml', 'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head', mloss_enlarge=0.3, retrain=True)

@@ -44,12 +44,18 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
                 'freeze_bn':True,
             }
         )
-
     train_params.update(kwargs)
     model.train(**train_params)
 
 def model_val(weight_path, network=YOLO):
     model = network(weight_path, task=TASK)
+    print(weight_path)
+    print(model.info(detailed=False))
+    model.val(data=DATA, device=DEVICE)
+
+def model_gat_val(weight_path, com_path, network=YOLO):
+    model = network(weight_path, task=TASK)
+    model.model.model[23].added_gat_head(com_path)
     print(weight_path)
     print(model.info(detailed=False))
     model.val(data=DATA, device=DEVICE)

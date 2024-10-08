@@ -19,28 +19,43 @@ __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10D
 
 # region added gat
 
-class GAT10(nn.Module):
-    def __init__(self, input_chs, output_chs, com_path, drop=0, leaky_rate=0.1, att_type='com', bias=False):
+class GAT(nn.Module):
+    def __init__(self, input_chs, output_chs, att_type='com', com_path=None, proj=True, res=False, add_softmax=True, drop_rate=0, leaky_rate=0.1):
         super().__init__()
         self.input_chs = input_chs
-        # self.proj_w = nn.Linear(input_chs, output_chs, bias=bias)
-        self.proj_w = MLP(input_chs, output_chs*2, output_chs, 2)
+        self.output_chs = output_chs
         self.att_type = att_type
-        if att_type == 'adj_head_layer':
-            self.proj_a = nn.Linear(output_chs * 2, 1, bias=bias)
-        elif att_type == 'cos':
-            self.proj_a = self.proj_cos
-        else:
-            import pandas as pd
-            com = pd.read_csv(com_path, header=0, index_col=0)
-            com = com.to_numpy()
-            self.correlation = torch.tensor(com).float()
+        self.com_path = com_path
+        self.proj = proj
+        self.res = res
+        self.add_softmax = add_softmax
+        self.drop_rate = drop_rate
+        self.leaky_rate = leaky_rate
 
-        self.act = nn.ReLU()
-        self.dropout = nn.Dropout(drop)
-        self.leakyrelu = nn.LeakyReLU(leaky_rate, )
+        self.proj_w = MLP(input_chs, output_chs*2, output_chs, 2) if self.proj else nn.Identity()
+
+        if self.att_type == 'mlp':
+            self.proj_a = nn.AdaptiveAvgPool1d(1)
+        elif self.att_type == 'cos':
+            self.proj_a = self.proj_cos
+        elif self.att_type == 'com':
+            self.correlation = self.load_com(self.com_path)
+        else:
+            raise NotImplementedError('Attention type %s not implemented'%self.att_type)
+
+        self.leaky_relu = nn.LeakyReLU(leaky_rate)
+        self.dropout = nn.Dropout(self.drop_rate)
         self.softmax = nn.Softmax(dim=1)
-        self.elu = nn.ELU()
+        self.feature_down = nn.MaxPool1d(kernel_size=4, stride=4)
+        self.feature_up = nn.Upsample(scale_factor=4, mode='nearest')
+
+
+    def load_com(self, com_path):
+        import pandas as pd
+        com = pd.read_csv(com_path, header=0, index_col=0)
+        com = com.to_numpy()
+        com = torch.tensor(com).float()
+        return com
 
     def data_prepare(self, x):
         b, n, c = x.shape
@@ -50,101 +65,59 @@ class GAT10(nn.Module):
         x_rep = x_rep.reshape((b, n, n, -1))
         return x_rep
 
-    def proj_cos(self, feature_repeat):
-        feature_1 = feature_repeat[:, :, :, :self.input_chs]
-        feature_2 = feature_repeat[:, :, :, self.input_chs:]
-        return F.cosine_similarity(feature_1, feature_2, dim=-1)
+    def proj_cos(self, features):
+        features_1 = features.unsqueeze(2)
+        features_2 = features.unsqueeze(1)
+
+        cosine_similarity_matrix = F.cosine_similarity(features_1, features_2, dim=-1)
+        return cosine_similarity_matrix
 
     def forward(self, inputs):
         b, c, h, w = inputs.shape
         n = h * w
+
         feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
+        feature_proj = self.proj_w(feature)
 
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
 
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)
+        if feature_proj.shape[1] > 4000:
+            feature_down = self.feature_down(self.feature_down(feature_proj.permute((0, 2, 1)))).permute((0, 2, 1))
+        elif feature_proj.shape[1] > 1000:
+            feature_down = self.feature_down(feature_proj.permute((0, 2, 1))).permute((0, 2, 1))
         else:
-            attention = self.correlation.to(inputs.device).to(inputs.dtype)
-            outputs = torch.matmul(feature_proj, attention)
+            feature_down = feature_proj
 
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-
-class GAT20(GAT10):
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = self.proj_w(feature)  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
+        if self.att_type == 'mlp':
+            feature_repeat = self.data_prepare(feature_down)  # size(b, c, c, 2n)
+            correlation = feature_repeat.mean(dim=-1).squeeze(-1)  # size(b, c, c)
+        elif self.att_type == 'cos':
+            correlation = self.proj_a(feature_down).squeeze(-1)  # size(b, c, c)
+        elif self.att_type == 'mlpt':
+            feature_repeat = self.data_prepare(feature_proj.permute((0, 2, 1)))  # size(b, c, c, 2n)
+            correlation = feature_repeat.mean(dim=-1).squeeze(-1)  # size(b, c, c)
+        elif self.att_type == 'cost':
+            correlation = self.proj_a(feature_proj.permute((0, 2, 1))).squeeze(-1)  # size(b, c, c)
         else:
             correlation = self.correlation.to(inputs.device).to(inputs.dtype)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(feature_proj, attention)
 
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
+        correlation = self.leaky_relu(correlation)
+        attention = self.softmax(correlation) if self.add_softmax else correlation
+        attention = self.dropout(attention)
 
-class GAT30(GAT10):
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = feature  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
+        if self.att_type in ['mlp', 'cos']:
+            outputs = torch.matmul(attention, feature_down)
+            if feature_proj.shape[1] > 4000:
+                outputs = self.feature_up(self.feature_up(outputs.permute((0, 2, 1)))).permute((0, 2, 1))
+            elif feature_proj.shape[1] > 1000:
+                outputs = self.feature_up(outputs.permute((0, 2, 1))).permute((0, 2, 1))
+            else:
+                outputs = feature_proj
         else:
-            attention = self.correlation.to(inputs.device).to(inputs.dtype)
             outputs = torch.matmul(feature_proj, attention)
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
-        outputs = outputs + inputs
-        return outputs
-
-class GAT40(GAT10):
-    def forward(self, inputs):
-        b, c, h, w = inputs.shape
-        n = h * w
-        feature = inputs.view((b, c, n)).permute((0, 2, 1))
-        feature_proj = feature  # size(n, self, c')
-
-        if self.att_type in ['adj_head_layer', 'cos']:
-            feature_repeat = self.data_prepare(feature_proj)  # size(n, self, self, 2c')
-
-            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(n, self, self)
-            correlation = self.leakyrelu(correlation)
-            attention = self.softmax(correlation)  # size(n, self, self)
-            attention = self.dropout(attention)
-            outputs = torch.matmul(attention, feature_proj)  # size(n, self, c')
-        else:
-            attention = self.correlation.to(inputs.device).to(inputs.dtype)
-            outputs = torch.matmul(feature_proj, attention)
-
-        outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
+        if self.res:
+            outputs = outputs + inputs
         return outputs
 # endregion
 
@@ -324,12 +297,18 @@ class MDetect(nn.Module):
         if len(params) == 3:
             sep, c4, gat = params
             com_path = None
+            retrain = False
         elif len(params) == 4:
-            sep, c4, gat, com_path = params
+            sep, c4, gat, retrain = params
+            com_path = None
+        elif len(params) == 5:
+            sep, c4, gat, retrain, com_path = params
         else:
             raise ValueError("the length (%d) of params is not correct!"%len(params))
         self.sep = sep
         self.gat = gat
+        if retrain:
+            self.end2end = False
         self.com_path = com_path
         c4 = c3 if c4 is None else c4
         if not self.sep:
@@ -354,14 +333,38 @@ class MDetect(nn.Module):
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
             self.cv4_out = None
 
-        if self.gat in [1, 10, 11, 12, 13]:
-            self.gat_head = nn.ModuleList(GAT10(self.na, self.na, self.com_path) for x in ch)
-        elif self.gat in [2, 20, 21, 22, 23]:
-            self.gat_head = nn.ModuleList(GAT20(self.na, self.na, self.com_path) for x in ch)
-        elif self.gat in [3, 30, 31, 32, 33]:
-            self.gat_head = nn.ModuleList(GAT30(self.na, self.na, self.com_path) for x in ch)
-        elif self.gat in [4, 40, 41, 42, 43]:
-            self.gat_head = nn.ModuleList(GAT40(self.na, self.na, self.com_path) for x in ch)
+        if self.gat == 'mlp':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp') for x in ch)
+        elif self.gat == 'cos':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos') for x in ch)
+        elif self.gat == 'mlp_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp', res=True) for x in ch)
+        elif self.gat == 'cos_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos', res=True) for x in ch)
+        elif self.gat == 'mlpt':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt') for x in ch)
+        elif self.gat == 'cost':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost') for x in ch)
+        elif self.gat == 'mlpt_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt', res=True) for x in ch)
+        elif self.gat == 'cost_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost', res=True) for x in ch)
+        elif self.gat == 'com':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_nosf':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', add_softmax=False, com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_res_nosf':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == 'com_res_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == 'com_nosf_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', add_softmax=False, com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == 'com_res_nosf_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path, proj=False) for x in ch)
         else:
             self.gat_head = None
 
@@ -372,6 +375,13 @@ class MDetect(nn.Module):
             self.one2one_cv4_out = copy.deepcopy(self.cv4_out) if self.cv4_out is not None else None
             self.one2one_gat_head = copy.deepcopy(self.gat_head) if self.gat_head is not None else None
 
+    def added_gat_head(self, com_path):
+        # self.gat = 'com_res_nosf_pure'
+        # self.com_path = com_path
+        # self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1) for x in range(self.nl))
+        self.gat = 'com_nosf_pure'
+        self.com_path = com_path
+        self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=False, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1) for x in range(self.nl))
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
@@ -386,20 +396,13 @@ class MDetect(nn.Module):
                     if self.gat is not None:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
-                        attribute_logits = [self.gat_head[i](torch.cat(attribute_logits, 1))]
-                        x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
+                        attribute_logits_cat = torch.cat(attribute_logits, 1)
+                        attribute_logits_gat = [self.gat_head[i](attribute_logits_cat)]
+                        x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits_gat, 1)
                     else:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
-                # elif self.sep in [5]:
-                #     if self.gat is not None:
-                #         attribute_feature = [self.cv4[j][i](x[i]) for j in range(self.na)]
-                #         attribute_logits = [self.gat_head[i](torch.cat(attribute_feature, 1))]
-                #         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
-                #     else:
-                #         attribute_logits = [self.cv4[j][i](x[i]) for j in range(self.na)]
-                #         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
                     raise ValueError('sep error %g'%self.sep)
         if self.training:  # Training path
@@ -434,14 +437,6 @@ class MDetect(nn.Module):
                         attribute_feature = self.one2one_cv4[i](x_detach[i])
                         attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
-                # elif self.sep in [5]:
-                #     if self.gat is not None:
-                #         attribute_feature = [self.cv4[j][i](x_detach[i]) for j in range(self.na)]
-                #         attribute_logits = [self.gat_head[i](torch.cat(attribute_feature, 1))]
-                #         x_detach[i] = torch.cat([self.cv2[i](x_detach[i]), self.cv3[i](x_detach[i])] + attribute_logits, 1)
-                #     else:
-                #         attribute_logits = [self.cv4[j][i](x_detach[i]) for j in range(self.na)]
-                #         x_detach[i] = torch.cat([self.cv2[i](x_detach[i]), self.cv3[i](x_detach[i])] + attribute_logits, 1)
                 else:
                     raise ValueError('sep error %g' % self.sep)
         one2one = x_detach
@@ -460,14 +455,6 @@ class MDetect(nn.Module):
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
-                # elif self.sep in [5]:
-                #     if self.gat is not None:
-                #         attribute_feature = [self.cv4[j][i](x[i]) for j in range(self.na)]
-                #         attribute_logits = [self.gat_head[i](torch.cat(attribute_feature, 1))]
-                #         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
-                #     else:
-                #         attribute_logits = [self.cv4[j][i](x[i]) for j in range(self.na)]
-                #         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
                     raise ValueError('sep error %g'%self.sep)
         if self.training:  # Training path
