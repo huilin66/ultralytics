@@ -14,6 +14,7 @@ from .block import DFL, BNContrastiveHead, ContrastiveHead, Proto
 from .conv import Conv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer, MLP
 from .utils import bias_init_with_prob, linear_init
+from .transformer import SwinTransformerBlock
 
 __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
 
@@ -37,6 +38,12 @@ class GAT(nn.Module):
         if self.att_type == 'mlp':
             self.proj_a = nn.AdaptiveAvgPool1d(1)
         elif self.att_type == 'cos':
+            self.proj_a = self.proj_cos
+        elif self.att_type == 'mlpr':
+            self.proj_a = MLP(output_chs*2, output_chs//2, 1, 2)
+        elif self.att_type == 'mlpt':
+            self.proj_a = nn.AdaptiveAvgPool1d(1)
+        elif self.att_type == 'cost':
             self.proj_a = self.proj_cos
         elif self.att_type == 'com':
             self.correlation = self.load_com(self.com_path)
@@ -92,6 +99,9 @@ class GAT(nn.Module):
             correlation = feature_repeat.mean(dim=-1).squeeze(-1)  # size(b, c, c)
         elif self.att_type == 'cos':
             correlation = self.proj_a(feature_down).squeeze(-1)  # size(b, c, c)
+        elif self.att_type == 'mlpr':
+            feature_repeat = self.data_prepare(feature_down)  # size(b, c, c, 2n)
+            correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(b, c, c)
         elif self.att_type == 'mlpt':
             feature_repeat = self.data_prepare(feature_proj.permute((0, 2, 1)))  # size(b, c, c, 2n)
             correlation = feature_repeat.mean(dim=-1).squeeze(-1)  # size(b, c, c)
@@ -104,7 +114,7 @@ class GAT(nn.Module):
         attention = self.softmax(correlation) if self.add_softmax else correlation
         attention = self.dropout(attention)
 
-        if self.att_type in ['mlp', 'cos']:
+        if self.att_type in ['mlp', 'cos', 'mlpr']:
             outputs = torch.matmul(attention, feature_down)
             if feature_proj.shape[1] > 4000:
                 outputs = self.feature_up(self.feature_up(outputs.permute((0, 2, 1)))).permute((0, 2, 1))
@@ -119,6 +129,23 @@ class GAT(nn.Module):
         if self.res:
             outputs = outputs + inputs
         return outputs
+class C3STRCP(nn.Module):
+    def __init__(self, c1, c2, n=1):
+        """Initialize CSP Bottleneck with a single convolution using input channels, output channels, and number."""
+        super().__init__()
+        c_ = c2//2  # hidden channels
+        self.cv1 = Conv(c1, c2, 1, 1)
+        self.cv2 = Conv(c2, c_, 1, 1)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c2, c_, num_heads, n)
+        self.cv3 = nn.Identity()
+
+    def forward(self, x):
+        """Forward pass of RT-DETR neck layer."""
+        y = self.cv1(x)
+        z1 = self.m(y)
+        z2 = self.cv2(y)
+        return self.cv3(torch.cat([z1, z2], 1))
 # endregion
 
 class Detect(nn.Module):
@@ -329,16 +356,23 @@ class MDetect(nn.Module):
         elif self.sep==5:
             self.cv4 = nn.ModuleList(nn.Sequential(nn.Identity()) for x in ch)
             self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==6:
+            self.cv4 = nn.ModuleList(nn.Sequential(C3STRCP(x, c4, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4, c4//self.na, 3), nn.Conv2d(c4//self.na, 1, 1)) for x in ch) for _ in range(self.na))
         else:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
             self.cv4_out = None
 
         if self.gat == 'mlp':
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp') for x in ch)
+        elif self.gat == 'mlpr':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpr') for x in ch)
         elif self.gat == 'cos':
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos') for x in ch)
         elif self.gat == 'mlp_res':
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp', res=True) for x in ch)
+        elif self.gat == 'mlpr_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpr', res=True) for x in ch)
         elif self.gat == 'cos_res':
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos', res=True) for x in ch)
         elif self.gat == 'mlpt':
@@ -376,9 +410,6 @@ class MDetect(nn.Module):
             self.one2one_gat_head = copy.deepcopy(self.gat_head) if self.gat_head is not None else None
 
     def added_gat_head(self, com_path):
-        # self.gat = 'com_res_nosf_pure'
-        # self.com_path = com_path
-        # self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1) for x in range(self.nl))
         self.gat = 'com_nosf_pure'
         self.com_path = com_path
         self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=False, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1) for x in range(self.nl))
@@ -390,9 +421,12 @@ class MDetect(nn.Module):
 
         for i in range(self.nl):
             if not self.sep:
-                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+                if self.gat is not None:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.gat_head[i](self.cv4[i](x[i]))), 1)
+                else:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
             else:
-                if self.sep in [1, 2, 3, 4, 5]:
+                if self.sep in [1, 2, 3, 4, 5, 6]:
                     if self.gat is not None:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
@@ -425,9 +459,12 @@ class MDetect(nn.Module):
         x_detach = [xi.detach() for xi in x]
         for i in range(self.nl):
             if not self.sep:
-                x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.one2one_cv4[i](x_detach[i])), 1)
+                if self.gat is not None:
+                    x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.gat_head[i](self.one2one_cv4[i](x_detach[i]))), 1)
+                else:
+                    x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.one2one_cv4[i](x_detach[i])), 1)
             else:
-                if self.sep in [1, 2, 3, 4, 5]:
+                if self.sep in [1, 2, 3, 4, 5, 6]:
                     if self.gat is not None:
                         attribute_feature = self.one2one_cv4[i](x_detach[i])
                         attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
@@ -443,9 +480,12 @@ class MDetect(nn.Module):
 
         for i in range(self.nl):
             if not self.sep:
-                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+                if self.gat is not None:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.gat_head[i](self.cv4[i](x[i]))), 1)
+                else:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
             else:
-                if self.sep in [1, 2, 3, 4, 5]:
+                if self.sep in [1, 2, 3, 4, 5, 6]:
                     if self.gat is not None:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
@@ -498,25 +538,13 @@ class MDetect(nn.Module):
         m = self  # self.model[-1]  # Detect() module
         # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1
         # ncf = math.log(0.6 / (m.nc - 0.999999)) if cf is None else torch.log(cf / cf.sum())  # nominal class frequency
-        if self.sep in [1, 2, 3, 4, 5]:
-            for a, b, s in zip(m.cv2, m.cv3, m.stride):  # from
-                a[-1].bias.data[:] = 1.0  # box
-                b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img) # cls (.01 objects, 80 classes, 640 img)
-        else:
-            for a, b, c, s in zip(m.cv2, m.cv3, m.cv4, m.stride):  # from
+        for a, b, s in zip(m.cv2, m.cv3, m.stride):  # from
+            a[-1].bias.data[:] = 1.0  # box
+            b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+        if self.end2end:
+            for a, b, s in zip(m.one2one_cv2, m.one2one_cv3, m.stride):  # from
                 a[-1].bias.data[:] = 1.0  # box
                 b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-                c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-        if self.end2end:
-            if self.sep in [1, 2, 3, 4, 5]:
-                for a, b, s in zip(m.one2one_cv2, m.one2one_cv3, m.stride):  # from
-                    a[-1].bias.data[:] = 1.0  # box
-                    b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-            else:
-                for a, b, c, s in zip(m.one2one_cv2, m.one2one_cv3, m.one2one_cv4, m.stride):  # from
-                    a[-1].bias.data[:] = 1.0  # box
-                    b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
-                    c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
 
     def decode_bboxes(self, bboxes, anchors):
         """Decode bounding boxes."""
