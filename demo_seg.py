@@ -47,9 +47,9 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
     train_params.update(kwargs)
     model.train(**train_params)
 
-def model_val(weight_path, network=YOLO):
+def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
-    model.val(data=DATA, device=DEVICE)
+    model.val(data=DATA, device=DEVICE, **kwargs)
 
 def model_predict(weight_path, img_dir, network=YOLO):
     model = network(weight_path, task=TASK)

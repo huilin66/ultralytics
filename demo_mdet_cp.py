@@ -1,7 +1,7 @@
 import demo_mdet
 import torch
 demo_mdet.DEVICE = torch.device('cuda:1')
-demo_mdet.EPOCHS = 100
+# demo_mdet.EPOCHS = 100
 if __name__ == '__main__':
     pass
     # demo_mdet.myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt', name='exp_mloss_enlarge', mloss_enlarge=0.25)
@@ -241,6 +241,13 @@ if __name__ == '__main__':
     #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
     #                   name='debug', mloss_enlarge=0.3, retrain=True)
 
-    demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep6head.yaml',
-                      'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
-                      name='exp_yolo10x_head_mc', mloss_enlarge=0.3, retrain=True)
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_sep6head.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head_mc', mloss_enlarge=0.3, retrain=True)
+
+    # demo_mdet.mayolo('mayolovn.yaml', 'yolov10n.pt', name='exp_mayolon_', mloss_enlarge=0.3)
+    # demo_mdet.mayolo('mayolovs.yaml', 'yolov10s.pt', name='exp_mayolos_', mloss_enlarge=0.3)
+    # demo_mdet.mayolo('mayolovm.yaml', 'yolov10m.pt', name='exp_mayolom_', mloss_enlarge=0.3)
+    # demo_mdet.mayolo('mayolovb.yaml', 'yolov10b.pt', name='exp_mayolob_', mloss_enlarge=0.3)
+    # demo_mdet.mayolo('mayolovl.yaml', 'yolov10l.pt', name='exp_mayolol_', mloss_enlarge=0.3)
+    # demo_mdet.mayolo('mayolovx.yaml', 'yolov10x.pt', name='exp_mayolox_', mloss_enlarge=0.3)
