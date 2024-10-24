@@ -387,7 +387,8 @@ def initialize_weights(model):
             m.momentum = 0.03
         elif t in {nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU}:
             m.inplace = True
-
+        elif hasattr(m, 'relative_position_bias_table'):
+            nn.init.normal_(m.relative_position_bias_table, std=.02)
 
 def scale_img(img, ratio=1.0, same_shape=False, gs=32):
     """Scales and pads an image tensor of shape img(bs,3,y,x) based on given ratio and grid size gs, optionally
