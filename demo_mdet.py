@@ -1,7 +1,7 @@
 import torch
 from ultralytics import YOLO
 BATCH_SIZE = 32
-EPOCHS = 100
+EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
 TASK = 'mdetect'
@@ -264,9 +264,29 @@ if __name__ == '__main__':
     # mayolo('yolov10l-mdetect-plus.yaml', 'yolov10l.pt', name='exp__mayolol', mloss_enlarge=0.3)
     # mayolo('yolov10x-mdetect-plus.yaml', 'yolov10x.pt', name='exp__mayolox', mloss_enlarge=0.3)
 
-    mayolo('mayolovn.yaml', 'runs/mdetect/exp_mayolon/weights/best.pt', name='exp_mayolon', mloss_enlarge=0.3, retrain=True)
-    mayolo('mayolovs.yaml', 'runs/mdetect/exp_mayolos/weights/best.pt', name='exp_mayolos', mloss_enlarge=0.3, retrain=True)
-    mayolo('mayolovm.yaml', 'runs/mdetect/exp_mayolom/weights/best.pt', name='exp_mayolom', mloss_enlarge=0.3, retrain=True)
-    mayolo('mayolovb.yaml', 'runs/mdetect/exp_mayolob/weights/best.pt', name='exp_mayolob', mloss_enlarge=0.3, retrain=True)
-    mayolo('mayolovl.yaml', 'runs/mdetect/exp_mayolol/weights/best.pt', name='exp_mayolol', mloss_enlarge=0.3, retrain=True)
-    mayolo('mayolovx.yaml', 'runs/mdetect/exp_mayolox/weights/best.pt', name='exp_mayolox', mloss_enlarge=0.3, retrain=True)
+    # mayolo('mayolovn.yaml', 'runs/mdetect/exp_mayolon/weights/best.pt', name='exp_mayolon', mloss_enlarge=0.3, retrain=True)
+    # mayolo('mayolovs.yaml', 'runs/mdetect/exp_mayolos/weights/best.pt', name='exp_mayolos', mloss_enlarge=0.3, retrain=True)
+    # mayolo('mayolovm.yaml', 'runs/mdetect/exp_mayolom/weights/best.pt', name='exp_mayolom', mloss_enlarge=0.3, retrain=True)
+    # mayolo('mayolovb.yaml', 'runs/mdetect/exp_mayolob/weights/best.pt', name='exp_mayolob', mloss_enlarge=0.3, retrain=True)
+    # mayolo('mayolovl.yaml', 'runs/mdetect/exp_mayolol/weights/best.pt', name='exp_mayolol', mloss_enlarge=0.3, retrain=True)
+    # mayolo('mayolovx.yaml', 'runs/mdetect/exp_mayolox/weights/best.pt', name='exp_mayolox', mloss_enlarge=0.3, retrain=True)
+
+    # myolo10('yolov10x-mdetect-psa_c3strcp5_3.yaml',
+    #         weight_path=r'yolov10x.pt',
+    #         name='exp_yolo10x_exp',
+    #         mloss_enlarge=0.3
+    #         )
+    # myolo10('yolov10x-mdetect-psa_c3strss_3.yaml',
+    #         weight_path=r'yolov10x.pt',
+    #         name='exp_yolo10x_exp',
+    #         mloss_enlarge=0.3
+    #         )
+    myolo10('yolov10x-mdetect-psa_c4trcbam1_3_res_8head.yaml',
+            weight_path=r'runs/mdetect/exp_yolo10x_m3res_14/weights/best.pt',
+            name='exp_yolo10x_exp', mloss_enlarge=0.3
+            )
+    myolo10('yolov10x-mdetect-psa_c4trcbam1_3_res_sep8head.yaml',
+            weight_path=r'runs/mdetect/exp_yolo10x_m3res_14/weights/best.pt',
+            name='exp_yolo10x_exp', mloss_enlarge=0.3,
+            )
+

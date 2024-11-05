@@ -635,6 +635,56 @@ class C3STRCP(nn.Module):
         z2 = self.cv2(y)
         return self.cv3(torch.cat([z1, z2], 1))
 
+class C3STRCP5(nn.Module):
+    def __init__(self, c1, c2, n=1):
+        """Initialize CSP Bottleneck with a single convolution using input channels, output channels, and number."""
+        super().__init__()
+        c_ = c2//2  # hidden channels
+        self.cv1 = Conv(c1, c2, 1, 1)
+        self.cv2 = Conv(c2, c_, k=5, s=1, p=2)
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c2, c_, num_heads, n)
+        self.cv3 = nn.Identity()
+
+    def forward(self, x):
+        """Forward pass of RT-DETR neck layer."""
+        y = self.cv1(x)
+        z1 = self.m(y)
+        z2 = self.cv2(y)
+        return self.cv3(torch.cat([z1, z2], 1))
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = self.conv1(x)
+        return self.sigmoid(x)
+class C3STRSS(nn.Module):
+    def __init__(self, c1, c2, n=1):
+        """Initialize CSP Bottleneck with a single convolution using input channels, output channels, and number."""
+        super().__init__()
+        c_ = c2//2  # hidden channels
+        self.cv1 = Conv(c1, c2, 1, 1)
+        self.cv2 = Conv(c2, c_, k=5, s=1, p=2)
+        self.sa = SpatialAttention()
+        num_heads = c_ // 32
+        self.m = SwinTransformerBlock(c2, c_, num_heads, n)
+        self.cv3 = nn.Identity()
+
+    def forward(self, x):
+        """Forward pass of RT-DETR neck layer."""
+        y = self.cv1(x)
+        z1 = self.m(y)
+        z2 = self.cv2(y)
+        z2 = self.sa(z2) * z2
+        return self.cv3(torch.cat([z1, z2], 1))
+
 class C3TRSP(nn.Module):
     def __init__(self, c1, c2, n=1):
         """Initialize CSP Bottleneck with a single convolution using input channels, output channels, and number."""
@@ -1382,6 +1432,10 @@ class PSA(nn.Module):
             self.layer_module = C3STRSP(self.c1_module, self.c2_module)
         elif self.add_module == 'c3strcp':
             self.layer_module = C3STRCP(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3strcp5':
+            self.layer_module = C3STRCP5(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3strss':
+            self.layer_module = C3STRSS(self.c1_module, self.c2_module)
         elif self.add_module == 'c3trsp':
             self.layer_module = C3TRSP(self.c1_module, self.c2_module)
         elif self.add_module == 'c3trcp':

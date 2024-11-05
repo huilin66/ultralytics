@@ -336,13 +336,25 @@ if __name__ == '__main__':
     #         weight_path=r'yolov10x.pt',
     #         name='exp_yolo10x_m3res_6_head_', mloss_enlarge=0.3
     #         )
-    # demo_mdet.myolo10('yolov10x-mdetect-psa_c4str2_3_res_sep9head.yaml',
-    #         weight_path=r'runs/mdetect/exp_yolo10x_m3res_6/weights/best.pt',
-    #         name='exp_yolo10x_m3res_6_head_', mloss_enlarge=0.3
-    #         )
-    # demo_mdet.myolo10('yolov10x-mdetect-psa_c4str2_3_res_sep8head.yaml',
-    #         weight_path=r'runs/mdetect/exp_yolo10x_m3res_6/weights/best.pt',
-    #         name='exp_yolo10x_m3res_6_head_', mloss_enlarge=0.3
-    #         )
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c4str2_3_res_sep9head.yaml',
+            weight_path=r'runs/mdetect/exp_yolo10x_m3res_6/weights/best.pt',
+            name='exp_yolo10x_m3res_6_head_', mloss_enlarge=0.3
+            )
+    demo_mdet.myolo10('yolov10x-mdetect-psa_c4str2_3_res_sep8head.yaml',
+            weight_path=r'runs/mdetect/exp_yolo10x_m3res_6/weights/best.pt',
+            name='exp_yolo10x_m3res_6_head_', mloss_enlarge=0.3
+            )
 
     # demo_mdet.myolo9('yolov9m-mdetect.yaml', 'yolov9m.pt', name='exp_yolo9m', mloss_enlarge=0.3, auto_optim=True, optimizer='AdamW', lr0=0.0003)
+
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp5_3_res.yaml',
+    #         weight_path=r'yolov10x.pt',
+    #         name='exp_yolo10x_exp',
+    #         mloss_enlarge=0.3
+    #         )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strss_3_res.yaml',
+    #         weight_path=r'yolov10x.pt',
+    #         name='exp_yolo10x_exp',
+    #         mloss_enlarge=0.3
+    #         )
+
