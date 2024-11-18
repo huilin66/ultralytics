@@ -1,13 +1,15 @@
 import torch
 from ultralytics import YOLO, RTDETR
-BATCH_SIZE = 32
+BATCH_SIZE = 8
 EPOCHS = 500
-IMGSZ = 640
-CONF = 0.5
+IMGSZ = 1280
+CONF = 0.0
 TASK = 'detect'
 DEVICE = torch.device('cuda:0')
 # DATA = "billboard_mdet5_10_det_0806m.yaml"
-DATA = "billboard_mdet5_10_c_det_0806m.yaml"
+# DATA = "billboard_mdet5_10_c_det_0806m.yaml"
+# DATA = "trafficsign.yaml"
+DATA = "road_veg_1115.yaml"
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -113,6 +115,17 @@ def rtdetr(cfg_path, weight_path='rtdetr-x.pt', auto_optim=True, retrain=False, 
 
 if __name__ == '__main__':
     pass
+    yolo8x('yolov8x.yaml', weight_path='yolov8x.pt', auto_optim=False, name='road_veg_1115_')
+    yolo8x('yolov8x-p2.yaml', weight_path='yolov8x.pt', auto_optim=False, name='road_veg_1115_')
+    yolo8x('yolov8x-p6.yaml', weight_path='yolov8x.pt', auto_optim=False, name='road_veg_1115_')
+    # yolo8x('yolov8n.yaml', weight_path='yolov8n.pt', auto_optim=False)
+    # yolo8x('yolov8n-p2.yaml', weight_path='yolov8n.pt', auto_optim=False)
+    # yolo8x('yolov8n-p6.yaml', weight_path='yolov8n.pt', auto_optim=False)
+    # model_val(r'runs/detect/train73/weights/best.pt')
+    # model_predict(r'runs/detect/train73/weights/best.pt',
+    #               r'/nfsv4/23039356r/data/traffsign/road_veg_1114/images')
+
+
     # yolo8x('yolov8x.yaml', auto_optim=False)
     # yolo9e('yolov9e.yaml', auto_optim=False)
     # yolo10x('yolov10x.yaml', auto_optim=False)
@@ -120,3 +133,11 @@ if __name__ == '__main__':
     # yolo10('yolov8n.yaml', 'yolov8n.pt', auto_optim=False, name='debug', mloss_enlarge=0.4)
     # yolo10('yolov10n.yaml', 'yolov10n.pt', auto_optim=False, name='debug', mloss_enlarge=0.4)
 
+    # model_val(r'runs/detect/train71/weights/best.pt')
+    # model_predict(r'runs/detect/train71/weights/best.pt',
+    #               '/nfsv4/23039356r/data/traffsign/traff_sign_yolo/demo',)
+
+    # import shutil
+    # shutil.copy('/nfsv4/23039356r/data/traffsign/traff_sign_yolo/images/21452.png',
+    #             '/nfsv4/23039356r/data/traffsign/traff_sign_yolo/demo/21452.png',
+    #             )
