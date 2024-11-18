@@ -168,3 +168,4 @@ pnnx*
 # calibration image
 calibration_*.npy
 /key_results/
+demo_run.py
