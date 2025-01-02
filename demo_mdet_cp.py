@@ -1,7 +1,7 @@
 import demo_mdet
 import torch
 demo_mdet.DEVICE = torch.device('cuda:1')
-demo_mdet.EPOCHS = 100
+demo_mdet.EPOCHS = 500
 if __name__ == '__main__':
     pass
     # demo_mdet.myolo10('yolov10x-mdetect.yaml', 'yolov10x.pt', name='exp_mloss_enlarge', mloss_enlarge=0.25)
@@ -433,21 +433,123 @@ if __name__ == '__main__':
     #         name='exp_yolo10x_ablation_head0_',
     #         mloss_enlarge=0.0, retrain=True)
 
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_2/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_3/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_4/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_5/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_6/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_7/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_8/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_9/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_10/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_11/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_12/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_13/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_14/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_15/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_16/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_17/weights/best.pt')
-    demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_18/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_2/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_3/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_4/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_5/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_6/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_7/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_8/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_9/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_10/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_11/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_12/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_13/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_14/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_15/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_16/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_17/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_ablation_head0_18/weights/best.pt')
+
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_m317/weights/best.pt')
+    # demo_mdet.model_val('runs/mdetect/exp_yolo10x_m34/weights/best.pt')
+    # demo_mdet.model_val_single('runs/mdetect/exp_yolo10x_m34/weights/best.pt')
+    # demo_mdet.model_val_single('runs/mdetect/exp_yolo10x_ablation_head0_/weights/best.pt')
+
+
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain1230.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_',
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_',
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain1230.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_',
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_',
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+    #
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain1230.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', auto_optim=True,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', auto_optim=True,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain1230.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', auto_optim=True,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', auto_optim=True,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+    #
+    #
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain1230.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', lr0=0.01,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', lr0=0.01,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_retrain1230.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', lr0=0.01,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+    # demo_mdet.myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', lr0=0.01,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+
+    demo_mdet.mayolo('mayolon.yaml',
+                      'runs/mdetect/exp_mayolon/weights/best.pt',
+                      name='exp_mayolon_', lr0=0.01,
+                      mloss_enlarge=0.3, retrain=True, mdet=5,
+                      )
+    demo_mdet.mayolo('mayolos.yaml',
+                      'runs/mdetect/exp_mayolos/weights/best.pt',
+                      name='exp_mayolos_', lr0=0.01,
+                      mloss_enlarge=0.3, retrain=True, mdet=5,
+                      )
+    demo_mdet.myolo10('mayolom.yaml',
+                      'runs/mdetect/exp_mayolom/weights/best.pt',
+                      name='exp_mayolom_', lr0=0.01,
+                      mloss_enlarge=0.3, retrain=True, mdet=5,
+                      )
+    demo_mdet.mayolo('mayolob.yaml',
+                      'runs/mdetect/exp_mayolob/weights/best.pt',
+                      name='exp_mayolob_', lr0=0.01,
+                      mloss_enlarge=0.3, retrain=True, mdet=5,
+                      )
+    demo_mdet.mayolo('mayolol.yaml',
+                      'runs/mdetect/exp_mayolol/weights/best.pt',
+                      name='exp_mayolol_', lr0=0.01,
+                      mloss_enlarge=0.3, retrain=True, mdet=5,
+                      )
+    demo_mdet.mayolo('mayolox.yaml',
+                      'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_mayolox_', lr0=0.01,
+                      mloss_enlarge=0.3, retrain=True, mdet=5,
+                      )
+

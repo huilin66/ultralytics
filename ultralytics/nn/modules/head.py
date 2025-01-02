@@ -21,7 +21,7 @@ __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10D
 # region added gat
 
 class GAT(nn.Module):
-    def __init__(self, input_chs, output_chs, att_type='com', com_path=None, proj=True, res=False, add_softmax=True, drop_rate=0, leaky_rate=0.1):
+    def __init__(self, input_chs, output_chs, att_type='com', com_path=None, proj=True, res=False, add_softmax=True, drop_rate=0, leaky_rate=0.1, feature_ds=True):
         super().__init__()
         self.input_chs = input_chs
         self.output_chs = output_chs
@@ -32,7 +32,7 @@ class GAT(nn.Module):
         self.add_softmax = add_softmax
         self.drop_rate = drop_rate
         self.leaky_rate = leaky_rate
-
+        self.feature_ds = feature_ds
         self.proj_w = MLP(input_chs, output_chs*2, output_chs, 2) if self.proj else nn.Identity()
 
         if self.att_type == 'mlp':
@@ -87,9 +87,9 @@ class GAT(nn.Module):
         feature_proj = self.proj_w(feature)
 
 
-        if feature_proj.shape[1] > 4000:
+        if self.feature_ds and feature_proj.shape[1] > 4000:
             feature_down = self.feature_down(self.feature_down(feature_proj.permute((0, 2, 1)))).permute((0, 2, 1))
-        elif feature_proj.shape[1] > 1000:
+        elif self.feature_ds and feature_proj.shape[1] > 1000:
             feature_down = self.feature_down(feature_proj.permute((0, 2, 1))).permute((0, 2, 1))
         else:
             feature_down = feature_proj
@@ -388,6 +388,8 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt', res=True) for x in ch)
         elif self.gat == 'cost_res':
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost', res=True) for x in ch)
+        elif self.gat == 'com_gat':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path, proj=True, add_softmax=False) for x in ch)
         elif self.gat == 'com':
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path) for x in ch)
         elif self.gat == 'com_res':
@@ -454,7 +456,6 @@ class MDetect(nn.Module):
                     raise ValueError('sep error %g'%self.sep)
         if self.training:  # Training path
             return x
-
         y = self._inference(x)
         return y if self.export else (y, x)
 
@@ -521,7 +522,9 @@ class MDetect(nn.Module):
         """Decode predicted bounding boxes and class probabilities based on multiple-level feature maps."""
         # Inference path
         shape = x[0].shape  # BCHW
+        x_demo = x[0][0]
         x_cat = torch.cat([xi.view(shape[0], self.no, -1) for xi in x], 2)
+        x_cat_demo = x_cat[0]
         if self.dynamic or self.shape != shape:
             self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5))
             self.shape = shape
@@ -544,7 +547,8 @@ class MDetect(nn.Module):
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
 
-        return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
+        # return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
+        return torch.cat((dbox, cls.sigmoid(), att), 1)
 
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""

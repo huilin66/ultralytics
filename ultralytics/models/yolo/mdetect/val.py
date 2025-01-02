@@ -91,11 +91,11 @@ class MDetectionValidator(BaseValidator):
         self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], ap=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
+        self.stats = dict(tp=[], ap=[], f1=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 7) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)", "OA")
+        return ("%22s" + "%11s" * 8) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)", "OA", "F1")
 
     def postprocess(self, preds):
         """Apply Non-maximum suppression to prediction outputs."""
@@ -143,7 +143,8 @@ class MDetectionValidator(BaseValidator):
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
-                ap = torch.zeros((0, self.na), device=self.device)
+                ap = torch.zeros((0, self.na), device=self.device),
+                f1 = 0,
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -169,7 +170,7 @@ class MDetectionValidator(BaseValidator):
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"] = self._process_batch(predn, bbox, cls, mdet_attributes)
+                stat["tp"], stat["ap"], stat["f1"] = self._process_batch(predn, bbox, cls, mdet_attributes)
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
             for k in self.stats.keys():
@@ -274,6 +275,22 @@ class MDetectionValidator(BaseValidator):
             ap.append(p.unsqueeze(0))
         ap = torch.cat(ap, dim=0)
 
+        # Compute True Positives (TP)
+        tp = torch.sum(correct_box, dim=1)  # Sum over detections (columns) to get per-ground-truth TP
+
+        # Compute False Negatives (FN)
+        fn = torch.sum(~torch.any(correct_box, dim=0))  # Ground truth boxes not matched to any predictions
+
+        # Compute False Positives (FP)
+        fp = torch.sum(~torch.any(correct_box, dim=1))  # Prediction boxes not matched to any ground truth
+
+        # Avoid division by zero
+        precision = tp / (tp + fp + 1e-8)
+        recall = tp / (tp + fn + 1e-8)
+
+        # Compute F1 score
+        f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
+
         iou = iou.cpu().numpy()
 
         for i, threshold in enumerate(self.iouv.cpu().tolist()):
@@ -298,7 +315,7 @@ class MDetectionValidator(BaseValidator):
                         matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
                     correct[matches[:, 1].astype(int), i] = True
         correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
-        return correct, ap
+        return correct, ap, f1
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

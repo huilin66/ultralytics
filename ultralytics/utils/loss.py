@@ -767,6 +767,7 @@ class v8MDetectionLoss(v8DetectionLoss):
         self.no = m.nc + m.na + m.reg_max * 4
         self.assigner = TaskAlignedAssignerMdet(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.mloss_enlarge = model.args.mloss_enlarge
+        self.mloss_weight = model.args.mloss_weight
 
     def _labelsmoothing(self, target, class_num):
         confidence = 1.0 - self.epsilon
@@ -831,10 +832,23 @@ class v8MDetectionLoss(v8DetectionLoss):
             )
 
         gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
-        loss[3] = F.binary_cross_entropy_with_logits(
-                                                     input=pred_attributes,
-                                                     target=gt_attributes,
-                                                     )
+
+        if fg_mask.sum():
+            pred_attributes_fg = pred_attributes[fg_mask]
+            gt_attributes_fg = gt_attributes[fg_mask]
+
+            weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
+
+            loss[3] = F.binary_cross_entropy_with_logits(
+                input=pred_attributes_fg,
+                target=gt_attributes_fg,
+                weight=weight
+            )
+        else:
+            loss[3] = F.binary_cross_entropy_with_logits(
+                                                         input=pred_attributes,
+                                                         target=gt_attributes,
+                                                         )
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain
