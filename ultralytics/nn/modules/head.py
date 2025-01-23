@@ -87,9 +87,9 @@ class GAT(nn.Module):
         feature_proj = self.proj_w(feature)
 
 
-        if self.feature_ds and feature_proj.shape[1] > 4000:
+        if (hasattr(self, 'feature_ds') and self.feature_ds) and feature_proj.shape[1] > 4000:
             feature_down = self.feature_down(self.feature_down(feature_proj.permute((0, 2, 1)))).permute((0, 2, 1))
-        elif self.feature_ds and feature_proj.shape[1] > 1000:
+        elif (hasattr(self, 'feature_ds') and self.feature_ds) and feature_proj.shape[1] > 1000:
             feature_down = self.feature_down(feature_proj.permute((0, 2, 1))).permute((0, 2, 1))
         else:
             feature_down = feature_proj
@@ -547,8 +547,8 @@ class MDetect(nn.Module):
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
 
-        # return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
-        return torch.cat((dbox, cls.sigmoid(), att), 1)
+        return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
+        # return torch.cat((dbox, cls.sigmoid(), att), 1)
 
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""

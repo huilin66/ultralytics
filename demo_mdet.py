@@ -1,7 +1,7 @@
 import torch
 from ultralytics import YOLO
 BATCH_SIZE = 32
-EPOCHS = 100
+EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
 TASK = 'mdetect'
@@ -114,6 +114,7 @@ def myolo10(cfg_path, weight_path='yolov10x.pt', auto_optim=False, retrain=False
     myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 def mayolo(cfg_path, weight_path='yolov10x.pt', auto_optim=False, retrain=False, **kwargs):
+    kwargs['mloss_mask'] = True
     myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
 # endregion
@@ -408,23 +409,109 @@ if __name__ == '__main__':
     # model_val(r'runs/mdetect/exp_yolo10l/weights/best.pt')
     # model_val(r'runs/mdetect/exp_yolo10x/weights/best.pt')
     #
+    # model_val('runs/mdetect/exp_mayolon_/weights/best.pt')
+    # model_val('runs/mdetect/exp_mayolos_/weights/best.pt')
+    # model_val('runs/mdetect/exp_mayolom_/weights/best.pt')
+    # model_val('runs/mdetect/exp_mayolob_/weights/best.pt')
+    # model_val('runs/mdetect/exp_mayolol_/weights/best.pt')
+    # model_val('runs/mdetect/exp_mayolox_/weights/best.pt')
+    #
+    #
     # model_val(r'runs/mdetect/exp_mayolon2/weights/best.pt')
     # model_val(r'runs/mdetect/exp_mayolos2/weights/best.pt')
     # model_val(r'runs/mdetect/exp_mayolom2/weights/best.pt')
     # model_val(r'runs/mdetect/exp_mayolob2/weights/best.pt')
     # model_val(r'runs/mdetect/exp_mayolol2/weights/best.pt')
     # model_val(r'runs/mdetect/exp_mayolox2/weights/best.pt')
+    #
+    #
+    # model_val(r'runs/mdetect/exp_yolo10x/weights/best.pt')
+    #
+    # model_val('runs/mdetect/exp_yolo10x_m34/weights/best.pt')
+    # model_val_single('runs/mdetect/exp_yolo10x/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_ablation0107_debug4/weights/best.pt')
+    #
+    #
+    # model_val_single('runs/mdetect/exp_yolo10x_m34/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_ablation0107_debug5/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_ablation0107_debug6/weights/best.pt')
+    #
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt')
+
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_2/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_3/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_4/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_5/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_6/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_7/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_8/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_9/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_11/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_12/weights/best.pt')
 
 
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_2/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_3/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_4/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_5/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_6/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_7/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_8/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_9/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_11/weights/best.pt')
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_12/weights/best.pt')
+
+    # mayolo('yolov10x_GCA.yaml',
+    #       'runs/mdetect/exp_yolo10x/weights/best.pt',
+    #       name='exp_ablation0107_debug', lr0=0.01,
+    #       mloss_enlarge=0.3, retrain=True, mdet=5,
+    #       )
+    #
+    # mayolo('yolov10x_GIA_GCA.yaml',
+    #       'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #       name='exp_ablation0107_debug', lr0=0.01,
+    #       mloss_enlarge=0.3, retrain=True, mdet=5,
+    #       )
+    #
+    # mayolo('yolov10x_HO_GCA.yaml',
+    #       'runs/mdetect/exp_yolo10x/weights/best.pt',
+    #       name='exp_ablation0107_debug', lr0=0.01,
+    #       mloss_enlarge=0.3, retrain=True, mdet=5,
+    #       )
+
+
+    # model_predict(r'runs/mdetect/exp_yolo8x/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+    # model_predict(r'runs/mdetect/exp_yolo9e/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+    # model_predict(r'runs/mdetect/exp_yolo10x/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+    # model_predict(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+
+
+    # model_predict(r'runs/mdetect/exp_yolo8x/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images')
+    # model_predict(r'runs/mdetect/exp_yolo9e/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images')
+    # model_predict(r'runs/mdetect/exp_yolo10x/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images')
+    # model_predict(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images')
+
+
+    # myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+    #                   'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+    #                   name='exp_yolo10x_head1231_', lr0=0.01, mloss_mask=True,
+    #                   mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+    #                   )
+
+    # model_predict(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+    #
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_19/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_20/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_21/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_22/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_23/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_24/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_25/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_26/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_27/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_28/weights/best.pt')
+
+    model_predict(r'runs/mdetect/exp_yolo10x_head1231_20/weights/best.pt',
+                  img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+

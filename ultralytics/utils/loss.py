@@ -767,6 +767,7 @@ class v8MDetectionLoss(v8DetectionLoss):
         self.no = m.nc + m.na + m.reg_max * 4
         self.assigner = TaskAlignedAssignerMdet(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.mloss_enlarge = model.args.mloss_enlarge
+        self.mloss_mask = model.args.mloss_mask
         self.mloss_weight = model.args.mloss_weight
 
     def _labelsmoothing(self, target, class_num):
@@ -833,7 +834,7 @@ class v8MDetectionLoss(v8DetectionLoss):
 
         gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
 
-        if fg_mask.sum():
+        if fg_mask.sum() and self.mloss_mask:
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]
 
