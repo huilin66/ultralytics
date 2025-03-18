@@ -1,6 +1,4 @@
-# Ultralytics YOLO 🚀, AGPL-3.0 license
-
-import contextlib
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 from ultralytics.utils import LOGGER, SETTINGS, TESTS_RUNNING, colorstr
 
@@ -25,16 +23,15 @@ except (ImportError, AssertionError, TypeError, AttributeError):
     SummaryWriter = None
 
 
-def _log_scalars(scalars, step=0):
+def _log_scalars(scalars: dict, step: int = 0) -> None:
     """Logs scalar values to TensorBoard."""
     if WRITER:
         for k, v in scalars.items():
             WRITER.add_scalar(k, v, step)
 
 
-def _log_tensorboard_graph(trainer):
+def _log_tensorboard_graph(trainer) -> None:
     """Log model graph to TensorBoard."""
-
     # Input image
     imgsz = trainer.args.imgsz
     imgsz = (imgsz, imgsz) if isinstance(imgsz, int) else imgsz
@@ -46,29 +43,30 @@ def _log_tensorboard_graph(trainer):
         warnings.simplefilter("ignore", category=torch.jit.TracerWarning)  # suppress jit trace warning
 
         # Try simple method first (YOLO)
-        with contextlib.suppress(Exception):
+        try:
             trainer.model.eval()  # place in .eval() mode to avoid BatchNorm statistics changes
             WRITER.add_graph(torch.jit.trace(de_parallel(trainer.model), im, strict=False), [])
             LOGGER.info(f"{PREFIX}model graph visualization added ✅")
             return
 
-        # Fallback to TorchScript export steps (RTDETR)
-        try:
-            model = deepcopy(de_parallel(trainer.model))
-            model.eval()
-            model = model.fuse(verbose=False)
-            for m in model.modules():
-                if hasattr(m, "export"):  # Detect, RTDETRDecoder (Segment and Pose use Detect base class)
-                    m.export = True
-                    m.format = "torchscript"
-            model(im)  # dry run
-            WRITER.add_graph(torch.jit.trace(model, im, strict=False), [])
-            LOGGER.info(f"{PREFIX}model graph visualization added ✅")
-        except Exception as e:
-            LOGGER.warning(f"{PREFIX}WARNING ⚠️ TensorBoard graph visualization failure {e}")
+        except Exception:
+            # Fallback to TorchScript export steps (RTDETR)
+            try:
+                model = deepcopy(de_parallel(trainer.model))
+                model.eval()
+                model = model.fuse(verbose=False)
+                for m in model.modules():
+                    if hasattr(m, "export"):  # Detect, RTDETRDecoder (Segment and Pose use Detect base class)
+                        m.export = True
+                        m.format = "torchscript"
+                model(im)  # dry run
+                WRITER.add_graph(torch.jit.trace(model, im, strict=False), [])
+                LOGGER.info(f"{PREFIX}model graph visualization added ✅")
+            except Exception as e:
+                LOGGER.warning(f"{PREFIX}WARNING ⚠️ TensorBoard graph visualization failure {e}")
 
 
-def on_pretrain_routine_start(trainer):
+def on_pretrain_routine_start(trainer) -> None:
     """Initialize TensorBoard logging with SummaryWriter."""
     if SummaryWriter:
         try:
@@ -79,19 +77,19 @@ def on_pretrain_routine_start(trainer):
             LOGGER.warning(f"{PREFIX}WARNING ⚠️ TensorBoard not initialized correctly, not logging this run. {e}")
 
 
-def on_train_start(trainer):
+def on_train_start(trainer) -> None:
     """Log TensorBoard graph."""
     if WRITER:
         _log_tensorboard_graph(trainer)
 
 
-def on_train_epoch_end(trainer):
+def on_train_epoch_end(trainer) -> None:
     """Logs scalar statistics at the end of a training epoch."""
     _log_scalars(trainer.label_loss_items(trainer.tloss, prefix="train"), trainer.epoch + 1)
     _log_scalars(trainer.lr, trainer.epoch + 1)
 
 
-def on_fit_epoch_end(trainer):
+def on_fit_epoch_end(trainer) -> None:
     """Logs epoch metrics at end of training epoch."""
     _log_scalars(trainer.metrics, trainer.epoch + 1)
 

@@ -1,4 +1,5 @@
-# Ultralytics YOLO 🚀, AGPL-3.0 license
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
 # Signature dataset by Ultralytics
 # Documentation: https://docs.ultralytics.com/datasets/detect/signature/
 # Example usage: yolo train data=signature.yaml
@@ -17,4 +18,4 @@ names:
   0: signature
 
 # Download script/URL (optional)
-download: https://ultralytics.com/assets/signature.zip
+download: https://github.com/ultralytics/assets/releases/download/v0.0.0/signature.zip

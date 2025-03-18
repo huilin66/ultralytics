@@ -1,4 +1,4 @@
-# Ultralytics YOLO 🚀, AGPL-3.0 license
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 from functools import partial
 from pathlib import Path
@@ -21,11 +21,20 @@ def on_predict_start(predictor: object, persist: bool = False) -> None:
 
     Args:
         predictor (object): The predictor object to initialize trackers for.
-        persist (bool, optional): Whether to persist the trackers if they already exist. Defaults to False.
+        persist (bool): Whether to persist the trackers if they already exist.
 
     Raises:
         AssertionError: If the tracker_type is not 'bytetrack' or 'botsort'.
+        ValueError: If the task is 'classify' as classification doesn't support tracking.
+
+    Examples:
+        Initialize trackers for a predictor object:
+        >>> predictor = SomePredictorClass()
+        >>> on_predict_start(predictor, persist=True)
     """
+    if predictor.args.task == "classify":
+        raise ValueError("❌ Classification doesn't support 'mode=track'")
+
     if hasattr(predictor, "trackers") and persist:
         return
 
@@ -39,7 +48,7 @@ def on_predict_start(predictor: object, persist: bool = False) -> None:
     for _ in range(predictor.dataset.bs):
         tracker = TRACKER_MAP[cfg.tracker_type](args=cfg, frame_rate=30)
         trackers.append(tracker)
-        if predictor.dataset.mode != "stream":  # only need one tracker for other modes.
+        if predictor.dataset.mode != "stream":  # only need one tracker for other modes
             break
     predictor.trackers = trackers
     predictor.vid_path = [None] * predictor.dataset.bs  # for determining when to reset tracker on new video
@@ -51,27 +60,30 @@ def on_predict_postprocess_end(predictor: object, persist: bool = False) -> None
 
     Args:
         predictor (object): The predictor object containing the predictions.
-        persist (bool, optional): Whether to persist the trackers if they already exist. Defaults to False.
-    """
-    path, im0s = predictor.batch[:2]
+        persist (bool): Whether to persist the trackers if they already exist.
 
+    Examples:
+        Postprocess predictions and update with tracking
+        >>> predictor = YourPredictorClass()
+        >>> on_predict_postprocess_end(predictor, persist=True)
+    """
     is_obb = predictor.args.task == "obb"
     is_stream = predictor.dataset.mode == "stream"
-    for i in range(len(im0s)):
+    for i, result in enumerate(predictor.results):
         tracker = predictor.trackers[i if is_stream else 0]
-        vid_path = predictor.save_dir / Path(path[i]).name
+        vid_path = predictor.save_dir / Path(result.path).name
         if not persist and predictor.vid_path[i if is_stream else 0] != vid_path:
             tracker.reset()
             predictor.vid_path[i if is_stream else 0] = vid_path
 
-        det = (predictor.results[i].obb if is_obb else predictor.results[i].boxes).cpu().numpy()
+        det = (result.obb if is_obb else result.boxes).cpu().numpy()
         if len(det) == 0:
             continue
-        tracks = tracker.update(det, im0s[i])
+        tracks = tracker.update(det, result.orig_img)
         if len(tracks) == 0:
             continue
         idx = tracks[:, -1].astype(int)
-        predictor.results[i] = predictor.results[i][idx]
+        predictor.results[i] = result[idx]
 
         update_args = {"obb" if is_obb else "boxes": torch.as_tensor(tracks[:, :-1])}
         predictor.results[i].update(**update_args)
@@ -84,6 +96,11 @@ def register_tracker(model: object, persist: bool) -> None:
     Args:
         model (object): The model object to register tracking callbacks for.
         persist (bool): Whether to persist the trackers if they already exist.
+
+    Examples:
+        Register tracking callbacks to a YOLO model
+        >>> model = YOLOModel()
+        >>> register_tracker(model, persist=True)
     """
     model.add_callback("on_predict_start", partial(on_predict_start, persist=persist))
     model.add_callback("on_predict_postprocess_end", partial(on_predict_postprocess_end, persist=persist))

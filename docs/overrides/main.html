@@ -1,30 +1,18 @@
 <!--Ultralytics YOLO 🚀, AGPL-3.0 license-->
 
-{% extends "base.html" %}
-
-{% block announce %}
-<a
-  href="https://github.com/ultralytics/ultralytics/releases/tag/v8.2.0"
-  target="_blank"
-  class="banner-wrapper"
->
-  <img
-    src="https://assets-global.website-files.com/646dd1f1a3703e451ba81ecc/6627a6e4d47ce284268ea3b9_yolov82_release.svg"
-    loading="lazy"
-    alt="Ultralytics YOLOv8.2 Release"
-    class="banner-content desktop"
-  />
-  <img
-    src="https://assets-global.website-files.com/646dd1f1a3703e451ba81ecc/6627a163dd84c20540c5ea7a_yolov82_effects.svg"
-    loading="lazy"
-    alt="Ultralytics YOLOv8.2 Release"
-    class="banner-content mobile"
-  />
-  <img
-    src="https://assets-global.website-files.com/646dd1f1a3703e451ba81ecc/6627a163ab932e33983215d4_arrow_effects.svg"
-    loading="lazy"
-    alt="Ultralytics YOLOv8.2 Release Arrow"
-    class="banner-arrow"
-  />
-</a>
+{% extends "base.html" %} {% block announce %}
+<div class="banner-wrapper">
+  <div
+    class="banner-content-wrapper"
+    onclick="window.open('https://docs.ultralytics.com/models/yolo11')"
+  >
+    <p>Introducing</p>
+    <img
+      src="https://assets-global.website-files.com/646dd1f1a3703e451ba81ecc/67d044caa316aa50fba40a08_Ultralytics_YOLO11_Logotype_Reverse.svg"
+      loading="lazy"
+      height="40"
+      alt="Ultralytics YOLO11"
+    />
+  </div>
+</div>
 {% endblock %}

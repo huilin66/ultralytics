@@ -1,129 +1,122 @@
-# Ultralytics YOLO 🚀, AGPL-3.0 license
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-import cv2
-
-from ultralytics.utils.checks import check_imshow
-from ultralytics.utils.plotting import Annotator
+from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
 
 
-class AIGym:
-    """A class to manage the gym steps of people in a real-time video stream based on their poses."""
+class AIGym(BaseSolution):
+    """
+    A class to manage gym steps of people in a real-time video stream based on their poses.
 
-    def __init__(
-        self,
-        kpts_to_check,
-        line_thickness=2,
-        view_img=False,
-        pose_up_angle=145.0,
-        pose_down_angle=90.0,
-        pose_type="pullup",
-    ):
+    This class extends BaseSolution to monitor workouts using YOLO pose estimation models. It tracks and counts
+    repetitions of exercises based on predefined angle thresholds for up and down positions.
+
+    Attributes:
+        count (List[int]): Repetition counts for each detected person.
+        angle (List[float]): Current angle of the tracked body part for each person.
+        stage (List[str]): Current exercise stage ('up', 'down', or '-') for each person.
+        initial_stage (str | None): Initial stage of the exercise.
+        up_angle (float): Angle threshold for considering the 'up' position of an exercise.
+        down_angle (float): Angle threshold for considering the 'down' position of an exercise.
+        kpts (List[int]): Indices of keypoints used for angle calculation.
+
+    Methods:
+        process: Processes a frame to detect poses, calculate angles, and count repetitions.
+
+    Examples:
+        >>> gym = AIGym(model="yolo11n-pose.pt")
+        >>> image = cv2.imread("gym_scene.jpg")
+        >>> results = gym.process(image)
+        >>> processed_image = results.plot_im
+        >>> cv2.imshow("Processed Image", processed_image)
+        >>> cv2.waitKey(0)
+    """
+
+    def __init__(self, **kwargs):
         """
-        Initializes the AIGym class with the specified parameters.
+        Initialize AIGym for workout monitoring using pose estimation and predefined angles.
 
         Args:
-            kpts_to_check (list): Indices of keypoints to check.
-            line_thickness (int, optional): Thickness of the lines drawn. Defaults to 2.
-            view_img (bool, optional): Flag to display the image. Defaults to False.
-            pose_up_angle (float, optional): Angle threshold for the 'up' pose. Defaults to 145.0.
-            pose_down_angle (float, optional): Angle threshold for the 'down' pose. Defaults to 90.0.
-            pose_type (str, optional): Type of pose to detect ('pullup', 'pushup', 'abworkout'). Defaults to "pullup".
+            **kwargs (Any): Keyword arguments passed to the parent class constructor.
+                model (str): Model name or path, defaults to "yolo11n-pose.pt".
         """
+        kwargs["model"] = kwargs.get("model", "yolo11n-pose.pt")
+        super().__init__(**kwargs)
+        self.count = []  # List for counts, necessary where there are multiple objects in frame
+        self.angle = []  # List for angle, necessary where there are multiple objects in frame
+        self.stage = []  # List for stage, necessary where there are multiple objects in frame
 
-        # Image and line thickness
-        self.im0 = None
-        self.tf = line_thickness
+        # Extract details from CFG single time for usage later
+        self.initial_stage = None
+        self.up_angle = float(self.CFG["up_angle"])  # Pose up predefined angle to consider up pose
+        self.down_angle = float(self.CFG["down_angle"])  # Pose down predefined angle to consider down pose
+        self.kpts = self.CFG["kpts"]  # User selected kpts of workouts storage for further usage
 
-        # Keypoints and count information
-        self.keypoints = None
-        self.poseup_angle = pose_up_angle
-        self.posedown_angle = pose_down_angle
-        self.threshold = 0.001
-
-        # Store stage, count and angle information
-        self.angle = None
-        self.count = None
-        self.stage = None
-        self.pose_type = pose_type
-        self.kpts_to_check = kpts_to_check
-
-        # Visual Information
-        self.view_img = view_img
-        self.annotator = None
-
-        # Check if environment supports imshow
-        self.env_check = check_imshow(warn=True)
-        self.count = []
-        self.angle = []
-        self.stage = []
-
-    def start_counting(self, im0, results):
+    def process(self, im0):
         """
-        Function used to count the gym steps.
+        Monitor workouts using Ultralytics YOLO Pose Model.
+
+        This function processes an input image to track and analyze human poses for workout monitoring. It uses
+        the YOLO Pose model to detect keypoints, estimate angles, and count repetitions based on predefined
+        angle thresholds.
 
         Args:
-            im0 (ndarray): Current frame from the video stream.
-            results (list): Pose estimation data.
+            im0 (np.ndarray): Input image for processing.
+
+        Returns:
+            (SolutionResults): Contains processed image `plot_im`,
+                'workout_count' (list of completed reps),
+                'workout_stage' (list of current stages),
+                'workout_angle' (list of angles), and
+                'total_tracks' (total number of tracked individuals).
+
+        Examples:
+            >>> gym = AIGym()
+            >>> image = cv2.imread("workout.jpg")
+            >>> results = gym.process(image)
+            >>> processed_image = results.plot_im
         """
+        annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
 
-        self.im0 = im0
+        self.extract_tracks(im0)  # Extract tracks (bounding boxes, classes, and masks)
+        tracks = self.tracks[0]
 
-        if not len(results[0]):
-            return self.im0
+        if tracks.boxes.id is not None:
+            if len(tracks) > len(self.count):  # Add new entries for newly detected people
+                new_human = len(tracks) - len(self.count)
+                self.angle += [0] * new_human
+                self.count += [0] * new_human
+                self.stage += ["-"] * new_human
 
-        if len(results[0]) > len(self.count):
-            new_human = len(results[0]) - len(self.count)
-            self.count += [0] * new_human
-            self.angle += [0] * new_human
-            self.stage += ["-"] * new_human
+            # Enumerate over keypoints
+            for ind, k in enumerate(reversed(tracks.keypoints.data)):
+                # Get keypoints and estimate the angle
+                kpts = [k[int(self.kpts[i])].cpu() for i in range(3)]
+                self.angle[ind] = annotator.estimate_pose_angle(*kpts)
+                annotator.draw_specific_kpts(k, self.kpts, radius=self.line_width * 3)
 
-        self.keypoints = results[0].keypoints.data
-        self.annotator = Annotator(im0, line_width=self.tf)
-
-        for ind, k in enumerate(reversed(self.keypoints)):
-            # Estimate angle and draw specific points based on pose type
-            if self.pose_type in {"pushup", "pullup", "abworkout", "squat"}:
-                self.angle[ind] = self.annotator.estimate_pose_angle(
-                    k[int(self.kpts_to_check[0])].cpu(),
-                    k[int(self.kpts_to_check[1])].cpu(),
-                    k[int(self.kpts_to_check[2])].cpu(),
-                )
-                self.im0 = self.annotator.draw_specific_points(k, self.kpts_to_check, shape=(640, 640), radius=10)
-
-                # Check and update pose stages and counts based on angle
-                if self.pose_type in {"abworkout", "pullup"}:
-                    if self.angle[ind] > self.poseup_angle:
-                        self.stage[ind] = "down"
-                    if self.angle[ind] < self.posedown_angle and self.stage[ind] == "down":
-                        self.stage[ind] = "up"
+                # Determine stage and count logic based on angle thresholds
+                if self.angle[ind] < self.down_angle:
+                    if self.stage[ind] == "up":
                         self.count[ind] += 1
+                    self.stage[ind] = "down"
+                elif self.angle[ind] > self.up_angle:
+                    self.stage[ind] = "up"
 
-                elif self.pose_type in {"pushup", "squat"}:
-                    if self.angle[ind] > self.poseup_angle:
-                        self.stage[ind] = "up"
-                    if self.angle[ind] < self.posedown_angle and self.stage[ind] == "up":
-                        self.stage[ind] = "down"
-                        self.count[ind] += 1
-
-                self.annotator.plot_angle_and_count_and_stage(
-                    angle_text=self.angle[ind],
-                    count_text=self.count[ind],
-                    stage_text=self.stage[ind],
-                    center_kpt=k[int(self.kpts_to_check[1])],
+                # Display angle, count, and stage text
+                annotator.plot_angle_and_count_and_stage(
+                    angle_text=self.angle[ind],  # angle text for display
+                    count_text=self.count[ind],  # count text for workouts
+                    stage_text=self.stage[ind],  # stage position text
+                    center_kpt=k[int(self.kpts[1])],  # center keypoint for display
                 )
+        plot_im = annotator.result()
+        self.display_output(plot_im)  # Display output image, if environment support display
 
-            # Draw keypoints
-            self.annotator.kpts(k, shape=(640, 640), radius=1, kpt_line=True)
-
-        # Display the image if environment supports it and view_img is True
-        if self.env_check and self.view_img:
-            cv2.imshow("Ultralytics YOLOv8 AI GYM", self.im0)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                return
-
-        return self.im0
-
-
-if __name__ == "__main__":
-    kpts_to_check = [0, 1, 2]  # example keypoints
-    aigym = AIGym(kpts_to_check)
+        # Return SolutionResults
+        return SolutionResults(
+            plot_im=plot_im,
+            workout_count=self.count,
+            workout_stage=self.stage,
+            workout_angle=self.angle,
+            total_tracks=len(self.track_ids),
+        )

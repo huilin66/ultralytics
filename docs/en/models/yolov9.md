@@ -1,12 +1,12 @@
 ---
 comments: true
-description: Explore YOLOv9, the latest leap in real-time object detection, featuring innovations like PGI and GELAN, and achieving new benchmarks in efficiency and accuracy.
+description: Explore YOLOv9, a leap in real-time object detection, featuring innovations like PGI and GELAN, and achieving new benchmarks in efficiency and accuracy.
 keywords: YOLOv9, object detection, real-time, PGI, GELAN, deep learning, MS COCO, AI, neural networks, model efficiency, accuracy, Ultralytics
 ---
 
-# YOLOv9: A Leap Forward in Object Detection Technology
+# YOLOv9: A Leap Forward in [Object Detection](https://www.ultralytics.com/glossary/object-detection) Technology
 
-YOLOv9 marks a significant advancement in real-time object detection, introducing groundbreaking techniques such as Programmable Gradient Information (PGI) and the Generalized Efficient Layer Aggregation Network (GELAN). This model demonstrates remarkable improvements in efficiency, accuracy, and adaptability, setting new benchmarks on the MS COCO dataset. The YOLOv9 project, while developed by a separate open-source team, builds upon the robust codebase provided by [Ultralytics](https://ultralytics.com) [YOLOv5](yolov5.md), showcasing the collaborative spirit of the AI research community.
+YOLOv9 marks a significant advancement in real-time object detection, introducing groundbreaking techniques such as Programmable Gradient Information (PGI) and the Generalized Efficient Layer Aggregation Network (GELAN). This model demonstrates remarkable improvements in efficiency, accuracy, and adaptability, setting new benchmarks on the MS COCO dataset. The YOLOv9 project, while developed by a separate open-source team, builds upon the robust codebase provided by [Ultralytics](https://www.ultralytics.com/) [YOLOv5](yolov5.md), showcasing the collaborative spirit of the AI research community.
 
 <p align="center">
   <br>
@@ -19,11 +19,11 @@ YOLOv9 marks a significant advancement in real-time object detection, introducin
   <strong>Watch:</strong> YOLOv9 Training on Custom Data using Ultralytics | Industrial Package Dataset
 </p>
 
-![YOLOv9 performance comparison](https://github.com/ultralytics/ultralytics/assets/26833433/9f41ef7b-6008-43eb-8ba1-0a9b89600100)
+![YOLOv9 performance comparison](https://github.com/ultralytics/docs/releases/download/0/yolov9-performance-comparison.avif)
 
 ## Introduction to YOLOv9
 
-In the quest for optimal real-time object detection, YOLOv9 stands out with its innovative approach to overcoming information loss challenges inherent in deep neural networks. By integrating PGI and the versatile GELAN architecture, YOLOv9 not only enhances the model's learning capacity but also ensures the retention of crucial information throughout the detection process, thereby achieving exceptional accuracy and performance.
+In the quest for optimal real-time object detection, YOLOv9 stands out with its innovative approach to overcoming information loss challenges inherent in deep [neural networks](https://www.ultralytics.com/glossary/neural-network-nn). By integrating PGI and the versatile GELAN architecture, YOLOv9 not only enhances the model's learning capacity but also ensures the retention of crucial information throughout the detection process, thereby achieving exceptional accuracy and performance.
 
 ## Core Innovations of YOLOv9
 
@@ -47,7 +47,7 @@ The concept of Reversible Functions is another cornerstone of YOLOv9's design. A
 X = v_zeta(r_psi(X))
 ```
 
-with `psi` and `zeta` as parameters for the reversible and its inverse function, respectively. This property is crucial for deep learning architectures, as it allows the network to retain a complete information flow, thereby enabling more accurate updates to the model's parameters. YOLOv9 incorporates reversible functions within its architecture to mitigate the risk of information degradation, especially in deeper layers, ensuring the preservation of critical data for object detection tasks.
+with `psi` and `zeta` as parameters for the reversible and its inverse function, respectively. This property is crucial for [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) architectures, as it allows the network to retain a complete information flow, thereby enabling more accurate updates to the model's parameters. YOLOv9 incorporates reversible functions within its architecture to mitigate the risk of information degradation, especially in deeper layers, ensuring the preservation of critical data for object detection tasks.
 
 ### Impact on Lightweight Models
 
@@ -61,13 +61,37 @@ PGI is a novel concept introduced in YOLOv9 to combat the information bottleneck
 
 GELAN represents a strategic architectural advancement, enabling YOLOv9 to achieve superior parameter utilization and computational efficiency. Its design allows for flexible integration of various computational blocks, making YOLOv9 adaptable to a wide range of applications without sacrificing speed or accuracy.
 
-![YOLOv9 architecture comparison](https://github.com/ultralytics/ultralytics/assets/26833433/286a3971-677b-45e6-a90b-4b6bd565a7af)
+![YOLOv9 architecture comparison](https://github.com/ultralytics/docs/releases/download/0/yolov9-architecture-comparison.avif)
+
+## YOLOv9 Benchmarks
+
+Benchmarking in YOLOv9 using [Ultralytics](https://docs.ultralytics.com/modes/benchmark/) involves evaluating the performance of your trained and validated model in real-world scenarios. This process includes:
+
+- **Performance Evaluation:** Assessing the model's speed and accuracy.
+- **Export Formats:** Testing the model across different export formats to ensure it meets the necessary standards and performs well in various environments.
+- **Framework Support:** Providing a comprehensive framework within Ultralytics YOLOv8 to facilitate these assessments and ensure consistent and reliable results.
+
+By benchmarking, you can ensure that your model not only performs well in controlled testing environments but also maintains high performance in practical, real-world applications.
+
+<p align="center">
+  <br>
+  <iframe loading="lazy" width="720" height="405" src="https://www.youtube.com/embed/ziJR01lKnio"
+    title="YouTube video player" frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen>
+  </iframe>
+  <br>
+  <strong>Watch:</strong> How to Benchmark the YOLOv9 Model Using the Ultralytics Python Package
+</p>
 
 ## Performance on MS COCO Dataset
 
-The performance of YOLOv9 on the [COCO dataset](../datasets/detect/coco.md) exemplifies its significant advancements in real-time object detection, setting new benchmarks across various model sizes. Table 1 presents a comprehensive comparison of state-of-the-art real-time object detectors, illustrating YOLOv9's superior efficiency and accuracy.
+<script async src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="../../javascript/benchmark.js"></script>
 
-**Table 1. Comparison of State-of-the-Art Real-Time Object Detectors**
+<canvas id="modelComparisonChart" width="1024" height="400" active-models='["YOLOv9"]'></canvas>
+
+The performance of YOLOv9 on the [COCO dataset](../datasets/detect/coco.md) exemplifies its significant advancements in real-time object detection, setting new benchmarks across various model sizes. Table 1 presents a comprehensive comparison of state-of-the-art real-time object detectors, illustrating YOLOv9's superior efficiency and [accuracy](https://www.ultralytics.com/glossary/accuracy).
 
 !!! tip "Performance"
 
@@ -88,16 +112,16 @@ The performance of YOLOv9 on the [COCO dataset](../datasets/detect/coco.md) exem
         | [YOLOv9c-seg](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov9c-seg.pt)  | 640                   | 52.4                 | 42.2                  | 27.9               | 159.4             |
         | [YOLOv9e-seg](https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov9e-seg.pt)  | 640                   | 55.1                 | 44.3                  | 60.5               | 248.4             |
 
-YOLOv9's iterations, ranging from the tiny `t` variant to the extensive `e` model, demonstrate improvements not only in accuracy (mAP metrics) but also in efficiency with a reduced number of parameters and computational needs (FLOPs). This table underscores YOLOv9's ability to deliver high precision while maintaining or reducing the computational overhead compared to prior versions and competing models.
+YOLOv9's iterations, ranging from the tiny `t` variant to the extensive `e` model, demonstrate improvements not only in accuracy (mAP metrics) but also in efficiency with a reduced number of parameters and computational needs (FLOPs). This table underscores YOLOv9's ability to deliver high [precision](https://www.ultralytics.com/glossary/precision) while maintaining or reducing the computational overhead compared to prior versions and competing models.
 
 Comparatively, YOLOv9 exhibits remarkable gains:
 
 - **Lightweight Models**: YOLOv9s surpasses the YOLO MS-S in parameter efficiency and computational load while achieving an improvement of 0.4∼0.6% in AP.
 - **Medium to Large Models**: YOLOv9m and YOLOv9e show notable advancements in balancing the trade-off between model complexity and detection performance, offering significant reductions in parameters and computations against the backdrop of improved accuracy.
 
-The YOLOv9c model, in particular, highlights the effectiveness of the architecture's optimizations. It operates with 42% fewer parameters and 21% less computational demand than YOLOv7 AF, yet it achieves comparable accuracy, demonstrating YOLOv9's significant efficiency improvements. Furthermore, the YOLOv9e model sets a new standard for large models, with 15% fewer parameters and 25% less computational need than [YOLOv8x](yolov8.md), alongside a incremental 1.7% improvement in AP.
+The YOLOv9c model, in particular, highlights the effectiveness of the architecture's optimizations. It operates with 42% fewer parameters and 21% less computational demand than YOLOv7 AF, yet it achieves comparable accuracy, demonstrating YOLOv9's significant efficiency improvements. Furthermore, the YOLOv9e model sets a new standard for large models, with 15% fewer parameters and 25% less computational need than [YOLOv8x](yolov8.md), alongside an incremental 1.7% improvement in AP.
 
-These results showcase YOLOv9's strategic advancements in model design, emphasizing its enhanced efficiency without compromising on the precision essential for real-time object detection tasks. The model not only pushes the boundaries of performance metrics but also emphasizes the importance of computational efficiency, making it a pivotal development in the field of computer vision.
+These results showcase YOLOv9's strategic advancements in model design, emphasizing its enhanced efficiency without compromising on the precision essential for real-time object detection tasks. The model not only pushes the boundaries of performance metrics but also emphasizes the importance of computational efficiency, making it a pivotal development in the field of [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv).
 
 ## Conclusion
 
@@ -107,11 +131,11 @@ YOLOv9 represents a pivotal development in real-time object detection, offering 
 
 This example provides simple YOLOv9 training and inference examples. For full documentation on these and other [modes](../modes/index.md) see the [Predict](../modes/predict.md), [Train](../modes/train.md), [Val](../modes/val.md) and [Export](../modes/export.md) docs pages.
 
-!!! Example
+!!! example
 
     === "Python"
 
-        PyTorch pretrained `*.pt` models as well as configuration `*.yaml` files can be passed to the `YOLO()` class to create a model instance in python:
+        [PyTorch](https://www.ultralytics.com/glossary/pytorch) pretrained `*.pt` models as well as configuration `*.yaml` files can be passed to the `YOLO()` class to create a model instance in python:
 
         ```python
         from ultralytics import YOLO
@@ -148,10 +172,10 @@ This example provides simple YOLOv9 training and inference examples. For full do
 
 The YOLOv9 series offers a range of models, each optimized for high-performance [Object Detection](../tasks/detect.md). These models cater to varying computational needs and accuracy requirements, making them versatile for a wide array of applications.
 
-| Model      | Filenames                                               | Tasks                                        | Inference | Validation | Training | Export |
-| ---------- | ------------------------------------------------------- | -------------------------------------------- | --------- | ---------- | -------- | ------ |
-| YOLOv9     | `yolov9t` `yolov9s` `yolov9m` `yolov9c.pt` `yolov9e.pt` | [Object Detection](../tasks/detect.md)       | ✅        | ✅         | ✅       | ✅     |
-| YOLOv9-seg | `yolov9c-seg.pt` `yolov9e-seg.pt`                       | [Instance Segmentation](../tasks/segment.md) | ✅        | ✅         | ✅       | ✅     |
+| Model      | Filenames                                                        | Tasks                                        | Inference | Validation | Training | Export |
+| ---------- | ---------------------------------------------------------------- | -------------------------------------------- | --------- | ---------- | -------- | ------ |
+| YOLOv9     | `yolov9t.pt` `yolov9s.pt` `yolov9m.pt` `yolov9c.pt` `yolov9e.pt` | [Object Detection](../tasks/detect.md)       | ✅        | ✅         | ✅       | ✅     |
+| YOLOv9-seg | `yolov9c-seg.pt` `yolov9e-seg.pt`                                | [Instance Segmentation](../tasks/segment.md) | ✅        | ✅         | ✅       | ✅     |
 
 This table provides a detailed overview of the YOLOv9 model variants, highlighting their capabilities in object detection tasks and their compatibility with various operational modes such as [Inference](../modes/predict.md), [Validation](../modes/val.md), [Training](../modes/train.md), and [Export](../modes/export.md). This comprehensive support ensures that users can fully leverage the capabilities of YOLOv9 models in a broad range of object detection scenarios.
 
@@ -163,49 +187,55 @@ This table provides a detailed overview of the YOLOv9 model variants, highlighti
 
 We would like to acknowledge the YOLOv9 authors for their significant contributions in the field of real-time object detection:
 
-!!! Quote ""
+!!! quote ""
 
     === "BibTeX"
 
         ```bibtex
         @article{wang2024yolov9,
-          title={{YOLOv9}: Learning What You Want to Learn Using Programmable Gradient Information},
+          title={YOLOv9: Learning What You Want to Learn Using Programmable Gradient Information},
           author={Wang, Chien-Yao  and Liao, Hong-Yuan Mark},
           booktitle={arXiv preprint arXiv:2402.13616},
           year={2024}
         }
         ```
 
-The original YOLOv9 paper can be found on [arXiv](https://arxiv.org/pdf/2402.13616.pdf). The authors have made their work publicly available, and the codebase can be accessed on [GitHub](https://github.com/WongKinYiu/yolov9). We appreciate their efforts in advancing the field and making their work accessible to the broader community.
+The original YOLOv9 paper can be found on [arXiv](https://arxiv.org/pdf/2402.13616). The authors have made their work publicly available, and the codebase can be accessed on [GitHub](https://github.com/WongKinYiu/yolov9). We appreciate their efforts in advancing the field and making their work accessible to the broader community.
 
 ## FAQ
 
-### What is YOLOv9 and why should I use it for real-time object detection?
+### What innovations does YOLOv9 introduce for real-time object detection?
 
-YOLOv9 is the latest iteration of the YOLO (You Only Look Once) object detection family, featuring groundbreaking techniques like Programmable Gradient Information (PGI) and Generalized Efficient Layer Aggregation Network (GELAN). This model demonstrates significant improvements in efficiency, accuracy, and adaptability, setting new benchmarks on the [MS COCO](../datasets/detect/coco.md) dataset. The integration of PGI and GELAN ensures retention of crucial data throughout the detection process, making YOLOv9 an exceptional choice for real-time object detection.
+YOLOv9 introduces groundbreaking techniques such as Programmable Gradient Information (PGI) and the Generalized Efficient Layer Aggregation Network (GELAN). These innovations address information loss challenges in deep neural networks, ensuring high efficiency, accuracy, and adaptability. PGI preserves essential data across network layers, while GELAN optimizes parameter utilization and computational efficiency. Learn more about [YOLOv9's core innovations](#core-innovations-of-yolov9) that set new benchmarks on the MS COCO dataset.
 
-### How do Programmable Gradient Information (PGI) and GELAN improve YOLOv9's performance?
+### How does YOLOv9 perform on the MS COCO dataset compared to other models?
 
-Programmable Gradient Information (PGI) helps counteract information loss in deep neural networks by ensuring the preservation of essential data across network layers. This leads to more reliable gradient generation and better model convergence. The Generalized Efficient Layer Aggregation Network (GELAN) enhances parameter utilization and computational efficiency by allowing flexible integration of various computational blocks. These innovations collectively improve the accuracy and efficiency of YOLOv9. For more details, see the [Innovations section](#programmable-gradient-information-pgi).
+YOLOv9 outperforms state-of-the-art real-time object detectors by achieving higher accuracy and efficiency. On the [COCO dataset](../datasets/detect/coco.md), YOLOv9 models exhibit superior mAP scores across various sizes while maintaining or reducing computational overhead. For instance, YOLOv9c achieves comparable accuracy with 42% fewer parameters and 21% less computational demand than YOLOv7 AF. Explore [performance comparisons](#performance-on-ms-coco-dataset) for detailed metrics.
 
-### What makes YOLOv9 more efficient than previous YOLO versions?
+### How can I train a YOLOv9 model using Python and CLI?
 
-YOLOv9 incorporates several innovations like PGI and GELAN that effectively address the information bottleneck and improve layer aggregation, respectively. This results in high parameter efficiency and reduced computational load. Models such as YOLOv9s and YOLOv9e demonstrate significant gains in performance compared to previous versions. For a detailed performance comparison, refer to the [Performance section on MS COCO](#performance-on-ms-coco-dataset).
-
-### Can I train YOLOv9 on my custom dataset using Ultralytics?
-
-Yes, you can easily train YOLOv9 on your custom dataset using Ultralytics. The Ultralytics YOLO framework supports various modes including [Train](../modes/train.md), [Predict](../modes/predict.md), and [Val](../modes/val.md). For example, you can start training a YOLOv9c model with the following Python code snippet:
+You can train a YOLOv9 model using both Python and CLI commands. For Python, instantiate a model using the `YOLO` class and call the `train` method:
 
 ```python
 from ultralytics import YOLO
 
-# Load the YOLOv9c model configuration
-model = YOLO("yolov9c.yaml")
-
-# Train the model on your custom dataset
-results = model.train(data="custom_dataset.yaml", epochs=100, imgsz=640)
+# Build a YOLOv9c model from pretrained weights and train
+model = YOLO("yolov9c.pt")
+results = model.train(data="coco8.yaml", epochs=100, imgsz=640)
 ```
 
-### How does YOLOv9 compare to other state-of-the-art real-time object detectors?
+For CLI training, execute:
 
-YOLOv9 shows superior performance across different model sizes on the [COCO dataset](../datasets/detect/coco.md). It achieves higher mean Average Precision (mAP) with fewer parameters and computational resources compared to competitors. For instance, the YOLOv9c model operates with 42% fewer parameters and 21% less computational demand than YOLOv7 AF, while matching its accuracy. Detailed performance metrics can be found in the [Performance Comparison table](#performance-on-ms-coco-dataset).
+```bash
+yolo train model=yolov9c.yaml data=coco8.yaml epochs=100 imgsz=640
+```
+
+Learn more about [usage examples](#usage-examples) for training and inference.
+
+### What are the advantages of using Ultralytics YOLOv9 for lightweight models?
+
+YOLOv9 is designed to mitigate information loss, which is particularly important for lightweight models often prone to losing significant information. By integrating Programmable Gradient Information (PGI) and reversible functions, YOLOv9 ensures essential data retention, enhancing the model's accuracy and efficiency. This makes it highly suitable for applications requiring compact models with high performance. For more details, explore the section on [YOLOv9's impact on lightweight models](#impact-on-lightweight-models).
+
+### What tasks and modes does YOLOv9 support?
+
+YOLOv9 supports various tasks including object detection and [instance segmentation](https://www.ultralytics.com/glossary/instance-segmentation). It is compatible with multiple operational modes such as inference, validation, training, and export. This versatility makes YOLOv9 adaptable to diverse real-time computer vision applications. Refer to the [supported tasks and modes](#supported-tasks-and-modes) section for more information.

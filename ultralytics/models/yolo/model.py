@@ -1,4 +1,4 @@
-# Ultralytics YOLO 🚀, AGPL-3.0 license
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from huggingface_hub import PyTorchModelHubMixin
 class YOLO(Model):
     """YOLO (You Only Look Once) object detection model."""
 
-    def __init__(self, model="yolov8n.pt", task=None, verbose=False):
+    def __init__(self, model="yolo11n.pt", task=None, verbose=False):
         """Initialize YOLO model, switching to YOLOWorld if model filename contains '-world'."""
         path = Path(model)
         if "-world" in path.stem and path.suffix in {".pt", ".yaml", ".yml"}:  # if YOLOWorld PyTorch model
@@ -71,10 +71,14 @@ class YOLOWorld(Model):
 
     def __init__(self, model="yolov8s-world.pt", verbose=False) -> None:
         """
-        Initializes the YOLOv8-World model with the given pre-trained model file. Supports *.pt and *.yaml formats.
+        Initialize YOLOv8-World model with a pre-trained model file.
+
+        Loads a YOLOv8-World model for object detection. If no custom class names are provided, it assigns default
+        COCO class names.
 
         Args:
-            model (str | Path): Path to the pre-trained model. Defaults to 'yolov8s-world.pt'.
+            model (str | Path): Path to the pre-trained model file. Supports *.pt and *.yaml formats.
+            verbose (bool): If True, prints additional information during initialization.
         """
         super().__init__(model=model, task="detect", verbose=verbose)
 
@@ -96,7 +100,7 @@ class YOLOWorld(Model):
 
     def set_classes(self, classes):
         """
-        Set classes.
+        Set the model's class names for detection.
 
         Args:
             classes (List(str)): A list of categories i.e. ["person"].
@@ -109,6 +113,5 @@ class YOLOWorld(Model):
         self.model.names = classes
 
         # Reset method class names
-        # self.predictor = None  # reset predictor otherwise old names remain
         if self.predictor:
             self.predictor.model.names = classes
