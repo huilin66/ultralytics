@@ -354,6 +354,8 @@ class YOLOMDETDataset(BaseDataset):
                     self.label_files,
                     repeat(self.prefix),
                     repeat(self.use_keypoints),
+                    repeat(self.use_segments),
+                    repeat(self.use_mdetect),
                     repeat(len(self.data["names"])),
                     repeat(nkpt),
                     repeat(ndim),

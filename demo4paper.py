@@ -121,4 +121,9 @@ def mayolo(cfg_path, weight_path='yolov10x.pt', auto_optim=False, retrain=False,
 
 if __name__ == '__main__':
     pass
-    model_val(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt')
+    # model_val(r'runs/mdetect/exp_yolo10x_head1231_10/weights/best.pt')
+    myolo10('yolov10x-mdetect-psa_c3strcp_3_comgat6.yaml',
+                      'runs/mdetect/exp_yolo10x_m34/weights/best.pt',
+                      name='exp_yolo10x_head1231_', lr0=0.01, mloss_mask=True,
+                      mloss_enlarge=0.3, retrain=True, mdet=5, mloss_weight=True,
+                      )
