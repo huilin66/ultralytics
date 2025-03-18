@@ -512,6 +512,6 @@ if __name__ == '__main__':
     # model_val(r'runs/mdetect/exp_yolo10x_head1231_27/weights/best.pt')
     # model_val(r'runs/mdetect/exp_yolo10x_head1231_28/weights/best.pt')
 
-    model_predict(r'runs/mdetect/exp_yolo10x_head1231_20/weights/best.pt',
-                  img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
+    # model_predict(r'runs/mdetect/exp_yolo10x_head1231_20/weights/best.pt',
+    #               img_dir=r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/images_val')
 
