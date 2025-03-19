@@ -131,7 +131,7 @@ if __name__ == '__main__':
     # myolo8('yolov8s-mdetect.yaml', 'yolov8s.pt', name='exp_yolo8s', mloss_enlarge=0.3)
     # myolo8('yolov8m-mdetect.yaml', 'yolov8m.pt', name='exp_yolo8m', mloss_enlarge=0.3)
     # myolo8('yolov8l-mdetect.yaml', 'yolov8l.pt', name='exp_yolo8l', mloss_enlarge=0.3)
-    # myolo8('yolov8x-mdetect.yaml', 'yolov8x.pt', name='exp_yolo8x', mloss_enlarge=0.3)
+    myolo8('yolov8x-mdetect.yaml', 'yolov8x.pt', name='exp_yolo8x', mloss_enlarge=0.3)
     #
     # myolo9('yolov9m-mdetect.yaml', 'yolov9m.pt', name='exp_yolo9m', mloss_enlarge=0.3)
     # myolo9('yolov9s-mdetect.yaml', 'yolov9s.pt', name='exp_yolo9s', mloss_enlarge=0.3)
