@@ -79,16 +79,19 @@ class MDetectionValidator(BaseValidator):
             self.nc = model.nc
             self.attribute_names = model.attribute_names
             self.na = model.na
+            self.nal = model.nal
         else:
             self.nc = model.model.nc
             self.attribute_names = model.model.attribute_names
             self.na = model.model.na
+            self.nal = model.model.nal
         self.metrics.names = self.names
         self.metrics.plot = self.args.plots
         self.metrics.attribute_names = self.attribute_names
         self.metrics.nc = self.nc
         self.metrics.na = self.na
-        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, conf=self.args.conf)
+        self.metrics.nal = self.nal
+        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], ap=[], f1=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
@@ -240,7 +243,7 @@ class MDetectionValidator(BaseValidator):
         return self.match_predictions(detections[:, 5], gt_cls, iou, detections[:, 6:], gt_attributes)
 
     def match_predictions(self, pred_classes, true_classes, iou, pred_attributes,
-                          gt_attributes, use_scipy=False):
+                          gt_attributes, nal, use_scipy=False):
         """
         Matches predictions to ground truth objects (pred_classes, true_classes) using IoU.
 
@@ -257,38 +260,25 @@ class MDetectionValidator(BaseValidator):
         correct = np.zeros((pred_classes.shape[0], self.iouv.shape[0])).astype(bool)
         # LxD matrix where L - labels (rows), D - detections (columns)
         correct_class = true_classes[:, None] == pred_classes
-
         iou = iou * correct_class  # zero out the wrong classes
 
-        pred_attributes_result = torch.where(pred_attributes > 0.5, 1, 0)
-
+        # attribute result
+        pred_attributes_result = torch.floor(pred_attributes * (nal + 1)).long()
         iou50 = iou >= 0.5
         correct_box = correct_class & iou50 # n * 300
-        # gt_attributes: n * 14, pred_attributes_result: 300 * 14 --> correct_attributes: n * 300 * 14
         correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
-
         ap = []
-        # correct_attributes: n * 300 * 14 --> m *14
         for i in range(correct_attributes.shape[0]):
             ca = correct_attributes[i][correct_box[i]]
             p = torch.mean(ca.float(), axis=0) if ca.shape[0] > 0 else torch.zeros(gt_attributes.shape[-1], device=self.device)
             ap.append(p.unsqueeze(0))
         ap = torch.cat(ap, dim=0)
 
-        # Compute True Positives (TP)
-        tp = torch.sum(correct_box, dim=1)  # Sum over detections (columns) to get per-ground-truth TP
-
-        # Compute False Negatives (FN)
-        fn = torch.sum(~torch.any(correct_box, dim=0))  # Ground truth boxes not matched to any predictions
-
-        # Compute False Positives (FP)
-        fp = torch.sum(~torch.any(correct_box, dim=1))  # Prediction boxes not matched to any ground truth
-
-        # Avoid division by zero
+        tp = torch.sum(correct_box, dim=1)
+        fn = torch.sum(~torch.any(correct_box, dim=0))
+        fp = torch.sum(~torch.any(correct_box, dim=1))
         precision = tp / (tp + fp + 1e-8)
         recall = tp / (tp + fn + 1e-8)
-
-        # Compute F1 score
         f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
 
         iou = iou.cpu().numpy()

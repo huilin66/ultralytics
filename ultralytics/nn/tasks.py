@@ -116,6 +116,11 @@ class BaseModel(torch.nn.Module):
             (torch.Tensor): Loss if x is a dict (training), or network predictions (inference).
         """
         if isinstance(x, dict):  # for cases of training and validating while training.
+            # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg1.pth'
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1.pth'
+            # torch.save(x, save_data_path)
+            # torch.save(self.model.state_dict(), save_ckpt_path)
+            # return
             return self.loss(x, *args, **kwargs)
         return self.predict(x, *args, **kwargs)
 
@@ -310,7 +315,19 @@ class BaseModel(torch.nn.Module):
         if getattr(self, "criterion", None) is None:
             self.criterion = self.init_criterion()
 
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1000.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1001.pth'
+        # torch.save(self.state_dict(), save_ckpt_path)
+        # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg1001.pth'
+        # torch.save(batch, save_data_path)
         preds = self.forward(batch["img"]) if preds is None else preds
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg1000.pth'
+        # torch.save(preds, save_pred_path)
+        # loss = self.criterion(preds, batch)
+        # # save_loss_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/loss_seg1000.pth'
+        # # torch.save(loss, save_loss_path)
+        # return
         return self.criterion(preds, batch)
 
     def init_criterion(self):
@@ -346,30 +363,71 @@ class DetectionModel(BaseModel):
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml["nc"] = nc  # override YAML value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102501.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.inplace = self.yaml.get("inplace", True)
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102502.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.end2end = getattr(self.model[-1], "end2end", False)
-
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102503.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Build strides
         m = self.model[-1]  # Detect()
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102504.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         if isinstance(m, Detect):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102505.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             s = 256  # 2x min stride
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102506.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.inplace = self.inplace
-
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102507.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             def _forward(x):
                 """Perform a forward pass through the model, handling different Detect subclass types accordingly."""
                 if self.end2end:
                     return self.forward(x)["one2many"]
+                # if isinstance(m, (Segment, Pose, OBB)):
+                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg10000.pth'
+                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg10000.pth'
+                #     # torch.save(x, save_data_path)
+                #     # torch.save(self.model.state_dict(), save_ckpt_path)
+                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg10001.pth'
+                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg10001.pth'
+                #     # torch.save(x, save_data_path)
+                #     torch.save(self.state_dict(), save_ckpt_path)
+                #     z = self.forward(x)[0]
+                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg20000.pth'
+                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg20000.pth'
+                #     torch.save(z, save_data_path)
+                #     torch.save(self.model.state_dict(), save_ckpt_path)
+                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg20001.pth'
+                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg20001.pth'
+                #     torch.save(z, save_data_path)
+                #     torch.save(self.state_dict(), save_ckpt_path)
+                #     return z
                 return self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB)) else self.forward(x)
-
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102508.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))])  # forward
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102509.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             self.stride = m.stride
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1025.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.bias_init()  # only run once
         else:
             self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
-
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg103.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Init weights, biases
         initialize_weights(self)
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg104.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         if verbose:
             self.info()
             LOGGER.info("")
@@ -449,7 +507,7 @@ class DetectionModel(BaseModel):
 class MDetectionModel(BaseModel):
     """YOLOv8 mdetection model."""
 
-    def __init__(self, cfg="yolov8n.yaml", ch=3, nc=None, na=None, verbose=True):  # model, input channels, number of classes
+    def __init__(self, cfg="yolov8n.yaml", ch=3, nc=None, na=None, nal=None, verbose=True):  # model, input channels, number of classes
         """Initialize the YOLOv8 detection model with the given config and parameters."""
         super().__init__()
         self.yaml = cfg if isinstance(cfg, dict) else yaml_model_load(cfg)  # cfg dict
@@ -464,38 +522,85 @@ class MDetectionModel(BaseModel):
         ch = self.yaml["ch"] = self.yaml.get("ch", ch)  # input channels
         self.nc = self.yaml['nc']
         self.na = self.yaml['na']
+        self.nal = self.yaml['nal']
         if nc and nc != self.yaml["nc"]:
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml["nc"] = nc  # override YAML value
         if na and na != self.yaml["na"]:
             LOGGER.info(f"Overriding model.yaml na={self.yaml['na']} with na={na}")
             self.yaml["na"] = na  # override YAML value
+        if nal and nal != self.yaml["nal"]:
+            LOGGER.info(f"Overriding model.yaml nal={self.yaml['nal']} with nal={nal}")
+            self.yaml["nal"] = nal  # override YAML value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102501.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.attribute_names = {i: f"{i}" for i in range(self.yaml["na"])}
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102511.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.inplace = self.yaml.get("inplace", True)
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102502.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.end2end = getattr(self.model[-1], "end2end", False)
-
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102503.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Build strides
         m = self.model[-1]  # Detect()
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102504.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         if isinstance(m, MDetect):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102505.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             s = 256  # 2x min stride
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102506.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.inplace = self.inplace
-
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102507.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             def _forward(x):
                 """Performs a forward pass through the model, handling different Detect subclass types accordingly."""
                 if self.end2end:
                     return self.forward(x)["one2many"]
+                # if isinstance(m, (MSegment, Pose, OBB)):
+                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg10000.pth'
+                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg10000.pth'
+                #     torch.save(x, save_data_path)
+                #     torch.save(self.model.state_dict(), save_ckpt_path)
+                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg10001.pth'
+                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg10001.pth'
+                #     # torch.save(x, save_data_path)
+                #     # torch.save(self.state_dict(), save_ckpt_path)
+                #     z = self.forward(x)[0]
+                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg20000.pth'
+                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg20000.pth'
+                #     torch.save(z, save_data_path)
+                #     torch.save(self.model.state_dict(), save_ckpt_path)
+                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg20001.pth'
+                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg20001.pth'
+                #     # torch.save(z, save_data_path)
+                #     # torch.save(self.state_dict(), save_ckpt_path)
+                #     return z
                 return self.forward(x)[0] if isinstance(m, (MSegment, Pose, OBB)) else self.forward(x)
-
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102508.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))])  # forward
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102509.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             self.stride = m.stride
+            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg1025.pth'
+            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.bias_init()  # only run once
         else:
             self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
-
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg103.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Init weights, biases
         initialize_weights(self)
+        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg104.pth'
+        # torch.save(self.model.state_dict(), save_ckpt_path)
         if verbose:
             self.info()
             LOGGER.info("")
@@ -590,9 +695,9 @@ class SegmentationModel(DetectionModel):
 class MSegmentationModel(MDetectionModel):
     """YOLOv8 segmentation model."""
 
-    def __init__(self, cfg="yolov8n-seg.yaml", ch=3, nc=None, na=None, verbose=True):
+    def __init__(self, cfg="yolov8n-mseg.yaml", ch=3, nc=None, na=None, nal=None, verbose=True):
         """Initialize YOLOv8 segmentation model with given config and parameters."""
-        super().__init__(cfg=cfg, ch=ch, nc=nc, na=na, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, na=na, nal=nal, verbose=verbose)
 
     def init_criterion(self):
         """Initialize the loss criterion for the SegmentationModel."""
@@ -1213,7 +1318,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
     # Args
     legacy = True  # backward compatibility for v3/v5/v8/v9 models
     max_channels = float("inf")
-    nc, na, act, scales = (d.get(x) for x in ("nc", "na", "activation", "scales"))
+    nc, na, nal, act, scales = (d.get(x) for x in ("nc", "na", "nal", "activation", "scales"))
     depth, width, kpt_shape = (d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
     if scales:
         scale = d.get("scale")
@@ -1340,8 +1445,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             elif m is MSegment:
-                args[2+5] = make_divisible(min(args[2+5], max_channels) * width, 8)
-            if m in {Detect, Segment, Pose, OBB}:
+                args[4] = make_divisible(min(args[4], max_channels) * width, 8)
+            if m in {Detect, Segment, Pose, OBB, MDetect, MSegment}:
                 m.legacy = legacy
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
@@ -1434,6 +1539,8 @@ def guess_model_task(model):
             return "mdetect"
         if m == "segment":
             return "segment"
+        if m == "msegment":
+            return "msegment"
         if m == "pose":
             return "pose"
         if m == "obb":
@@ -1462,11 +1569,17 @@ def guess_model_task(model):
                 return "obb"
             elif isinstance(m, (Detect, WorldDetect, v10Detect)):
                 return "detect"
+            elif isinstance(m, MSegment):
+                return "msegment"
+            elif isinstance(m, MDetect):
+                return "mdetect"
 
     # Guess from model filename
     if isinstance(model, (str, Path)):
         model = Path(model)
-        if "-seg" in model.stem or "segment" in model.parts:
+        if "-mseg" in model.stem or "msegment" in model.parts:
+            return "msegment"
+        elif "-seg" in model.stem or "segment" in model.parts:
             return "segment"
         elif "-cls" in model.stem or "classify" in model.parts:
             return "classify"
@@ -1474,6 +1587,8 @@ def guess_model_task(model):
             return "pose"
         elif "-obb" in model.stem or "obb" in model.parts:
             return "obb"
+        elif "mdetect" in model.parts:
+            return "mdetect"
         elif "detect" in model.parts:
             return "detect"
 

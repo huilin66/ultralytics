@@ -282,6 +282,8 @@ class v8SegmentationLoss(v8DetectionLoss):
         self.overlap = model.args.overlap_mask
 
     def __call__(self, preds, batch):
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2000.pth'
+        # torch.save(preds, save_pred_path)
         """Calculate and return the combined loss for detection and segmentation."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl
         feats, pred_masks, proto = preds if len(preds) == 3 else preds[1]
@@ -294,6 +296,16 @@ class v8SegmentationLoss(v8DetectionLoss):
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
         pred_masks = pred_masks.permute(0, 2, 1).contiguous()
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2001.pth'
+        # torch.save(pred_scores, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2002.pth'
+        # torch.save(pred_distri, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2003.pth'
+        # torch.save(pred_masks, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2004.pth'
+        # torch.save(feats, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2005.pth'
+        # torch.save(proto, save_pred_path)
 
         dtype = pred_scores.dtype
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
@@ -314,9 +326,13 @@ class v8SegmentationLoss(v8DetectionLoss):
                 "correctly formatted 'segment' dataset using 'data=coco8-seg.yaml' "
                 "as an example.\nSee https://docs.ultralytics.com/datasets/segment/ for help."
             ) from e
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2006.pth'
+        # torch.save(mask_gt, save_pred_path)
 
         # Pboxes
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2007.pth'
+        # torch.save(pred_bboxes, save_pred_path)
 
         _, target_bboxes, target_scores, fg_mask, target_gt_idx = self.assigner(
             pred_scores.detach().sigmoid(),
@@ -326,13 +342,32 @@ class v8SegmentationLoss(v8DetectionLoss):
             gt_bboxes,
             mask_gt,
         )
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2008.pth'
+        # torch.save(fg_mask, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2009.pth'
+        # torch.save(target_bboxes, save_pred_path)
 
         target_scores_sum = max(target_scores.sum(), 1)
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
-
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2010.pth'
+        # torch.save(pred_distri, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2011.pth'
+        # torch.save(pred_bboxes, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2012.pth'
+        # torch.save(anchor_points, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2013.pth'
+        # torch.save(stride_tensor, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2014.pth'
+        # torch.save(target_scores, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2015.pth'
+        # torch.save(target_scores_sum, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2016.pth'
+        # torch.save(target_bboxes, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2017.pth'
+        # torch.save(fg_mask, save_pred_path)
         if fg_mask.sum():
             # Bbox loss
             loss[0], loss[3] = self.bbox_loss(
@@ -344,6 +379,8 @@ class v8SegmentationLoss(v8DetectionLoss):
                 target_scores_sum,
                 fg_mask,
             )
+            # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2018.pth'
+            # torch.save(fg_mask, save_pred_path)
             # Masks loss
             masks = batch["masks"].to(self.device).float()
             if tuple(masks.shape[-2:]) != (mask_h, mask_w):  # downsample
@@ -358,10 +395,13 @@ class v8SegmentationLoss(v8DetectionLoss):
             loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
 
         loss[0] *= self.hyp.box  # box gain
-        loss[1] *= self.hyp.box  # seg gain
+        loss[1] *= self.hyp.seg  # seg gain
         loss[2] *= self.hyp.cls  # cls gain
         loss[3] *= self.hyp.dfl  # dfl gain
 
+
+        # save_loss_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/loss_seg2000.pth'
+        # torch.save(loss, save_loss_path)
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
     @staticmethod
@@ -785,6 +825,7 @@ class v8MDetectionLoss(v8DetectionLoss):
 
         m = model.model[-1]
         self.na = m.na
+        self.nal = m.nal
         self.no = m.nc + m.na + m.reg_max * 4
         self.assigner = TaskAlignedAssignerMdet(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.mloss_enlarge = model.args.mloss_enlarge
@@ -887,6 +928,150 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         super().__init__(model, tal_topk, epsilon, size_sum, weight_ratio)
         self.overlap = model.args.overlap_mask
 
+    def __call__(self, preds, batch):
+        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2000.pth'
+        # torch.save(preds, save_pred_path)
+        loss = torch.zeros(5, device=self.device)  # box, seg, cls, dfl, att
+        feats, pred_masks, proto = preds if len(preds) == 3 else preds[1]
+        batch_size, _, mask_h, mask_w = proto.shape
+        pred_distri, pred_scores, pred_attributes = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+            (self.reg_max * 4, self.nc, self.na), 1
+        )
+
+        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_masks = pred_masks.permute(0, 2, 1).contiguous()
+        pred_attributes = pred_attributes.permute(0, 2, 1).contiguous()
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2001.pth'
+        # torch.save(pred_scores, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2002.pth'
+        # torch.save(pred_distri, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2003.pth'
+        # torch.save(pred_masks, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2004.pth'
+        # torch.save(feats, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2005.pth'
+        # torch.save(proto, save_pred_path)
+
+        dtype = pred_scores.dtype
+        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+
+        # Targets
+        batch_idx = batch["batch_idx"].view(-1, 1)
+        targets = torch.cat((batch_idx, batch["cls"].view(-1, 1), batch["bboxes"], batch["mdet_attributes"]), 1)
+        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        gt_labels, gt_bboxes, gt_attributes = targets.split((1, 4, self.na), 2)  # cls, xyxy
+        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2006.pth'
+        # torch.save(mask_gt, save_pred_path)
+        # Pboxes
+        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2007.pth'
+        # torch.save(pred_bboxes, save_pred_path)
+
+        # _, target_bboxes, target_scores, fg_mask, target_gt_idx = self.assigner(
+        #     pred_scores.detach().sigmoid(),
+        #     (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+        #     anchor_points * stride_tensor,
+        #     gt_labels,
+        #     gt_bboxes,
+        #     mask_gt,
+        # )
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2008.pth'
+        # torch.save(fg_mask, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2009.pth'
+        # torch.save(target_bboxes, save_pred_path)
+
+        _, target_bboxes, target_scores, gt_attributes, fg_mask, target_gt_idx = self.assigner(
+            pred_scores.detach().sigmoid(),
+            (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+            pred_attributes.detach().sigmoid(),
+            anchor_points * stride_tensor,
+            gt_labels,
+            gt_bboxes,
+            gt_attributes,
+            mask_gt,
+        )
+
+        target_scores_sum = max(target_scores.sum(), 1)
+
+        # Cls loss
+        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
+        loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
+
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2010.pth'
+        # torch.save(pred_distri, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2011.pth'
+        # torch.save(pred_bboxes, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2012.pth'
+        # torch.save(anchor_points, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2013.pth'
+        # torch.save(stride_tensor, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2014.pth'
+        # torch.save(target_scores, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2015.pth'
+        # torch.save(target_scores_sum, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2016.pth'
+        # torch.save(target_bboxes, save_pred_path)
+        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2017.pth'
+        # torch.save(fg_mask, save_pred_path)
+        # Bbox loss
+        if fg_mask.sum():
+            loss[0], loss[3] = self.bbox_loss(
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes / stride_tensor,
+                target_scores,
+                target_scores_sum,
+                fg_mask
+            )
+            # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_mseg2018.pth'
+            # torch.save(loss[0], save_pred_path)
+            # Masks loss
+            masks = batch["masks"].to(self.device).float()
+            if tuple(masks.shape[-2:]) != (mask_h, mask_w):  # downsample
+                masks = F.interpolate(masks[None], (mask_h, mask_w), mode="nearest")[0]
+
+            loss[1] = self.calculate_segmentation_loss(
+                fg_mask, masks, target_gt_idx, target_bboxes, batch_idx, proto, pred_masks, imgsz, self.overlap
+            )
+        # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
+        else:
+            loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
+
+        # Attribute loss
+        gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
+
+        if fg_mask.sum() and self.mloss_mask:
+            pred_attributes_fg = pred_attributes[fg_mask]
+            gt_attributes_fg = gt_attributes[fg_mask]
+
+            weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
+
+            loss[4] = F.binary_cross_entropy_with_logits(
+                input=pred_attributes_fg,
+                target=gt_attributes_fg,
+                weight=weight
+            )
+        else:
+            loss[4] = F.binary_cross_entropy_with_logits(
+                                                         input=pred_attributes,
+                                                         target=gt_attributes,
+                                                         )
+
+        loss[0] *= self.hyp.box  # box gain
+        loss[1] *= self.hyp.seg  # seg gain
+        loss[2] *= self.hyp.cls  # cls gain
+        loss[3] *= self.hyp.dfl  # dfl gain
+        loss[4] *= self.hyp.mdet # mdet gain
+
+        # save_loss_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/loss_mseg2000.pth'
+        # torch.save(loss, save_loss_path)
+        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
+
     @staticmethod
     def single_mask_loss(
         gt_mask: torch.Tensor, pred: torch.Tensor, proto: torch.Tensor, xyxy: torch.Tensor, area: torch.Tensor
@@ -978,93 +1163,6 @@ class v8MSegmentationLoss(v8MDetectionLoss):
 
         return loss / fg_mask.sum()
 
-    def __call__(self, preds, batch):
-        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(4, device=self.device)  # box, cls, att, dfl
-        feats, pred_masks, proto = preds if len(preds) == 3 else preds[1]
-        batch_size, _, mask_h, mask_w = proto.shape
-        pred_distri, pred_scores, pred_attributes = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc, self.na), 1
-        )
-
-
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
-        pred_masks = pred_masks.permute(0, 2, 1).contiguous()
-        pred_attributes = pred_attributes.permute(0, 2, 1).contiguous()
-
-        dtype = pred_scores.dtype
-        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
-        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
-
-        # Targets
-        batch_idx = batch["batch_idx"].view(-1, 1)
-        targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"], batch["mdet_attributes"]), 1)
-        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes, gt_attributes = targets.split((1, 4, self.na), 2)  # cls, xyxy
-        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
-
-        # Pboxes
-        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
-
-        _, target_bboxes, target_scores, gt_attributes, fg_mask, target_gt_idx = self.assigner(
-            pred_scores.detach().sigmoid(),
-            (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
-            pred_attributes.detach().sigmoid(),
-            anchor_points * stride_tensor,
-            gt_labels,
-            gt_bboxes,
-            gt_attributes,
-            mask_gt,
-        )
-
-        target_scores_sum = max(target_scores.sum(), 1)
-
-        # Cls loss
-        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
-        loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
-
-        # Bbox loss
-        if fg_mask.sum():
-            target_bboxes /= stride_tensor
-            loss[0], loss[3] = self.bbox_loss(
-                pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
-        )
-        # Masks loss
-        masks = batch["masks"].to(self.device).float()
-        if tuple(masks.shape[-2:]) != (mask_h, mask_w):  # downsample
-            masks = F.interpolate(masks[None], (mask_h, mask_w), mode="nearest")[0]
-
-        loss[1] = self.calculate_segmentation_loss(
-            fg_mask, masks, target_gt_idx, target_bboxes, batch_idx, proto, pred_masks, imgsz, self.overlap
-        )
-        # Attribute loss
-        gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
-
-        if fg_mask.sum() and self.mloss_mask:
-            pred_attributes_fg = pred_attributes[fg_mask]
-            gt_attributes_fg = gt_attributes[fg_mask]
-
-            weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
-
-            loss[4] = F.binary_cross_entropy_with_logits(
-                input=pred_attributes_fg,
-                target=gt_attributes_fg,
-                weight=weight
-            )
-        else:
-            loss[4] = F.binary_cross_entropy_with_logits(
-                                                         input=pred_attributes,
-                                                         target=gt_attributes,
-                                                         )
-
-        loss[0] *= self.hyp.box  # box gain
-        loss[1] *= self.hyp.seg  # seg gain
-        loss[2] *= self.hyp.cls  # cls gain
-        loss[3] *= self.hyp.dfl  # dfl gain
-        loss[4] *= self.hyp.mdet # mdet gain
-
-        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 class v10DetectLoss:
     def __init__(self, model):
         self.one2many = v8DetectionLoss(model, tal_topk=10)

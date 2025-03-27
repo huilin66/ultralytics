@@ -191,7 +191,9 @@ def verify_image_label_mdet(args):
             nf = 1  # label found
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
-                na = int(lb[0, 1])
+                xx = lb[0][1]
+                yy = int(xx)
+                na = int(lb[0][1])
                 if seg:  # is segment
                     classes = np.array([x[0] for x in lb], dtype=np.float32)
                     attributes = np.array([x[1:1 + 1 + na] for x in lb], dtype=np.float32)
@@ -366,11 +368,25 @@ def find_dataset_yaml(path: Path) -> Path:
     return files[0]
 
 
-def get_attribute_label(attributes):
+def get_attribute_label(attributes, strategy=2):
     attribute_len = 0
-    for k, v in attributes.items():
-        attribute_len += len(v)-1
-    return attribute_len
+    if strategy == 1:
+        # strategy 1 : a valid level to a single class
+        for k, v in attributes.items():
+            attribute_len += len(v)-1
+        attribute_level = 0
+    elif strategy == 2:
+        # strategy 2 : a single class includes all levels
+        attribute_len = len(attributes)
+        max_len = 0
+        for k, v in attributes.items():
+            if len(v)>max_len:
+                max_len = len(v)
+        attribute_level = max_len
+    else:
+        attribute_len = 0
+        attribute_level = 0
+    return attribute_len, attribute_level
 
 
 def check_det_dataset(dataset, autodownload=True):
@@ -463,7 +479,7 @@ def check_det_dataset(dataset, autodownload=True):
             LOGGER.info(f"Dataset download {s}\n")
     check_font("Arial.ttf" if is_ascii(data["names"]) else "Arial.Unicode.ttf")  # download fonts
     if 'attributes' in data.keys() and data['attributes'] is not None and len(data['attributes']) > 0:
-        data['na'] = get_attribute_label(data['attributes'])
+        data['na'], data['nal'] = get_attribute_label(data['attributes'])
     return data  # dictionary
 
 

@@ -470,12 +470,13 @@ class MConfusionMatrix:
         iou_thres (float): The Intersection over Union threshold.
     """
 
-    def __init__(self, nc, na, conf=0.25, iou_thres=0.45, task="detect"):
+    def __init__(self, nc, na, nal, conf=0.25, iou_thres=0.45, task="detect"):
         """Initialize attributes for the YOLO model."""
         self.task = task
         self.matrix = np.zeros((nc + 1, nc + 1)) if self.task == "detect" else np.zeros((nc, nc))
         self.nc = nc  # number of classes
         self.na = na
+        self.nal = nal
         self.conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
         self.iou_thres = iou_thres
 
@@ -1130,7 +1131,7 @@ class MDetMetrics(SimpleClass):
         curves_results: TODO
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), attribute_names=(), nc=0, na=0) -> None:
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), attribute_names=(), nc=0, na=0, nal=2) -> None:
         """Initialize a DetMetrics instance with a save directory, plot flag, callback function, and class names."""
         self.save_dir = save_dir
         self.plot = plot
@@ -1143,6 +1144,7 @@ class MDetMetrics(SimpleClass):
         self.attribute_names = attribute_names
         self.nc = nc
         self.na = na
+        self.nal = nal
 
     def get_attribute_names(self):
         attribute_dict = self.attribute_names
@@ -1392,7 +1394,7 @@ class MSegmentMetrics(SimpleClass):
         results_dict: Returns the dictionary containing all the detection and segmentation metrics and fitness score.
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), attribute_names=(), nc=0, na=0) -> None:
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), attribute_names=(), nc=0, na=0, nal=2) -> None:
         """Initialize a SegmentMetrics instance with a save directory, plot flag, callback function, and class names."""
         self.save_dir = save_dir
         self.plot = plot
@@ -1406,6 +1408,7 @@ class MSegmentMetrics(SimpleClass):
         self.attribute_names = attribute_names
         self.nc = nc
         self.na = na
+        self.nal = nal
 
     def get_attribute_names(self):
         attribute_dict = self.attribute_names
@@ -1421,7 +1424,7 @@ class MSegmentMetrics(SimpleClass):
                 print('Error in get_attribute_names')
         self.attribute_names = attribute_names
 
-    def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, target_img, pred_attributes, target_attributes):
+    def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1):
         """
         Processes the detection and segmentation metrics over the given set of predictions.
 
@@ -1457,10 +1460,11 @@ class MSegmentMetrics(SimpleClass):
             names=self.names,
             prefix="Box",
         )[2:]
-        self.box.nc = len(self.names)
+        self.box.nc = self.nc
         self.box.update(results_box)
         self.attributes.nc = self.na
         self.attributes.all_ap = np.mean(ap, axis=0)
+        self.attributes.f1 = np.mean(f1)
 
     @property
     def keys(self):

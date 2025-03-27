@@ -18,7 +18,12 @@ FREEZE_NUMS = {
 
 def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
     model = network(cfg_path, task=TASK)
+    # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg1.pth'
+    # torch.save(model.model.state_dict(), save_ckpt_path)
+    # return
     model.load(pretrain_path)
+    # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg2.pth'
+    # torch.save(model.model.state_dict(), save_ckpt_path)
 
     train_params = {
         'data': DATA,
@@ -43,7 +48,9 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
                 'freeze_bn':True,
             }
         )
-
+    save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg3.pth'
+    torch.save(model.model.state_dict(), save_ckpt_path)
+    # return
     train_params.update(kwargs)
     model.train(**train_params)
 
@@ -96,7 +103,7 @@ def yolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False,
 
 if __name__ == '__main__':
     pass
-    yolo8x('yolov8x.yaml', auto_optim=False)
+    yolo8x('yolov8x-mseg.yaml', auto_optim=False, name='debug', mdet=0)
     # yolo9e('yolov9e.yaml', auto_optim=False)
     # yolo10x('yolov10x.yaml', auto_optim=False)
     # rtdetrx('rtdetr-x.yaml', auto_optim=False)

@@ -412,6 +412,7 @@ class TaskAlignedAssignerMdet(TaskAlignedAssigner):
                 torch.full_like(pd_scores[..., 0], self.bg_idx).to(device),
                 torch.zeros_like(pd_bboxes).to(device),
                 torch.zeros_like(pd_scores).to(device),
+                torch.zeros_like(pd_attributes).to(device),
                 torch.zeros_like(pd_scores[..., 0]).to(device),
                 torch.zeros_like(pd_scores[..., 0]).to(device),
             )

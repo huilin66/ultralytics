@@ -1,24 +1,12 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
-
-import math
-import random
 from copy import copy
-
-import numpy as np
-import torch.nn as nn
-
-# from ultralytics.data import build_dataloader, build_yolo_dataset, build_yolo_mdet_dataset
-# from ultralytics.engine.trainer import BaseTrainer
-# from ultralytics.models import yolo
-# from ultralytics.utils import LOGGER, RANK
-# from ultralytics.utils.plotting import plot_images, plot_labels, plot_results
-# from ultralytics.utils.torch_utils import de_parallel, torch_distributed_zero_first
 
 from ultralytics.nn.tasks import MSegmentationModel
 from ultralytics.utils import DEFAULT_CFG, RANK
 from ultralytics.utils.plotting import plot_images, plot_results
+from ultralytics.models import yolo
 from ultralytics.models.yolo.mdetect import MDetectionTrainer
-from ultralytics.models.yolo.msegment import MSegmentationValidator
+
 
 class MSegmentationTrainer(MDetectionTrainer):
     """
@@ -42,15 +30,15 @@ class MSegmentationTrainer(MDetectionTrainer):
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return a YOLO SegmentationModel model."""
-        model = MSegmentationModel(cfg, ch=3, nc=self.data["nc"], na=self.data["na"], verbose=verbose and RANK == -1)
+        model = MSegmentationModel(cfg, ch=3, nc=self.data["nc"], na=self.data["na"], nal=self.data["nal"], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
         return model
 
     def get_validator(self):
         """Returns a DetectionValidator for YOLO model validation."""
-        self.loss_names = "box_loss", "cls_loss", "dfl_loss", "att_loss"
-        return MSegmentationValidator(
+        self.loss_names = "box_loss", "seg_loss", "cls_loss", "dfl_loss", "att_loss"
+        return yolo.msegment.MSegmentationValidator(
             self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
         )
 

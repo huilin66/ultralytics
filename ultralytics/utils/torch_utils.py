@@ -453,11 +453,24 @@ def get_flops_with_torch_profiler(model, imgsz=640):
 
 def initialize_weights(model):
     init_seeds()
-
+    # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg201.pth'
+    # torch.save(model.state_dict(), save_ckpt_path)
     """Initialize model weights to random values."""
     for m in model.modules():
+    # for m_name, m in model.named_modules():
         t = type(m)
+        # print(m_name)
         if t is nn.Conv2d:
+            # print('changed!')
+            pass  # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
+            if m.bias is not None:
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                if fan_in != 0:
+                    bound = 1 / math.sqrt(fan_in)
+                    nn.init.uniform_(m.bias, -bound, bound)
+        elif t is nn.ConvTranspose2d:
+            # print('changed!')
             pass  # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             nn.init.kaiming_uniform_(m.weight, a=math.sqrt(5))
             if m.bias is not None:
@@ -474,10 +487,14 @@ def initialize_weights(model):
         elif t is nn.BatchNorm2d:
             m.eps = 1e-3
             m.momentum = 0.03
+            m.running_mean.zero_()  # 重置为 0
+            m.running_var.fill_(1)  # 重置为 1
         elif t in {nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU}:
             m.inplace = True
         elif hasattr(m, 'relative_position_bias_table'):
             nn.init.normal_(m.relative_position_bias_table, std=.02)
+    # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg202.pth'
+    # torch.save(model.state_dict(), save_ckpt_path)
 
 def scale_img(img, ratio=1.0, same_shape=False, gs=32):
     """

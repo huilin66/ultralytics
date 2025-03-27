@@ -133,9 +133,9 @@ if __name__ == '__main__':
     #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\val.txt',
     # )
 
-    random_select(r'/nfsv4/23039356r/data/traffsign/road_veg_1115/images',
-                  r'/nfsv4/23039356r/data/traffsign/road_veg_1115',
-                  r'/nfsv4/23039356r/data/traffsign/road_veg_1115/labels',
+    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/images',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/labels',
                   train_ratio=0.9)
 
 

@@ -197,7 +197,9 @@ class BaseValidator:
             model.model.names = self.data['names']
             if 'na' in self.data:
                 model.model.na = self.data['na']
+                model.model.nal = self.data['nal']
                 model.model.attribute_names = self.data['attributes']
+
 
         self.run_callbacks("on_val_start")
         dt = (

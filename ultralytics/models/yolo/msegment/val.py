@@ -50,7 +50,7 @@ class MSegmentationValidator(MDetectionValidator):
             self.process = ops.process_mask_upsample  # more accurate
         else:
             self.process = ops.process_mask  # faster
-        self.stats = dict(tp_m=[], tp=[], ap=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
+        self.stats['tp_m'] = []
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
@@ -71,17 +71,7 @@ class MSegmentationValidator(MDetectionValidator):
 
     def postprocess(self, preds):
         """Post-processes YOLO predictions and returns output detections with proto."""
-        p = ops.non_max_suppression_with_attributes(
-            preds[0],
-            self.args.conf,
-            self.args.iou,
-            labels=self.lb,
-            multi_label=True,
-            agnostic=self.args.single_cls,
-            max_det=self.args.max_det,
-            nc=self.nc,
-            na=self.na,
-        )
+        p = super().postprocess(preds[0])
         proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]  # second output is len 3 if pt, but only 1 if exported
         return p, proto
 
@@ -100,16 +90,17 @@ class MSegmentationValidator(MDetectionValidator):
 
     def update_metrics(self, preds, batch):
         """Metrics."""
-        for si, pred in enumerate(preds):
+        for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
             self.seen += 1
             npr = len(pred)
             stat = dict(
                 conf=torch.zeros(0, device=self.device),
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1 = 0,
+                f1 = torch.zeros(0, device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -125,68 +116,48 @@ class MSegmentationValidator(MDetectionValidator):
                         self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls, gt_attributes=mdet_attributes)
                 continue
 
+            gt_masks = pbatch.pop("masks")
             # Predictions
             if self.args.single_cls:
                 pred[:, 5] = 0
-            predn = self._prepare_pred(pred, pbatch)
+            predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
-            stat["pred_attributes"] = predn[:, 6:]
+            stat["pred_attributes"] = predn[:, 6:6+self.na]
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"], stat["f1"] = self._process_batch(predn, bbox, cls, mdet_attributes)
+                stat["tp"], stat["ap"], stat["f1"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
+                stat["tp_m"], _, _ = self._process_batch(
+                    predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True, gt_attributes=mdet_attributes
+                )
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
             for k in self.stats.keys():
                 self.stats[k].append(stat[k])
 
+            pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
+            if self.args.plots and self.batch_i < 3:
+                self.plot_masks.append(pred_masks[:15].cpu())  # filter top 15 to plot
+
             # Save
             if self.args.save_json:
-                self.pred_to_json(predn, batch["im_file"][si])
+                pred_masks = ops.scale_image(
+                    pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+                    pbatch["ori_shape"],
+                    ratio_pad=batch["ratio_pad"][si],
+                )
+                self.pred_to_json(predn, batch["im_file"][si], pred_masks)
             if self.args.save_txt:
                 file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
                 self.save_one_txt(predn, self.args.save_conf, pbatch["ori_shape"], file)
 
+    def finalize_metrics(self, *args, **kwargs):
+        """Set speed and confusion matrix for evaluation metrics."""
+        self.metrics.speed = self.speed
+        self.metrics.confusion_matrix = self.confusion_matrix
 
-
-    def get_stats(self):
-        """Returns metrics statistics and results dictionary."""
-        stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()}  # to numpy
-        self.metrics.get_attribute_names()
-
-        self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
-        self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
-        stats.pop("target_img", None)
-        if len(stats) and stats["tp"].any():
-            self.metrics.process(**stats)
-        else:
-            self.metrics.attributes.all_ap = np.zeros(self.metrics.na)
-        return self.metrics.results_dict
-
-    def print_results(self):
-        """Prints training/validation set metrics per class."""
-        pf = "%22s" + "%11i" * 2 + "%11.3g" * len(self.metrics.keys)  # print format
-        LOGGER.info(pf % ("all", self.seen, self.nt_per_class.sum(), *self.metrics.mean_results()))
-        if self.nt_per_class.sum() == 0:
-            LOGGER.warning(f"WARNING ⚠️ no labels found in {self.args.task} set, can not compute metrics without labels")
-
-        # Print results per class
-        if self.args.verbose and not self.training and self.nc > 1 and len(self.stats):
-            for i, c in enumerate(self.metrics.ap_class_index):
-                LOGGER.info(pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i)))
-            LOGGER.info('-'*20*(3+len(self.metrics.keys)))
-            for i in range(self.nc, self.nc+self.na):
-                LOGGER.info(pf % (self.metrics.attribute_names[i-self.nc], 0, self.nt_per_class[0], *self.metrics.class_result(i)))
-
-        if self.args.plots:
-            for normalize in True, False:
-                self.confusion_matrix.plot(
-                    save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot
-                )
-
-    def _process_batch(self, detections, gt_bboxes, gt_cls, pred_masks=None, gt_masks=None, overlap=False, masks=False,
-                       gt_attributes=None):
+    def _process_batch(self, detections, gt_bboxes, gt_cls, pred_masks=None, gt_masks=None, overlap=False, masks=False, gt_attributes=None):
         """
         Return correct prediction matrix.
 
@@ -210,7 +181,8 @@ class MSegmentationValidator(MDetectionValidator):
         else:  # boxes
             iou = box_iou(gt_bboxes, detections[:, :4])
 
-        return self.match_predictions(detections[:, 5], gt_cls, iou, detections[:, 6:6 + self.na], gt_attributes)
+        return self.match_predictions(detections[:, 5], gt_cls, iou, detections[:, 6:6+self.na], gt_attributes, self.nal)
+
 
     def plot_val_samples(self, batch, ni):
         """Plot validation image samples."""
@@ -230,7 +202,7 @@ class MSegmentationValidator(MDetectionValidator):
         """Plots predicted bounding boxes on input images and saves the result."""
         plot_images(
             batch["img"],
-            *output_to_target(preds, max_det=self.args.max_det),
+            *output_to_target(preds[0], max_det=self.args.max_det),
             torch.cat(self.plot_masks, dim=0) if len(self.plot_masks) else self.plot_masks,
             paths=batch["im_file"],
             fname=self.save_dir / f"val_batch{ni}_pred.jpg",
@@ -239,19 +211,28 @@ class MSegmentationValidator(MDetectionValidator):
         )  # pred
         self.plot_masks.clear()
 
-    def save_one_txt(self, predn, save_conf, shape, file):
+    def save_one_txt(self, predn, pred_masks, save_conf, shape, file):
         """Save YOLO detections to a txt file in normalized coordinates in a specific format."""
-        gn = torch.tensor(shape)[[1, 0, 1, 0]]  # normalization gain whwh
-        for row in predn.tolist():
-            xyxy = row[:4]  # Bounding box coordinates
-            conf = row[4]  # Confidence
-            cls = row[5]  # Class ID
-            att = row[6:]  # Attributes
+        # gn = torch.tensor(shape)[[1, 0, 1, 0]]  # normalization gain whwh
+        # for row in predn.tolist():
+        #     xyxy = row[:4]  # Bounding box coordinates
+        #     conf = row[4]  # Confidence
+        #     cls = row[5]  # Class ID
+        #     att = row[6:]  # Attributes
+        #
+        #     xywh = (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+        #     line = (cls, len(att), *att, *xywh, conf) if save_conf else (cls, len(att), *att, *xywh)  # label format
+        #     with open(file, "a") as f:
+        #         f.write(("%g " * len(line)).rstrip() % line + "\n")
+        from ultralytics.engine.results import Results
 
-            xywh = (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-            line = (cls, len(att), *att, *xywh, conf) if save_conf else (cls, len(att), *att, *xywh)  # label format
-            with open(file, "a") as f:
-                f.write(("%g " * len(line)).rstrip() % line + "\n")
+        Results(
+            np.zeros((shape[0], shape[1]), dtype=np.uint8),
+            path=None,
+            names=self.names,
+            boxes=predn[:, :6],
+            masks=pred_masks,
+        ).save_txt(file, save_conf=save_conf)
 
     def pred_to_json(self, predn, filename, pred_masks):
         """

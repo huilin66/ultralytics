@@ -82,6 +82,7 @@ class MDetectionTrainer(BaseTrainer):
         self.model.names = self.data["names"]  # attach class names to model
         self.model.args = self.args  # attach hyperparameters to model
         self.model.na = self.data["na"] # attach number of attributes to model
+        self.model.nal = self.data['nal']
         self.model.attribute_names = self.data["attributes"] # attach attribute names to model
         # TODO: self.model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc
 
