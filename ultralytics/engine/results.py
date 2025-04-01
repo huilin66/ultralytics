@@ -17,7 +17,7 @@ from ultralytics.utils import LOGGER, SimpleClass, ops
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.plotting import Annotator, colors, save_one_box
 from ultralytics.utils.torch_utils import smart_inference_mode
-
+from ultralytics.data.utils import get_attribute_num
 
 class BaseTensor(SimpleClass):
     """
@@ -1448,10 +1448,12 @@ class Attributes(BaseTensor):
         super().__init__(attributes, orig_shape)
         self.orig_shape = orig_shape
         self.attribute_names = attribute_names
+        self.attribute_len, self.attribute_level = get_attribute_num(attribute_names)
 
     @property
     def result(self):
-        data = self.data.cpu().numpy()
+        data = torch.floor(self.data * (self.attribute_level)).long()
+        data = data.cpu().numpy()
         value = self.get_attribute(self.attribute_names, data)
         return value
 
@@ -1460,18 +1462,11 @@ class Attributes(BaseTensor):
         for k, v in attributes.items():
             attribute_len += len(v) - 1
         return attribute_len
+
     def get_attribute(self, attribute_dict, gt_attribute):
         attributes = {}
-        idx = 0
-        attribute_len = self.get_attribute_len(attribute_dict)
-        assert attribute_len == len(gt_attribute)
-        for k, v in attribute_dict.items():
-            assert len(v) > 1
-            attributes[k] = False
-            for i in range(1, len(v)):
-                if gt_attribute[idx] > 0.5:
-                    attributes[k] = v[i]
-                idx += 1
+        for idx, (k, v) in enumerate(attribute_dict.items()):
+            attributes[k] = v[gt_attribute[idx]]
         return attributes
 
     def __getitem__(self, idx):

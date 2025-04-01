@@ -6,7 +6,7 @@ IMGSZ = 640
 CONF = 0.5
 TASK = 'msegment'
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_mseg2.yaml"
+DATA = "billboard_mseg3.yaml"
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -101,12 +101,18 @@ def yolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False,
 # endregion
 
 
+
+
 if __name__ == '__main__':
     pass
-    yolo8x('yolov8x-mseg.yaml', auto_optim=False, name='debug', mdet=0)
+    # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name='debug', mdet=0)
     # yolo9e('yolov9e.yaml', auto_optim=False)
     # yolo10x('yolov10x.yaml', auto_optim=False)
     # rtdetrx('rtdetr-x.yaml', auto_optim=False)
     # model_val(r'runs/msegment/train4/weights/best.pt')
     # model_predict(r'runs/segment/train3/weights/best.pt',
     #               r'/nfsv4/23039356r/data/billboard/data0521_m/yolo_rgb_segmentation1/images')
+    model_predict(r'runs/msegment/debug108/weights/best.pt',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/images/48.JPG')
+
+    # model_export(r'runs/msegment/debug108/weights/best.pt')

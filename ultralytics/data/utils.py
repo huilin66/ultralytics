@@ -368,7 +368,7 @@ def find_dataset_yaml(path: Path) -> Path:
     return files[0]
 
 
-def get_attribute_label(attributes, strategy=2):
+def get_attribute_num(attributes, strategy=2):
     attribute_len = 0
     if strategy == 1:
         # strategy 1 : a valid level to a single class
@@ -388,6 +388,7 @@ def get_attribute_label(attributes, strategy=2):
         attribute_level = 0
     return attribute_len, attribute_level
 
+# def get_attribute_value()
 
 def check_det_dataset(dataset, autodownload=True):
     """
@@ -479,7 +480,7 @@ def check_det_dataset(dataset, autodownload=True):
             LOGGER.info(f"Dataset download {s}\n")
     check_font("Arial.ttf" if is_ascii(data["names"]) else "Arial.Unicode.ttf")  # download fonts
     if 'attributes' in data.keys() and data['attributes'] is not None and len(data['attributes']) > 0:
-        data['na'], data['nal'] = get_attribute_label(data['attributes'])
+        data['na'], data['nal'] = get_attribute_num(data['attributes'])
     return data  # dictionary
 
 
