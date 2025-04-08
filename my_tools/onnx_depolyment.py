@@ -58,38 +58,6 @@ def crop_mask(masks, boxes):
     return masks * ((r >= x1) * (r < x2) * (c >= y1) * (c < y2))
 
 
-def scale_masks(masks, shape, padding=True):
-    """
-    Rescale segment masks to shape.
-
-    Args:
-        masks (np.ndarray): (N, C, H, W).
-        shape (tuple): Height and width.
-        padding (bool): If True, assuming the boxes is based on image augmented by yolo style. If False then do regular
-            rescaling.
-
-    Returns:
-        (np.ndarray): Rescaled masks.
-    """
-    mh, mw = masks.shape[2:]
-    gain = min(mh / shape[0], mw / shape[1])  # gain  = old / new
-    pad = [mw - shape[1] * gain, mh - shape[0] * gain]  # wh padding
-    if padding:
-        pad[0] /= 2
-        pad[1] /= 2
-    top, left = (int(pad[1]), int(pad[0])) if padding else (0, 0)  # y, x
-    bottom, right = (int(mh - pad[1]), int(mw - pad[0]))
-    masks = masks[..., top:bottom, left:right]
-
-    # Resize each mask in the batch
-    resized_masks = np.zeros((masks.shape[0], masks.shape[1], *shape), dtype=masks.dtype)
-    for i in range(masks.shape[0]):
-        for j in range(masks.shape[1]):
-            resized_masks[i, j] = resize(masks[i, j], shape, order=1, preserve_range=True, anti_aliasing=False)
-
-    return resized_masks
-
-
 def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None, padding=True, xywh=False):
     """
     Rescale bounding boxes from img1_shape to img0_shape.
@@ -329,7 +297,7 @@ def nms_rotated_np(boxes, scores, iou_threshold):
 # endregion
 
 
-class YOLOv8MSeg:
+class YOLOvMSeg:
     """
     YOLOv8 segmentation model for performing instance segmentation using ONNX Runtime.
 
@@ -358,8 +326,8 @@ class YOLOv8MSeg:
         """
         self.session = ort.InferenceSession(
             onnx_model,
-            # providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-            providers=["CPUExecutionProvider"],
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            # providers=["CPUExecutionProvider"],
         )
         self.save_dir = save_dir
         self.imgsz = (imgsz, imgsz) if isinstance(imgsz, int) else imgsz
@@ -495,10 +463,21 @@ class YOLOv8MSeg:
                 boxs, scores, class_ids, attributes, masks = boxs[keep], scores[keep], class_ids[keep], attributes[keep], masks[keep]
 
             vis_img = self.draw_result(img, boxs, scores, class_ids, attributes, masks, img_path)
-            results.append({'img':img,'names':self.classes, 'boxes':pred[:, :6], 'masks':masks, 'attributes':attributes, 'vis_img':vis_img})
 
-            return results
+            masks = masks.astype(np.uint8) * 255
+            object_results = []
+            for i in range(len(boxs)):
+                box, score, class_id, mask, attribute = boxs[i], scores[i], class_ids[i], masks[i], attributes[i]
+                box = np.array(box, dtype=np.int32)
+                class_name = self.classes[int(class_id)]
+                attribute_result = [f'{self.attributes[idx_att]} : {self.levels[int(level_att)]}' for idx_att, level_att
+                                    in enumerate(attribute)]
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                mask_contour_list = [cnt.squeeze().tolist() for cnt in contours if len(cnt) >= 3]
+                object_result = (box, score, class_name, mask_contour_list, attribute_result)
+                object_results.append(object_result)
 
+            return object_results
     def draw_result(self, img, boxs, scores, class_ids, attributes, masks, img_path, alpha=0.5) -> None:
         colors = np.array([self.color_palette[int(i)] for i in class_ids]) / 255.0
 
@@ -611,12 +590,12 @@ if __name__ == "__main__":
     parser.add_argument("--iou", type=float, default=0.5, help="NMS IoU threshold")
     args = parser.parse_args()
 
-    model = YOLOv8MSeg(args.model, args.save_dir, args.conf, args.iou)
+    model = YOLOvMSeg(args.model, args.save_dir, args.conf, args.iou)
 
     results = model(args.source)
 
     # cv2.imshow("Segmented Image", results[0]['vis_img'])
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-    plt.imshow(results[0]['vis_img'])
-    plt.show()
+    # plt.imshow(results[0]['vis_img'])
+    # plt.show()
