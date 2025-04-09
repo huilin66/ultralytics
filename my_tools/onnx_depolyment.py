@@ -296,8 +296,195 @@ def nms_rotated_np(boxes, scores, iou_threshold):
     return np.arange(len(boxes))  # dummy implementation
 # endregion
 
+class YOLOBaseDeployer:
+    def __init__(self, onnx_model, save_dir, conf=0.25, iou=0.7, imgsz=640, classes=CLASSES):
+        self.session = ort.InferenceSession(
+            onnx_model,
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+        )
+        self.save_dir = save_dir
+        self.imgsz = (imgsz, imgsz) if isinstance(imgsz, int) else imgsz
+        self.classes = classes
+        self.conf = conf
+        self.iou = iou
+        self.nc = len(classes)
+        _, _, self.input_width, self.input_height = self.session.get_inputs()[0].shape
+        self.color_palette = [
+            (255, 42, 4),
+            (79, 68, 255),
+            (255, 0, 189),
+            (255, 180, 0),
+            (186, 0, 221),
+            (0, 192, 38),
+            (255, 36, 125),
+            (104, 0, 123),
+            (108, 27, 255),
+            (47, 109, 252),
+            (104, 31, 17),
+        ]
+    def __call__(self, img_path):
+        """
+        Run inference on the input image using the ONNX model.
 
-class YOLOvMSeg:
+        Args:
+            img (np.ndarray): The original input image in BGR format.
+
+        Returns:
+            (List[Results]): Processed detection results after post-processing, containing bounding boxes and
+                segmentation masks.
+        """
+        img_data, pad = self.preprocess(img_path, self.imgsz)
+        outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
+        return self.postprocess(self.img, img_data, outs, img_path)
+
+    def letterbox(self, img, new_shape=(640, 640)):
+        """
+        Resize and pad image while maintaining aspect ratio.
+
+        Args:
+            img (np.ndarray): Input image in BGR format.
+            new_shape (Tuple[int, int]): Target shape as (height, width).
+
+        Returns:
+            (np.ndarray): Resized and padded image.
+        """
+        shape = img.shape[:2]  # current shape [height, width]
+
+        # Scale ratio (new / old)
+        r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+
+        # Compute padding
+        new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+        dw, dh = (new_shape[1] - new_unpad[0]) / 2, (new_shape[0] - new_unpad[1]) / 2  # wh padding
+
+        if shape[::-1] != new_unpad:  # resize
+            img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
+        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
+
+        return img, (top, left)
+
+    def preprocess(self, img_path, new_shape):
+        """
+        Preprocess the input image before feeding it into the model.
+
+        Args:
+            img (np.ndarray): The input image in BGR format.
+            new_shape (Tuple[int, int]): The target shape for resizing as (height, width).
+
+        Returns:
+            (np.ndarray): Preprocessed image ready for model inference, with shape (1, 3, height, width) and normalized.
+        """
+        self.img = cv2.imread(img_path)
+        self.img_height, self.img_width = self.img.shape[:2]
+
+        img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
+
+        img, pad = self.letterbox(img, new_shape)
+        image_data = np.array(img) / 255.0
+        image_data = np.transpose(image_data, (2, 0, 1))  # Channel first
+
+        image_data = np.expand_dims(image_data, axis=0).astype(np.float32)
+        return image_data, pad
+
+    def postprocess(self, img, prep_img, outs, img_path):
+        raise NotImplementedError("This deployer doesn't support postprocess")
+
+    def draw_result(self, img, boxs, scores, class_ids, attributes, masks, img_path, alpha=0.5) -> None:
+        raise NotImplementedError("This deployer doesn't support draw_result")
+
+class YOLOMDetDeployer(YOLOBaseDeployer):
+    def __init__(self, onnx_model, save_dir, conf=0.25, iou=0.7, imgsz=640, classes=CLASSES, attributes=ATTRIBUTES, levels=LEVELS):
+        """
+        Initialize the instance segmentation model using an ONNX model.
+
+        Args:
+            onnx_model (str): Path to the ONNX model file.
+            conf (float): Confidence threshold for filtering detections.
+            iou (float): IoU threshold for non-maximum suppression.
+            imgsz (int | Tuple[int, int]): Input image size of the model. Can be an integer for square input or a tuple
+                for rectangular input.
+        """
+        self.session = ort.InferenceSession(
+            onnx_model,
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            # providers=["CPUExecutionProvider"],
+        )
+        self.save_dir = save_dir
+        self.imgsz = (imgsz, imgsz) if isinstance(imgsz, int) else imgsz
+        self.classes = classes
+        self.attributes = attributes
+        self.levels = levels
+        self.conf = conf
+        self.iou = iou
+        self.nc = len(classes)
+        self.na = len(attributes)
+        self.nl = len(levels)
+        _, _, self.input_width, self.input_height = self.session.get_inputs()[0].shape
+        self.color_palette = [
+            (255, 42, 4),
+            (79, 68, 255),
+            (255, 0, 189),
+            (255, 180, 0),
+            (186, 0, 221),
+            (0, 192, 38),
+            (255, 36, 125),
+            (104, 0, 123),
+            (108, 27, 255),
+            (47, 109, 252),
+            (104, 31, 17),
+        ]
+
+    def __call__(self, img_path):
+        """
+        Run inference on the input image using the ONNX model.
+
+        Args:
+            img (np.ndarray): The original input image in BGR format.
+
+        Returns:
+            (List[Results]): Processed detection results after post-processing, containing bounding boxes and
+                segmentation masks.
+        """
+        img_data, pad = self.preprocess(img_path, self.imgsz)
+        outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
+        return self.postprocess(self.img, img_data, outs, img_path)
+
+
+    def postprocess(self, img, prep_img, outs, img_path):
+        cat_feature, preds, mask_coefficients = outs[0], outs[1:4], outs[4]
+        preds = non_max_suppression_with_attributes(cat_feature, self.conf, self.iou, nc=self.nc, na=self.na)
+
+        results = []
+        for i, pred in enumerate(preds):
+            pred[:, :4] = scale_boxes(prep_img.shape[2:], pred[:, :4], img.shape)
+            boxs = pred[:, :4]
+            scores = pred[:, 4:5]
+            class_ids = pred[:, 5:6]
+            attributes = pred[:,  6:6+self.na]
+            attributes = np.floor(attributes * (self.nl)).astype(np.int64)
+            attributes = np.clip(attributes, 0, self.nl-1)  # Ensure no value exceeds 2
+
+
+            vis_img = self.draw_result(img, boxs, scores, class_ids, attributes, masks, img_path)
+
+
+            object_results = []
+            for i in range(len(boxs)):
+                box, score, class_id, attribute = boxs[i], scores[i], class_ids[i],  attributes[i]
+                box = np.array(box, dtype=np.int32)
+                class_name = self.classes[int(class_id)]
+                attribute_result = [f'{self.attributes[idx_att]} : {self.levels[int(level_att)]}' for idx_att, level_att
+                                    in enumerate(attribute)]
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                mask_contour_list = [cnt.squeeze().tolist() for cnt in contours if len(cnt) >= 3]
+                object_result = (box, score, class_name, mask_contour_list, attribute_result)
+                object_results.append(object_result)
+
+            return object_results
+
+class YOLOMSegDeployer(YOLOBaseDeployer):
     """
     YOLOv8 segmentation model for performing instance segmentation using ONNX Runtime.
 
@@ -368,60 +555,10 @@ class YOLOvMSeg:
         """
         img_data, pad = self.preprocess(img_path, self.imgsz)
         outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
-        return self.postprocess2(self.img, img_data, outs, img_path)
+        return self.postprocess(self.img, img_data, outs, img_path)
 
-    def letterbox(self, img, new_shape=(640, 640)):
-        """
-        Resize and pad image while maintaining aspect ratio.
 
-        Args:
-            img (np.ndarray): Input image in BGR format.
-            new_shape (Tuple[int, int]): Target shape as (height, width).
-
-        Returns:
-            (np.ndarray): Resized and padded image.
-        """
-        shape = img.shape[:2]  # current shape [height, width]
-
-        # Scale ratio (new / old)
-        r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-
-        # Compute padding
-        new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
-        dw, dh = (new_shape[1] - new_unpad[0]) / 2, (new_shape[0] - new_unpad[1]) / 2  # wh padding
-
-        if shape[::-1] != new_unpad:  # resize
-            img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
-
-        return img, (top, left)
-
-    def preprocess(self, img_path, new_shape):
-        """
-        Preprocess the input image before feeding it into the model.
-
-        Args:
-            img (np.ndarray): The input image in BGR format.
-            new_shape (Tuple[int, int]): The target shape for resizing as (height, width).
-
-        Returns:
-            (np.ndarray): Preprocessed image ready for model inference, with shape (1, 3, height, width) and normalized.
-        """
-        self.img = cv2.imread(img_path)
-        self.img_height, self.img_width = self.img.shape[:2]
-
-        img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
-
-        img, pad = self.letterbox(img, new_shape)
-        image_data = np.array(img) / 255.0
-        image_data = np.transpose(image_data, (2, 0, 1))  # Channel first
-
-        image_data = np.expand_dims(image_data, axis=0).astype(np.float32)
-        return image_data, pad
-
-    def postprocess2(self, img, prep_img, outs, img_path):
+    def postprocess(self, img, prep_img, outs, img_path):
         """
         Post-process model predictions to extract meaningful results.
 
@@ -478,6 +615,7 @@ class YOLOvMSeg:
                 object_results.append(object_result)
 
             return object_results
+
     def draw_result(self, img, boxs, scores, class_ids, attributes, masks, img_path, alpha=0.5) -> None:
         colors = np.array([self.color_palette[int(i)] for i in class_ids]) / 255.0
 
@@ -581,6 +719,7 @@ class YOLOvMSeg:
         return masks > 0.0  # Binary mask
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default=r'/nfsv4/23039356r/repository/ultralytics/runs/msegment/debug108/weights/best.onnx', help="Path to ONNX model")
@@ -590,10 +729,10 @@ if __name__ == "__main__":
     parser.add_argument("--iou", type=float, default=0.5, help="NMS IoU threshold")
     args = parser.parse_args()
 
-    model = YOLOvMSeg(args.model, args.save_dir, args.conf, args.iou)
+    model = YOLOMSegDeployer(args.model, args.save_dir, args.conf, args.iou)
 
     results = model(args.source)
-
+    print(results)
     # cv2.imshow("Segmented Image", results[0]['vis_img'])
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
