@@ -3,38 +3,55 @@
 import argparse
 import os.path
 
-import re
 import cv2
-import matplotlib.pyplot as plt
-import yaml
-
 import numpy as np
 import time
 from typing import List, Optional, Union
-
+from collections import defaultdict
 import onnxruntime as ort
 
 CLASSES = [
     'background',
-    'wall frame',
-    'wall display',
-    'projecting frame',
-    'projecting display',
-    'hanging frame',
-    'hanging display',
-    'other'
+    'wall signboard',
+    'projecting signboard',
 ]
 ATTRIBUTES = [
-    'deformation',
-    'broken',
-    'abandonment',
-    'corrosion'
+    'surface_missing',
+    'surface_incomplete',
+    'surface_corroded',
+    'frame_corroded',
+    'surface_peeling',
+    'surface_fade',
+    'surface_deformed',
+    'frame_deformed',
+    'disconnected',
+    'added_billboard'
 ]
 LEVELS = [
     'no',
-    'medium',
-    'high'
+    'yes',
 ]
+# CLASSES = [
+#     'background',
+#     'wall frame',
+#     'wall display',
+#     'projecting frame',
+#     'projecting display',
+#     'hanging frame',
+#     'hanging display',
+#     'other'
+# ]
+# ATTRIBUTES = [
+#     'deformation',
+#     'broken',
+#     'abandonment',
+#     'corrosion'
+# ]
+# LEVELS = [
+#     'no',
+#     'medium',
+#     'high'
+# ]
 
 
 # region utils
@@ -322,7 +339,7 @@ class YOLOBaseDeployer:
             (47, 109, 252),
             (104, 31, 17),
         ]
-    def __call__(self, img_path):
+    def __call__(self, input_path):
         """
         Run inference on the input image using the ONNX model.
 
@@ -333,9 +350,21 @@ class YOLOBaseDeployer:
             (List[Results]): Processed detection results after post-processing, containing bounding boxes and
                 segmentation masks.
         """
-        img_data, pad = self.preprocess(img_path, self.imgsz)
-        outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
-        return self.postprocess(self.img, img_data, outs, img_path)
+        if os.path.isdir(input_path):
+            file_list = [os.path.join(input_path, file_name) for file_name in sorted(os.listdir(input_path))]
+            results = []
+            for idx, file_path in enumerate(file_list):
+                print(f'processing {idx}/{len(file_list)}:')
+                img_data, pad = self.preprocess(file_path, self.imgsz)
+                outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
+                result = self.postprocess(self.img, img_data, outs, file_path)
+                results.append(result)
+            results.append(result)
+        else:
+            img_data, pad = self.preprocess(input_path, self.imgsz)
+            outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
+            results = self.postprocess(self.img, img_data, outs, input_path)
+        return results
 
     def letterbox(self, img, new_shape=(640, 640)):
         """
@@ -395,7 +424,7 @@ class YOLOBaseDeployer:
         raise NotImplementedError("This deployer doesn't support draw_result")
 
 class YOLOMDetDeployer(YOLOBaseDeployer):
-    def __init__(self, onnx_model, save_dir, conf=0.25, iou=0.7, imgsz=640, classes=CLASSES, attributes=ATTRIBUTES, levels=LEVELS):
+    def __init__(self, onnx_model, save_dir, conf=0.4, iou=0.1, imgsz=640, classes=CLASSES, attributes=ATTRIBUTES, levels=LEVELS):
         """
         Initialize the instance segmentation model using an ONNX model.
 
@@ -436,24 +465,9 @@ class YOLOMDetDeployer(YOLOBaseDeployer):
             (104, 31, 17),
         ]
 
-    def __call__(self, img_path):
-        """
-        Run inference on the input image using the ONNX model.
-
-        Args:
-            img (np.ndarray): The original input image in BGR format.
-
-        Returns:
-            (List[Results]): Processed detection results after post-processing, containing bounding boxes and
-                segmentation masks.
-        """
-        img_data, pad = self.preprocess(img_path, self.imgsz)
-        outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
-        return self.postprocess(self.img, img_data, outs, img_path)
-
 
     def postprocess(self, img, prep_img, outs, img_path):
-        cat_feature, preds, mask_coefficients = outs[0], outs[1:4], outs[4]
+        cat_feature, preds = outs[0], outs[1:4]
         preds = non_max_suppression_with_attributes(cat_feature, self.conf, self.iou, nc=self.nc, na=self.na)
 
         results = []
@@ -467,7 +481,7 @@ class YOLOMDetDeployer(YOLOBaseDeployer):
             attributes = np.clip(attributes, 0, self.nl-1)  # Ensure no value exceeds 2
 
 
-            vis_img = self.draw_result(img, boxs, scores, class_ids, attributes, masks, img_path)
+            vis_img = self.draw_result(img, boxs, scores, class_ids, attributes, img_path)
 
 
             object_results = []
@@ -477,12 +491,64 @@ class YOLOMDetDeployer(YOLOBaseDeployer):
                 class_name = self.classes[int(class_id)]
                 attribute_result = [f'{self.attributes[idx_att]} : {self.levels[int(level_att)]}' for idx_att, level_att
                                     in enumerate(attribute)]
-                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                mask_contour_list = [cnt.squeeze().tolist() for cnt in contours if len(cnt) >= 3]
-                object_result = (box, score, class_name, mask_contour_list, attribute_result)
+                object_result = (box, score, class_name, attribute_result)
                 object_results.append(object_result)
 
             return object_results
+
+    def draw_result(self, img, boxs, scores, class_ids, attributes, img_path, alpha=0.5, uids=None) -> None:
+        colors = np.array([self.color_palette[int(i)] for i in class_ids]) / 255.0
+
+
+        for idx, (box, score, class_id, attribute, color) in enumerate(zip(boxs, scores, class_ids, attributes, colors)):
+            uid = uids[idx] if uids is not None else None
+            class_id = int(class_id)
+            score = float(score)
+            # Extract the coordinates of the bounding box
+            x1, y1, x2, y2 = box
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+
+            # Retrieve the color for the class ID
+            color = self.color_palette[class_id]
+
+            # Draw the bounding box on the image
+            cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+
+            # Create the label text with class name and score
+            label = f"{self.classes[class_id]}: {score:.2f}" if uid is None else f"{self.classes[class_id]}: {score:.2f} | uid:{uid}"
+
+            # Calculate the dimensions of the label text
+            (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+
+            # Calculate the position of the label text
+            label_x = x1
+            label_y = y1 - 10 if y1 - 10 > label_height else y1 + 10
+
+            # Draw a filled rectangle as the background for the label text
+            cv2.rectangle(
+                img, (label_x, label_y - label_height), (label_x + label_width, label_y + label_height), color, cv2.FILLED
+            )
+
+            # Draw the label text on the image
+            cv2.putText(img, label, (label_x, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+
+            # Draw attibutes:
+            p1, p2 = (int(box[0]), int(box[1])), (int(box[0])+15*len(attribute), int(box[1])+15*len(attribute))
+            cv2.rectangle(img, p1, p2, (100, 100, 100))
+            overlay = img.copy()
+            cv2.rectangle(overlay, p1, p2, color, -1)
+            cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+
+            for idx, att in enumerate(attribute):
+                att_name = self.attributes[idx]
+                att_level = self.levels[int(att)]
+                att_label = f'{att_name}:{att_level}'
+                pos = [x1, y1 + 15 * (idx + 1) - 10]
+                cv2.putText(img, att_label, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+
+        cv2.imwrite(os.path.join(self.save_dir, os.path.basename(img_path)), img)
+        return img
 
 class YOLOMSegDeployer(YOLOBaseDeployer):
     """
@@ -540,22 +606,6 @@ class YOLOMSegDeployer(YOLOBaseDeployer):
             (47, 109, 252),
             (104, 31, 17),
         ]
-
-
-    def __call__(self, img_path):
-        """
-        Run inference on the input image using the ONNX model.
-
-        Args:
-            img (np.ndarray): The original input image in BGR format.
-
-        Returns:
-            (List[Results]): Processed detection results after post-processing, containing bounding boxes and
-                segmentation masks.
-        """
-        img_data, pad = self.preprocess(img_path, self.imgsz)
-        outs = self.session.run(None, {self.session.get_inputs()[0].name: img_data})
-        return self.postprocess(self.img, img_data, outs, img_path)
 
 
     def postprocess(self, img, prep_img, outs, img_path):
@@ -720,21 +770,192 @@ class YOLOMSegDeployer(YOLOBaseDeployer):
 
 
 
+class YOLOMDetTrackDeployer(YOLOMDetDeployer):
+    def __init__(self, onnx_model, save_dir,max_age):
+        super(YOLOMDetTrackDeployer, self).__init__(onnx_model, save_dir)
+        self.max_age = max_age
+        self.tracks = defaultdict(dict)
+        self.next_id = 0
+        self.frame_count = 0
+
+    def postprocess(self, img, prep_img, outs, img_path):
+        cat_feature, preds = outs[0], outs[1:4]
+        preds = non_max_suppression_with_attributes(cat_feature, self.conf, self.iou, nc=self.nc, na=self.na)
+
+        results = []
+        for i, pred in enumerate(preds):
+            pred[:, :4] = scale_boxes(prep_img.shape[2:], pred[:, :4], img.shape)
+            boxs = pred[:, :4]
+            scores = pred[:, 4:5]
+            class_ids = pred[:, 5:6]
+            attributes = pred[:,  6:6+self.na]
+            attributes = np.floor(attributes * (self.nl)).astype(np.int64)
+            attributes = np.clip(attributes, 0, self.nl-1)  # Ensure no value exceeds 2
+
+            object_results = []
+            for i in range(len(boxs)):
+                box, score, class_id, attribute = boxs[i], scores[i], class_ids[i],  attributes[i]
+                box = np.array(box, dtype=np.int32)
+                class_name = self.classes[int(class_id)]
+                attribute_result = [f'{self.attributes[idx_att]} : {self.levels[int(level_att)]}' for idx_att, level_att
+                                    in enumerate(attribute)]
+                object_result = (box, score, class_name, attribute_result)
+                object_results.append(object_result)
+
+            uids = self.track_update(object_results)
+            print(uids)
+            vis_img = self.draw_result(img, boxs, scores, class_ids, attributes, img_path, uids=uids)
+
+            return object_results
+
+    def track_update(self, frame_result):
+        """更新跟踪状态并返回每个box的UID"""
+        self.frame_count += 1
+        uid_to_box = {}  # 最终输出：{UID: box}的字典
+        # 1. 准备当前帧检测数据
+        current_detections = [
+            {'box': record[0], 'score': record[1], 'class': record[2], 'attribute': record[3]}
+            for record in frame_result
+        ]
+        # 2. 初始化未匹配的检测索引
+        unmatched_det_indices = set(range(len(current_detections)))
+
+        # 3. 优先匹配现有轨迹
+        for track_id, track_info in list(self.tracks.items()):
+            # 清理过期轨迹（超过max_age帧未更新）
+            if self.frame_count - track_info['last_seen'] > self.max_age:
+                del self.tracks[track_id]
+                continue
+
+            # 寻找最佳IOU匹配
+            best_iou, best_idx = 0, -1
+            for idx in list(unmatched_det_indices):
+                iou = self._calculate_iou(
+                    track_info['box'],
+                    current_detections[idx]['box']
+                )
+                if iou > self.iou and iou > best_iou:
+                    best_iou, best_idx = iou, idx
+
+            # 更新匹配成功的轨迹
+            if best_idx != -1:
+                self.tracks[track_id] = {
+                    'box': current_detections[best_idx]['box'],
+                    'last_seen': self.frame_count
+                }
+                uid_to_box[track_id] = current_detections[best_idx]['box']
+                unmatched_det_indices.remove(best_idx)
+
+        # 4. 关键步骤：为未匹配的检测创建新轨迹
+        for idx in unmatched_det_indices:
+            new_id = self.next_id
+            self.tracks[new_id] = {
+                'box': current_detections[idx]['box'],
+                'last_seen': self.frame_count
+            }
+            uid_to_box[new_id] = current_detections[idx]['box']
+            self.next_id += 1  # 确保ID唯一递增
+
+        # 5. 按原始检测顺序返回UID列表
+        uids = []
+        for det in current_detections:
+            for uid, box in uid_to_box.items():
+                if np.array_equal(box, det['box']):
+                    uids.append(uid)
+                    break
+        return uids
+        # return [
+        #     next((uid for uid, box in uid_to_box.items() if np.array_equal(box, det['box'])) for det in current_detections
+        # ]
+
+        active_ids = []
+        current_detections = []
+        result_uids = []
+        for record in result:
+            current_det = {'box': record[0], 'score': record[1], 'class': record[2], 'attribute': record[3], }
+            current_detections.append(current_det)
+            # 匹配现有轨迹
+            matched_pairs = []
+            used_detections = set()  # 改用集合记录已匹配的检测索引
+            for track_id, track_info in list(self.tracks.items()):
+                if self.frame_count - track_info['last_seen'] > self.max_age:
+                    del self.tracks[track_id]
+                    continue
+
+                best_iou = 0
+                best_idx = -1
+                for idx, det in enumerate(current_detections):
+                    if 'matched' in det:
+                        continue
+                    iou = self._calculate_iou(track_info['box'], det['box'])
+                    if iou > self.iou and iou > best_iou:
+                        best_iou = iou
+                        best_idx = idx
+
+                if best_idx != -1:
+                    matched_pairs.append((track_id, best_idx))
+                    current_detections[best_idx]['matched'] = True
+
+            # 更新匹配的轨迹
+            for track_id, det_idx in matched_pairs:
+                det = current_detections[det_idx]
+                self.tracks[track_id] = {
+                    'box': det['box'],
+                    'class': det['class'],
+                    'score': det['score'],
+                    'last_seen': self.frame_count
+                }
+                active_ids.append(track_id)
+
+            # 为新检测创建轨迹
+            for idx, det in enumerate(current_detections):
+                if 'matched' not in det:
+                    self.tracks[self.next_id] = {
+                        'box': det['box'],
+                        'class': det['class'],
+                        'score': det['score'],
+                        'last_seen': self.frame_count
+                    }
+                    active_ids.append(self.next_id)
+                    self.next_id += 1
+
+            # 6. 返回格式: 每个box对应的UID列表（与输入frame_result顺序一致）
+
+            for det in current_detections:
+                # 查找这个box对应的UID
+                found_uid = None
+                for uid, box in self.tracks.items():
+                    if np.array_equal(box['box'], det['box']):
+                        found_uid = uid
+                        break
+                result_uids.append(found_uid)
+        return result_uids
+
+    def _calculate_iou(self, box1, box2):
+        """计算IOU"""
+        x1 = max(box1[0], box2[0])
+        y1 = max(box1[1], box2[1])
+        x2 = min(box1[2], box2[2])
+        y2 = min(box1[3], box2[3])
+
+        inter = max(0, x2 - x1) * max(0, y2 - y1)
+        area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+        area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+        return inter / (area1 + area2 - inter + 1e-6)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default=r'/nfsv4/23039356r/repository/ultralytics/runs/msegment/debug108/weights/best.onnx', help="Path to ONNX model")
-    parser.add_argument("--source", type=str, default=r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/images/48.JPG', help="Path to input image")
-    parser.add_argument("--save_dir", type=str, default=r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/results', help="Confidence threshold")
-    parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold")
-    parser.add_argument("--iou", type=float, default=0.5, help="NMS IoU threshold")
+    # parser.add_argument("--model", type=str, default=r'/nfsv4/23039356r/repository/ultralytics/runs/msegment/debug108/weights/best.onnx', help="Path to ONNX model")
+    parser.add_argument("--model", type=str, default=r'/nfsv4/23039356r/repository/ultralytics/runs/mdetect/exp_yolo10x_head1231_20/weights/best.onnx', help="Path to ONNX model")
+    # parser.add_argument("--source", type=str, default=r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/images', help="Path to input image")
+    parser.add_argument("--source", type=str, default=r'/nfsv4/23039356r/data/billboard/data0806_m/demo2', help="Path to input image")
+    # parser.add_argument("--save_dir", type=str, default=r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/results', help="Confidence threshold")
+    parser.add_argument("--save_dir", type=str,default=r'/nfsv4/23039356r/data/billboard/data0806_m/demo_result2',help="Confidence threshold")
     args = parser.parse_args()
 
-    model = YOLOMSegDeployer(args.model, args.save_dir, args.conf, args.iou)
-
+    # model = YOLOMSegDeployer(args.model, args.save_dir, args.conf, args.iou)
+    # model = YOLOMDetDeployer(args.model, args.save_dir, args.conf, args.iou)
+    model = YOLOMDetTrackDeployer(args.model, args.save_dir, 5)
     results = model(args.source)
     print(results)
-    # cv2.imshow("Segmented Image", results[0]['vis_img'])
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    # plt.imshow(results[0]['vis_img'])
-    # plt.show()
+
