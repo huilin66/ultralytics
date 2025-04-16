@@ -75,5 +75,16 @@ class MSegmentationPredictor(MDetectionPredictor):
             pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
         if masks is not None:
             keep = masks.sum((-2, -1)) > 0  # only keep predictions with masks
-            pred, masks = pred[keep], masks[keep]
-        return MdetResults(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], masks=masks, attributes=attributes, attribute_names=attribute_names)
+            pred, masks, attributes = pred[keep], masks[keep], attributes[keep]
+        return MdetResults(
+            orig_img,
+            path=img_path,
+            names=self.model.names,
+            boxes=pred[:, :6],
+            masks=masks,
+            attributes=attributes,
+            attribute_names=attribute_names,
+            nc=self.model.model.nc,
+            na=self.model.model.na,
+            nal=self.model.model.nal,
+        )

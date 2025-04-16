@@ -1069,7 +1069,7 @@ class MdetResults(SimpleClass):
 
     def __init__(
         self, orig_img, path, names, boxes=None, attributes=None, masks=None, probs=None, keypoints=None, obb=None,
-            speed=None, attribute_names=None,) -> None:
+            speed=None, attribute_names=None, nc=None, na=None, nal=None) -> None:
         """
         Initialize the Results class.
 
@@ -1097,6 +1097,9 @@ class MdetResults(SimpleClass):
         self.path = path
         self.save_dir = None
         self._keys = "boxes", "attributes", "masks", "probs", "keypoints", "obb"
+        self.nc = nc
+        self.na = na
+        self.nal = nal
 
     def __getitem__(self, idx):
         """Return a Results object for the specified index."""
@@ -1353,13 +1356,15 @@ class MdetResults(SimpleClass):
         elif boxes:
             # Detect/segment/pose
             for j, d in enumerate(boxes):
-                att = attributes.data[j]
+                att = attributes.data[j].cpu().numpy()
+                att = np.floor(att * self.nal).astype(np.int32)
+                att = np.clip(att, 0, self.nal-1)
                 # atts = *(att)
                 c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
                 line = (c, len(att), *att, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
                 if masks:
                     seg = masks[j].xyn[0].copy().reshape(-1)  # reversed mask.xyn, (n,2) to (n*2)
-                    line = (c, *seg)
+                    line = (c, len(att), *att, *seg)
                 if kpts is not None:
                     kpt = torch.cat((kpts[j].xyn, kpts[j].conf[..., None]), 2) if kpts[j].has_visible else kpts[j].xyn
                     line += (*kpt.reshape(-1).tolist(),)
@@ -1453,6 +1458,7 @@ class Attributes(BaseTensor):
     @property
     def result(self):
         data = torch.floor(self.data * (self.attribute_level)).long()
+        data = torch.clip(data, min=0, max=self.attribute_level-1)
         data = data.cpu().numpy()
         value = self.get_attribute(self.attribute_names, data)
         return value

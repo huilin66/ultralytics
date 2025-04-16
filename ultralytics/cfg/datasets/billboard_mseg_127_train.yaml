@@ -1,0 +1,34 @@
+path: /nfsv4/23039356r/data/billboard/bd_data/data127 # dataset root dir
+train: train.txt # train images (relative to 'path') 118287 images
+val: train.txt # val images (relative to 'path') 5000 images
+test: train.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+
+# Classes
+names:
+  0: background
+  1: wall frame
+  2: wall display
+  3: projecting frame
+  4: projecting display
+  5: hanging frame
+  6: hanging display
+  7: other
+
+attributes:
+  deformation:
+    - no
+    - medium
+    - high
+  broken:
+    - no
+    - medium
+    - high
+  abandonment:
+    - no
+    - medium
+    - high
+  corrosion:
+    - no
+    - medium
+    - high

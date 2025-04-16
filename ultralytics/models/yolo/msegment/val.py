@@ -150,7 +150,7 @@ class MSegmentationValidator(MDetectionValidator):
                 self.pred_to_json(predn, batch["im_file"][si], pred_masks)
             if self.args.save_txt:
                 file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
-                self.save_one_txt(predn, self.args.save_conf, pbatch["ori_shape"], file)
+                self.save_one_txt(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file)
 
     def finalize_metrics(self, *args, **kwargs):
         """Set speed and confusion matrix for evaluation metrics."""
@@ -220,18 +220,23 @@ class MSegmentationValidator(MDetectionValidator):
         #     cls = row[5]  # Class ID
         #     att = row[6:]  # Attributes
         #
-        #     xywh = (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+        #     xywh = (ops.xyxy2xywh(toMrch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
         #     line = (cls, len(att), *att, *xywh, conf) if save_conf else (cls, len(att), *att, *xywh)  # label format
         #     with open(file, "a") as f:
         #         f.write(("%g " * len(line)).rstrip() % line + "\n")
-        from ultralytics.engine.results import Results
+        from ultralytics.engine.results import MdetResults
 
-        Results(
+        MdetResults(
             np.zeros((shape[0], shape[1]), dtype=np.uint8),
             path=None,
             names=self.names,
             boxes=predn[:, :6],
+            attributes=predn[:, 6:6+len(self.attribute_names)],
+            attribute_names=self.attribute_names,
             masks=pred_masks,
+            nc=self.nc,
+            na=self.na,
+            nal=self.nal
         ).save_txt(file, save_conf=save_conf)
 
     def pred_to_json(self, predn, filename, pred_masks):

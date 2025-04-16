@@ -264,6 +264,7 @@ class MDetectionValidator(BaseValidator):
 
         # attribute result
         pred_attributes_result = torch.floor(pred_attributes * (nal)).long()
+        pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=nal-1)
         iou50 = iou >= 0.5
         correct_box = correct_class & iou50 # n * 300
         correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
