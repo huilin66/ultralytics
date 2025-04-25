@@ -217,13 +217,16 @@ class MDetectionValidator(BaseValidator):
             for i, c in enumerate(self.metrics.ap_class_index):
                 LOGGER.info(pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i)))
             LOGGER.info('-'*20*(3+len(self.metrics.keys)))
+
+            x = self.metrics.class_result
             for i in range(self.nc, self.nc+self.na):
-                LOGGER.info(pf % (self.metrics.attribute_names[i-self.nc], 0, self.nt_per_class[0], *self.metrics.class_result(i)))
+                LOGGER.info(pf % (list(self.metrics.attribute_names.keys())[i-self.nc], 0, self.nt_per_class[0], *self.metrics.class_result(i)))
 
         if self.args.plots:
             for normalize in True, False:
                 self.confusion_matrix.plot(
-                    save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot
+                    save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot,
+                    attribute_names=self.attribute_names,
                 )
 
     def _process_batch(self, detections, gt_bboxes, gt_cls, gt_attributes):

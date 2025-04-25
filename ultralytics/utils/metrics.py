@@ -7,6 +7,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 
 from ultralytics.utils import LOGGER, SimpleClass, TryExcept, plt_settings
@@ -479,6 +480,7 @@ class MConfusionMatrix:
         self.nal = nal
         self.conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
         self.iou_thres = iou_thres
+        self.matrix_atts = [np.zeros((nal, nal)) for _ in range(na)]
 
     def process_cls_preds(self, preds, targets):
         """
@@ -503,6 +505,9 @@ class MConfusionMatrix:
             gt_bboxes (Array[M, 4]| Array[N, 5]): Ground truth bounding boxes with xyxy/xyxyr format.
             gt_cls (Array[M]): The class labels.
         """
+        pred_attributes = detections[:, 6:6+self.na]
+        pred_attributes = torch.floor(pred_attributes * (self.nal)).long()
+        pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
         if gt_cls.shape[0] == 0:  # Check if labels is empty
             if detections is not None:
                 detections = detections[detections[:, 4] > self.conf]
@@ -542,7 +547,15 @@ class MConfusionMatrix:
         for i, gc in enumerate(gt_classes):
             j = m0 == i
             if n and sum(j) == 1:
+                x1,y1 = detection_classes[m1[j]], gc
                 self.matrix[detection_classes[m1[j]], gc] += 1  # correct
+
+                if detection_classes[m1[j]] == gc:
+                    pred_att = pred_attributes[m1[j]].squeeze(0)
+                    gt_att = gt_attributes[i]
+                    for k in range(self.na):
+                        x2, y2 = pred_att[k], gt_att[k]
+                        self.matrix_atts[k][int(pred_att[k]), int(gt_att[k])] += 1
             else:
                 self.matrix[self.nc, gc] += 1  # true background
 
@@ -564,7 +577,7 @@ class MConfusionMatrix:
 
     @TryExcept("WARNING ⚠️ ConfusionMatrix plot failure")
     @plt_settings()
-    def plot(self, normalize=True, save_dir="", names=(), on_plot=None):
+    def plot(self, normalize=True, save_dir="", names=(), attribute_names=(), on_plot=None):
         """
         Plot the confusion matrix using seaborn and save it to a file.
 
@@ -607,6 +620,42 @@ class MConfusionMatrix:
         plt.close(fig)
         if on_plot:
             on_plot(plot_fname)
+        df = pd.DataFrame(array, columns=ticklabels, index=ticklabels)
+        df.to_csv(Path(save_dir) / f'{title.lower().replace(" ", "_")}.csv')
+
+
+        array_atts = [matrix / ((matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1) for matrix in self.matrix_atts]  # normalize columns
+        names_atts = list(attribute_names.keys())
+        levels_atts = list(attribute_names.values())[0]
+        for idx in range(self.na):
+            fig, ax = plt.subplots(1, 1, figsize=(12, 9), tight_layout=True)
+            seaborn.set_theme(font_scale=1.0 if self.nal < 50 else 0.8)  # for label size
+            ticklabels = levels_atts
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # suppress empty matrix RuntimeWarning: All-NaN slice encountered
+                seaborn.heatmap(
+                    array_atts[idx],
+                    ax=ax,
+                    annot=self.nal < 30,
+                    annot_kws={"size": 8},
+                    cmap="Blues",
+                    fmt=".2f" if normalize else ".0f",
+                    square=True,
+                    vmin=0.0,
+                    xticklabels=ticklabels,
+                    yticklabels=ticklabels,
+                ).set_facecolor((1, 1, 1))
+            title = f"Confusion Matrix for Attribute {names_atts[idx]}" + " Normalized" * normalize
+            ax.set_xlabel("True")
+            ax.set_ylabel("Predicted")
+            ax.set_title(title)
+            plot_fname = Path(save_dir) / f'{title.lower().replace(" ", "_")}.png'
+            fig.savefig(plot_fname, dpi=250)
+            plt.close(fig)
+            if on_plot:
+                on_plot(plot_fname)
+            df = pd.DataFrame(array_atts[idx], columns=ticklabels, index=ticklabels)
+            df.to_csv(Path(save_dir) / f'{title.lower().replace(" ", "_")}.csv')
 
     def print(self):
         """Print the confusion matrix to the console."""
@@ -1411,18 +1460,19 @@ class MSegmentMetrics(SimpleClass):
         self.nal = nal
 
     def get_attribute_names(self):
-        attribute_dict = self.attribute_names
-        attribute_names = []
-        for k, v in attribute_dict.items():
-            if len(v) == 2:
-                attribute_names.append(k)
-            elif len(v) > 2:
-                for i in range(1, len(v)):
-                    attribute_name = '%s_%s'%(k, v[i])
-                    attribute_names.append(attribute_name)
-            else:
-                print('Error in get_attribute_names')
-        self.attribute_names = attribute_names
+        pass
+        # attribute_dict = self.attribute_names
+        # attribute_names = []
+        # for k, v in attribute_dict.items():
+        #     if len(v) == 2:
+        #         attribute_names.append(k)
+        #     elif len(v) > 2:
+        #         for i in range(1, len(v)):
+        #             attribute_name = '%s_%s'%(k, v[i])
+        #             attribute_names.append(attribute_name)
+        #     else:
+        #         print('Error in get_attribute_names')
+        # self.attribute_names = attribute_names
 
     def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1):
         """

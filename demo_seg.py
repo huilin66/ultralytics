@@ -1,12 +1,12 @@
 import torch
 from ultralytics import YOLO, RTDETR
-BATCH_SIZE = 32
+BATCH_SIZE = 8
 EPOCHS = 500
-IMGSZ = 640
+IMGSZ = 960
 CONF = 0.5
 TASK = 'segment'
 DEVICE = torch.device('cuda:0')
-DATA = 'billboard_seg2.yaml'
+DATA = 'billboard_seg_307_det_c6.yaml'
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -47,9 +47,6 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
                 'freeze_bn':True,
             }
         )
-    save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg3.pth'
-    torch.save(model.model.state_dict(), save_ckpt_path)
-    # return
     train_params.update(kwargs)
     model.train(**train_params)
 
@@ -108,7 +105,7 @@ def yolo12(cfg_path, weight_path='yolo12x.pt', auto_optim=True, retrain=False, *
 
 if __name__ == '__main__':
     pass
-    yolo8('yolov8x-seg.yaml', auto_optim=False, name='debug')
+    yolo8('yolov8x-seg.yaml', auto_optim=False, name=DATA.replace('.yaml', ''))
     # yolo9('yolov9e-seg.yaml', auto_optim=False, name='debug')
     # yolo10('yolov10x-seg.yaml', auto_optim=False, name='debug')
     # yolo11('yolo11x-seg.yaml', auto_optim=False, name='debug')

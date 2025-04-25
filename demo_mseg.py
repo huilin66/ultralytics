@@ -1,12 +1,12 @@
 import torch
 from ultralytics import YOLO, RTDETR
 BATCH_SIZE = 32
-EPOCHS = 500
+EPOCHS = 100
 IMGSZ = 640
 CONF = 0.5
 TASK = 'msegment'
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_mseg_127.yaml"
+DATA = "billboard_mseg_307_ref.yaml"
 DATA_TRAIN = DATA.replace('.yaml', '_train.yaml')
 DATA_ALL = DATA.replace('.yaml', '_all.yaml')
 FREEZE_NUMS = {
@@ -46,13 +46,11 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
         train_params.update(
             {
                 'freeze':get_freeze_num(cfg_path),
-                'freeze_head':['.cv2', '.cv3'],
+                'freeze_head':['.cv2', '.cv3', '.cv4'],
                 'freeze_bn':True,
             }
         )
-    save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg3.pth'
-    torch.save(model.model.state_dict(), save_ckpt_path)
-    # return
+
     train_params.update(kwargs)
     model.train(**train_params)
 
@@ -124,9 +122,9 @@ if __name__ == '__main__':
     #               # '/nfsv4/23039356r/data/billboard/bd_data/data127/images/20210325_172330.jpg',
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data127/images'
     #               )
-    model_predict(r'runs/msegment/billboard_mseg_127/weights/best.pt',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data127/val.txt'
-                  )
+    # model_predict(r'runs/msegment/billboard_mseg_127/weights/best.pt',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data127/val.txt'
+    #               )
     # yolo9e('yolov9e.yaml', auto_optim=False)
     # yolo10x('yolov10x.yaml', auto_optim=False)
     # rtdetrx('rtdetr-x.yaml', auto_optim=False)
@@ -137,3 +135,4 @@ if __name__ == '__main__':
     #               r'/nfsv4/23039356r/data/billboard/bd_data/selected_sample/images/48.JPG')
 
     # model_export(r'runs/msegment/debug108/weights/best.pt')
+
