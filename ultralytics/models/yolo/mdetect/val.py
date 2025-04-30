@@ -92,6 +92,7 @@ class MDetectionValidator(BaseValidator):
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], ap=[], f1=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
+        self.att_threshold = self.args.att_threshold
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -144,7 +145,7 @@ class MDetectionValidator(BaseValidator):
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1 = 0,
+                f1 = torch.zeros(0, device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -260,7 +261,7 @@ class MDetectionValidator(BaseValidator):
 
         iou = iou * correct_class  # zero out the wrong classes
 
-        pred_attributes_result = torch.where(pred_attributes > 0.5, 1, 0)
+        pred_attributes_result = torch.where(pred_attributes > self.att_threshold, 1, 0)
 
         iou50 = iou >= 0.5
         correct_box = correct_class & iou50 # n * 300
