@@ -119,8 +119,70 @@ if __name__ == '__main__':
     # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data307_det_c6/images',
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data307_det_c6/labels',
     #               train_ratio=0.9)
-    ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data127/val.txt',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data307/images',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data307/labels',)
+    # ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data127/val.txt',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data307/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data307/labels',)
     # random_kfold(r'/nfsv4/23039356r/data/billboard/bd_data/data127/images', 5,
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data127/labels',)
+
+
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data307/val.txt',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389/labels',)
+
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg/labels',
+    #               train_ratio=0.9)
+    #
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg_c6/labels',
+    #               train_ratio=0.9)
+    #
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_c6/labels',
+    #               train_ratio=0.9)
+
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6_seg/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6_seg/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6_seg/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6_seg/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6_seg/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6_seg/labels',
+    #               train_ratio=0.9)
+    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001/images',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001/labels',
+                  train_ratio=0.9)
+    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005/images',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005/labels',
+                  train_ratio=0.9)
+    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010/images',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010/labels',
+                  train_ratio=0.9)
+
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data611/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data611/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data389/val.txt',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data611/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data611/labels',)
+
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data389/val.txt',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/labels',)

@@ -54,7 +54,7 @@ class MSegmentationValidator(MDetectionValidator):
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 11) % (
+        return ("%22s" + "%11s" * 12) % (
             "Class",
             "Images",
             "Instances",
@@ -67,6 +67,7 @@ class MSegmentationValidator(MDetectionValidator):
             "mAP50",
             "mAP50-95)",
             "OA",
+            "F1",
         )
 
     def postprocess(self, preds):
@@ -100,7 +101,7 @@ class MSegmentationValidator(MDetectionValidator):
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1 = torch.zeros(0, device=self.device),
+                f1 = torch.zeros((0, self.na), device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")

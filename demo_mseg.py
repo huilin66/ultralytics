@@ -1,12 +1,12 @@
 import torch
-from ultralytics import YOLO, RTDETR
+from ultralytics import YOLO
 BATCH_SIZE = 32
-EPOCHS = 100
+EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
 TASK = 'msegment'
 DEVICE = torch.device('cuda:0')
-DATA = "billboard_mseg_307_ref.yaml"
+DATA = "billboard_mseg_389.yaml"
 DATA_TRAIN = DATA.replace('.yaml', '_train.yaml')
 DATA_ALL = DATA.replace('.yaml', '_all.yaml')
 FREEZE_NUMS = {
@@ -46,7 +46,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
         train_params.update(
             {
                 'freeze':get_freeze_num(cfg_path),
-                'freeze_head':['.cv2', '.cv3', '.cv4'],
+                'freeze_head':['.cv2', '.cv3', '.cv4', '.proto'],
                 'freeze_bn':True,
             }
         )
@@ -56,7 +56,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
 
 def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
-    model.val(data=DATA, device=DEVICE, **kwargs)
+    model.val(device=DEVICE, **kwargs)
 
 def model_val_train(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
@@ -136,3 +136,15 @@ if __name__ == '__main__':
 
     # model_export(r'runs/msegment/debug108/weights/best.pt')
 
+    # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389')
+    # model_val('runs/msegment/billboard_mseg_389/weights/best.pt')
+
+    # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389', retrain=True,
+    #        weight_path=r'runs/segment/billboard_seg_3895/weights/best.pt')
+
+    # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389',  data='billboard_mseg_389_filter001_c6.yaml')
+    # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389', data='billboard_mseg_389_filter005_c6.yaml')
+    # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389', data='billboard_mseg_389_filter010_c6.yaml')
+
+    model_val(r'runs/msegment/billboard_mseg_38930/weights/best.pt',
+                        data='billboard_mseg_389_filter010.yaml')

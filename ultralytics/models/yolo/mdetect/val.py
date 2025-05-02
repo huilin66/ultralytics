@@ -147,7 +147,7 @@ class MDetectionValidator(BaseValidator):
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1 = 0,
+                f1 = torch.zeros((0, self.na), device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -194,7 +194,6 @@ class MDetectionValidator(BaseValidator):
     def get_stats(self):
         """Returns metrics statistics and results dictionary."""
         stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()}  # to numpy
-        self.metrics.get_attribute_names()
 
         self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
         self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
@@ -278,12 +277,59 @@ class MDetectionValidator(BaseValidator):
             ap.append(p.unsqueeze(0))
         ap = torch.cat(ap, dim=0)
 
-        tp = torch.sum(correct_box, dim=1)
-        fn = torch.sum(~torch.any(correct_box, dim=0))
-        fp = torch.sum(~torch.any(correct_box, dim=1))
-        precision = tp / (tp + fp + 1e-8)
-        recall = tp / (tp + fn + 1e-8)
-        f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
+        f1_scores = []
+        for k in range(correct_attributes.shape[-1]):
+            idx_i, idx_j = torch.where(correct_box)
+            correct_gt_attributes = gt_attributes[idx_i, k]
+            correct_pre_attributes = pred_attributes_result[idx_j, k]
+
+            tp_per_level, fp_per_level, fn_per_level,num_per_level = [], [], [], []
+            for a in range(nal):
+                num = (correct_gt_attributes == a).sum().item()
+                tp = ((correct_gt_attributes == a) & (correct_pre_attributes == a)).sum().item()
+                fp = ((correct_gt_attributes != a) & (correct_pre_attributes == a)).sum().item()
+                fn = ((correct_gt_attributes == a) & (correct_pre_attributes != a)).sum().item()
+                tp_per_level.append(tp)
+                fp_per_level.append(fp)
+                fn_per_level.append(fn)
+                num_per_level.append(num)
+            tp_sum = sum(tp_per_level)
+            fp_sum = sum(fn_per_level)
+            fn_sum = sum(fn_per_level)
+            num_sum = sum(num_per_level)
+
+            if num_sum == 0:
+                f1 = float('nan')
+            else:
+                precision = tp_sum/(tp_sum+fp_sum) if (tp_sum+fp_sum)>0 else 0
+                recall = tp_sum/(tp_sum+fn_sum) if (tp_sum+fn_sum)>0 else 0
+                f1 = 2 * (precision * recall) / (precision + recall)  if (precision + recall)>0 else 0
+            f1_scores.append(f1)
+
+
+            # f1_per_level = []
+            # for a in range(nal):
+            #     # if no label
+            #     # level_sum = (correct_gt_attributes == a).sum().item()
+            #     # if level_sum==0:
+            #     #     f1_per_level.append(float('nan'))
+            #     #     continue
+            #
+            #     tp = ((correct_gt_attributes == a) & (correct_pre_attributes == a)).sum().item()
+            #     fp = ((correct_gt_attributes != a) & (correct_pre_attributes == a)).sum().item()
+            #     fn = ((correct_gt_attributes == a) & (correct_pre_attributes != a)).sum().item()
+            #
+            #     precision = tp/(tp+fp) if (tp+fp)>0 else 0.0
+            #     recall = tp/(tp+fn) if (tp+fn)>0 else 0.0
+            #
+            #     f1 = 2*(precision*recall)/(precision+recall) if (precision+recall)>0 else float('nan')
+            #     f1_per_level.append(f1)
+            #
+            # macro_f1 = sum(f1_per_level)/len(f1_per_level) if len(f1_per_level)>0 else float('nan')
+            # f1_scores.append(macro_f1)
+
+        f1_scores = torch.tensor(f1_scores).unsqueeze(0).to(self.device)
+
 
         iou = iou.cpu().numpy()
 
@@ -309,7 +355,7 @@ class MDetectionValidator(BaseValidator):
                         matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
                     correct[matches[:, 1].astype(int), i] = True
         correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
-        return correct, ap, f1
+        return correct, ap, f1_scores
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

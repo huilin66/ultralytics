@@ -1,12 +1,13 @@
 import torch
 from ultralytics import YOLO, RTDETR
-BATCH_SIZE = 8
+BATCH_SIZE = 32
 EPOCHS = 500
-IMGSZ = 960
+IMGSZ = 640
 CONF = 0.5
 TASK = 'segment'
-DEVICE = torch.device('cuda:0')
-DATA = 'billboard_seg_307_det_c6.yaml'
+DEVICE = torch.device('cuda:1')
+# DATA = 'billboard_seg_389_c6.yaml'
+DATA = 'billboard_seg_611_ref.yaml'
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -106,6 +107,9 @@ def yolo12(cfg_path, weight_path='yolo12x.pt', auto_optim=True, retrain=False, *
 if __name__ == '__main__':
     pass
     yolo8('yolov8x-seg.yaml', auto_optim=False, name=DATA.replace('.yaml', ''))
+    # yolo8('yolov8x-seg.yaml', auto_optim=False, name=f'billboard_seg_389', data='billboard_seg_389_filter001_c6.yaml')
+    # yolo8('yolov8x-seg.yaml', auto_optim=False, name=f'billboard_seg_389', data='billboard_seg_389_filter005_c6.yaml')
+    # yolo8('yolov8x-seg.yaml', auto_optim=False, name=f'billboard_meg_389',  data='billboard_seg_389_filter010_c6.yaml')
     # yolo9('yolov9e-seg.yaml', auto_optim=False, name='debug')
     # yolo10('yolov10x-seg.yaml', auto_optim=False, name='debug')
     # yolo11('yolo11x-seg.yaml', auto_optim=False, name='debug')

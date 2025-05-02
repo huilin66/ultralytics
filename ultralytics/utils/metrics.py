@@ -894,7 +894,7 @@ class Metric(SimpleClass):
         """Initialize a Metric instance for computing evaluation metrics for the YOLOv8 model."""
         self.p = []  # (nc, )
         self.r = []  # (nc, )
-        self.f1 = []  # (nc, )
+        self.all_f1 = []  # (nc, )
         self.all_ap = []  # (nc, 10)
         self.ap_class_index = []  # (nc, )
         self.nc = 0
@@ -983,6 +983,30 @@ class Metric(SimpleClass):
                 ap_mean = 0
             return ap_mean
 
+
+    @property
+    def mf1(self):
+        """
+        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+
+        Returns:
+            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        """
+        if isinstance(self.all_f1, list):
+            all_f1 = np.array(self.all_f1)
+            all_f1 = all_f1.mean()
+            if np.isnan(all_f1):
+                return 0
+            else:
+                return all_f1
+        else:
+            if len(self.all_f1)> 0:
+                assert isinstance(self.all_f1, np.ndarray), ValueError(self.all_f1)
+                f1_class = self.all_f1.mean(axis=0)
+                f1_mean = f1_class.mean()
+            else:
+                f1_mean = 0
+            return f1_mean
 
     def mean_results(self):
         """Return mean of results, mp, mr, map50, map."""
@@ -1413,7 +1437,6 @@ class SegmentMetrics(SimpleClass):
         return self.box.curves_results + self.seg.curves_results
 
 
-
 class MSegmentMetrics(SimpleClass):
     """
     Calculates and aggregates detection and segmentation metrics over a given set of classes.
@@ -1459,20 +1482,6 @@ class MSegmentMetrics(SimpleClass):
         self.na = na
         self.nal = nal
 
-    def get_attribute_names(self):
-        pass
-        # attribute_dict = self.attribute_names
-        # attribute_names = []
-        # for k, v in attribute_dict.items():
-        #     if len(v) == 2:
-        #         attribute_names.append(k)
-        #     elif len(v) > 2:
-        #         for i in range(1, len(v)):
-        #             attribute_name = '%s_%s'%(k, v[i])
-        #             attribute_names.append(attribute_name)
-        #     else:
-        #         print('Error in get_attribute_names')
-        # self.attribute_names = attribute_names
 
     def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1):
         """
@@ -1513,8 +1522,8 @@ class MSegmentMetrics(SimpleClass):
         self.box.nc = self.nc
         self.box.update(results_box)
         self.attributes.nc = self.na
-        self.attributes.all_ap = np.mean(ap, axis=0)
-        self.attributes.f1 = np.mean(f1)
+        self.attributes.all_ap = np.nanmean(ap, axis=0)
+        self.attributes.all_f1 = np.nanmean(f1, axis=0)
 
     @property
     def keys(self):
@@ -1528,19 +1537,20 @@ class MSegmentMetrics(SimpleClass):
             "metrics/recall(M)",
             "metrics/mAP50(M)",
             "metrics/mAP50-95(M)",
-            "metrics/mAP"
+            "metrics/mAP",
+            "metrics/f1",
         ]
 
     def mean_results(self):
         """Return the mean metrics for bounding box and segmentation results."""
-        return self.box.mean_results() + self.seg.mean_results() + [self.attributes.map]
+        return self.box.mean_results() + self.seg.mean_results() + [self.attributes.map, self.attributes.mf1]
 
     def class_result(self, i):
         """Returns classification results for a specified class index."""
         if i < self.nc:
-            return self.box.class_result(i) + self.seg.class_result(i) + (0, )
+            return self.box.class_result(i) + self.seg.class_result(i) + (0, 0)
         else:
-            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc],)
+            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc], self.attributes.all_f1[i - self.nc])
 
     @property
     def maps(self):
