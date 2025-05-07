@@ -296,16 +296,6 @@ class v8SegmentationLoss(v8DetectionLoss):
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
         pred_masks = pred_masks.permute(0, 2, 1).contiguous()
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2001.pth'
-        # torch.save(pred_scores, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2002.pth'
-        # torch.save(pred_distri, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2003.pth'
-        # torch.save(pred_masks, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2004.pth'
-        # torch.save(feats, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2005.pth'
-        # torch.save(proto, save_pred_path)
 
         dtype = pred_scores.dtype
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
@@ -326,13 +316,9 @@ class v8SegmentationLoss(v8DetectionLoss):
                 "correctly formatted 'segment' dataset using 'data=coco8-seg.yaml' "
                 "as an example.\nSee https://docs.ultralytics.com/datasets/segment/ for help."
             ) from e
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2006.pth'
-        # torch.save(mask_gt, save_pred_path)
 
         # Pboxes
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2007.pth'
-        # torch.save(pred_bboxes, save_pred_path)
 
         _, target_bboxes, target_scores, fg_mask, target_gt_idx = self.assigner(
             pred_scores.detach().sigmoid(),
@@ -342,32 +328,13 @@ class v8SegmentationLoss(v8DetectionLoss):
             gt_bboxes,
             mask_gt,
         )
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2008.pth'
-        # torch.save(fg_mask, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2009.pth'
-        # torch.save(target_bboxes, save_pred_path)
 
         target_scores_sum = max(target_scores.sum(), 1)
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2010.pth'
-        # torch.save(pred_distri, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2011.pth'
-        # torch.save(pred_bboxes, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2012.pth'
-        # torch.save(anchor_points, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2013.pth'
-        # torch.save(stride_tensor, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2014.pth'
-        # torch.save(target_scores, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2015.pth'
-        # torch.save(target_scores_sum, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2016.pth'
-        # torch.save(target_bboxes, save_pred_path)
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2017.pth'
-        # torch.save(fg_mask, save_pred_path)
+
         if fg_mask.sum():
             # Bbox loss
             loss[0], loss[3] = self.bbox_loss(
@@ -379,8 +346,6 @@ class v8SegmentationLoss(v8DetectionLoss):
                 target_scores_sum,
                 fg_mask,
             )
-            # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg2018.pth'
-            # torch.save(fg_mask, save_pred_path)
             # Masks loss
             masks = batch["masks"].to(self.device).float()
             if tuple(masks.shape[-2:]) != (mask_h, mask_w):  # downsample
@@ -399,9 +364,6 @@ class v8SegmentationLoss(v8DetectionLoss):
         loss[2] *= self.hyp.cls  # cls gain
         loss[3] *= self.hyp.dfl  # dfl gain
 
-
-        # save_loss_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/loss_seg2000.pth'
-        # torch.save(loss, save_loss_path)
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
     @staticmethod

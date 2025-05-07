@@ -1,13 +1,13 @@
 import torch
 from ultralytics import YOLO, RTDETR
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
 TASK = 'segment'
 DEVICE = torch.device('cuda:1')
-# DATA = 'billboard_seg_389_c6.yaml'
-DATA = 'billboard_seg_611_ref.yaml'
+DATA = 'billboard_seg_389_c6.yaml'
+# DATA = 'billboard_seg_611_ref.yaml'
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -19,12 +19,7 @@ FREEZE_NUMS = {
 
 def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
     model = network(cfg_path, task=TASK)
-    # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1.pth'
-    # torch.save(model.model.state_dict(), save_ckpt_path)
-    # return
     model.load(pretrain_path)
-    # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg2.pth'
-    # torch.save(model.model.state_dict(), save_ckpt_path)
     train_params = {
         'data': DATA,
         'device': DEVICE,
@@ -106,6 +101,7 @@ def yolo12(cfg_path, weight_path='yolo12x.pt', auto_optim=True, retrain=False, *
 
 if __name__ == '__main__':
     pass
+    yolo8('yolov8x-seg-p2.yaml', auto_optim=False, name=DATA.replace('.yaml', ''))
     yolo8('yolov8x-seg.yaml', auto_optim=False, name=DATA.replace('.yaml', ''))
     # yolo8('yolov8x-seg.yaml', auto_optim=False, name=f'billboard_seg_389', data='billboard_seg_389_filter001_c6.yaml')
     # yolo8('yolov8x-seg.yaml', auto_optim=False, name=f'billboard_seg_389', data='billboard_seg_389_filter005_c6.yaml')
@@ -120,4 +116,5 @@ if __name__ == '__main__':
     # model_val(r'runs/segment/train3/weights/best.pt')
     # model_predict(r'runs/segment/debug13/weights/best.pt',
     #               r'/nfsv4/23039356r/data/billboard/data0521_m/yolo_rgb_segmentation2_seg/images')
+    # model_val(r'runs/segment/billboard_seg_611_ref2/weights/best.pt')
 

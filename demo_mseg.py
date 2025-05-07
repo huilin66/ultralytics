@@ -146,5 +146,8 @@ if __name__ == '__main__':
     # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389', data='billboard_mseg_389_filter005_c6.yaml')
     # yolo8x('yolov8x-mseg.yaml', auto_optim=False, name=f'billboard_mseg_389', data='billboard_mseg_389_filter010_c6.yaml')
 
-    model_val(r'runs/msegment/billboard_mseg_38930/weights/best.pt',
-                        data='billboard_mseg_389_filter010.yaml')
+    # model_val(r'runs/msegment/billboard_mseg_38930/weights/best.pt',
+    #                     data='billboard_mseg_389_filter010.yaml')
+
+    model_val(r'runs/msegment/billboard_mseg_38916/weights/best.pt',
+                        data='billboard_mseg_389_c6.yaml')

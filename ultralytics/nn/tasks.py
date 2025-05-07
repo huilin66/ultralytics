@@ -116,11 +116,6 @@ class BaseModel(torch.nn.Module):
             (torch.Tensor): Loss if x is a dict (training), or network predictions (inference).
         """
         if isinstance(x, dict):  # for cases of training and validating while training.
-            # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg1.pth'
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1.pth'
-            # torch.save(x, save_data_path)
-            # torch.save(self.model.state_dict(), save_ckpt_path)
-            # return
             return self.loss(x, *args, **kwargs)
         return self.predict(x, *args, **kwargs)
 
@@ -281,25 +276,148 @@ class BaseModel(torch.nn.Module):
             verbose (bool, optional): Whether to log the transfer progress.
         """
 
-        def not_supported_dicts(da, db):
+        def not_supported_dicts(da, db, insert=False):
             """Returns a dictionary of intersecting keys with matching shapes, excluding 'exclude' keys, using da values."""
-            usd = []
-            for k, v in db.items():
-                if k in da and v.shape == da[k].shape:
-                    pass
-                else:
-                    if k in da:
-                        usd.append([k, v.shape, da[k].shape])
+            data1 = {}
+            data2 = {}
+            if insert:
+                for k, v in da.items():
+                    if 'model.16.' in k:
+                        k_new = k.replace('model.16.', 'model.22.')
+                    elif 'model.18.' in k:
+                        k_new = k.replace('model.18.', 'model.24.')
+                    elif 'model.19.' in k:
+                        k_new = k.replace('model.19.', 'model.25.')
+                    elif 'model.21.' in k:
+                        k_new = k.replace('model.21.', 'model.27.')
+                    elif 'model.22.' in k:
+                        if 'model.22.cv2.0' in k:
+                            k_new = k.replace('model.22.cv2.0', 'model.28.cv2.1')
+                        elif 'model.22.cv2.1' in k:
+                            k_new = k.replace('model.22.cv2.1', 'model.28.cv2.2')
+                        elif 'model.22.cv2.2' in k:
+                            k_new = k.replace('model.22.cv2.2', 'model.28.cv2.3')
+                        elif 'model.22.cv3.0' in k:
+                            k_new = k.replace('model.22.cv3.0', 'model.28.cv3.1')
+                        elif 'model.22.cv3.1' in k:
+                            k_new = k.replace('model.22.cv3.1', 'model.28.cv3.2')
+                        elif 'model.22.cv3.2' in k:
+                            k_new = k.replace('model.22.cv3.2', 'model.28.cv3.3')
+                        else:
+                            k_new = k.replace('model.22.', 'model.28.')
                     else:
-                        usd.append([k, v.shape])
-            for k in usd:
-                print(k)
-            return usd
+                        k_new = k
+                    if k_new in db and v.shape == db[k_new].shape:
+                        pass
+                    else:
+                        data1[k] = v
+                for k, v in db.items():
+                    if 'model.22.' in k:
+                        k_new = k.replace('model.22.', 'model.16.')
+                    elif 'model.24.' in k:
+                        k_new = k.replace('model.24.', 'model.18.')
+                    elif 'model.25.' in k:
+                        k_new = k.replace('model.25.', 'model.19.')
+                    elif 'model.27.' in k:
+                        k_new = k.replace('model.27.', 'model.21.')
+                    elif 'model.28.' in k:
+                        if 'model.28.cv2.1' in k:
+                            k_new = k.replace('model.28.cv2.1', 'model.22.cv2.0')
+                        elif 'model.28.cv2.2' in k:
+                            k_new = k.replace('model.28.cv2.2', 'model.22.cv2.1')
+                        elif 'model.28.cv2.3' in k:
+                            k_new = k.replace('model.28.cv2.3', 'model.22.cv2.2')
+                        elif 'model.28.cv3.1' in k:
+                            k_new = k.replace('model.28.cv3.1', 'model.22.cv3.0')
+                        elif 'model.28.cv3.2' in k:
+                            k_new = k.replace('model.28.cv3.2', 'model.22.cv3.1')
+                        elif 'model.28.cv3.3' in k:
+                            k_new = k.replace('model.28.cv3.3', 'model.22.cv3.2')
+                        else:
+                            k_new = k.replace('model.28.', 'model.22.')
+                    else:
+                        k_new = k
+                    if k_new in da and v.shape == da[k_new].shape:
+                        pass
+                    else:
+                        data2[k] = 0
+            else:
+                for k, v in da.items():
+                    if k in db and v.shape == db[k].shape:
+                        pass
+                    else:
+                        data1[k] = v
+                for k, v in db.items():
+                    if k in da and v.shape == da[k].shape:
+                        pass
+                    else:
+                        data2[k] = v
+            return data1, data2
+
+
+        def supported_dicts(da, db, insert=False, exclude=()):
+            """
+            Returns a dictionary of intersecting keys with matching shapes, excluding 'exclude' keys, using da values.
+
+            Args:
+                da (dict): First dictionary.
+                db (dict): Second dictionary.
+                exclude (tuple, optional): Keys to exclude. Defaults to ().
+
+            Returns:
+                (dict): Dictionary of intersecting keys with matching shapes.
+            """
+            if insert:
+                data = {}
+                for k, v in da.items():
+                    if 'model.16.' in k:
+                        k_new = k.replace('model.16.', 'model.22.')
+                    elif 'model.18.' in k:
+                        k_new = k.replace('model.18.', 'model.24.')
+                    elif 'model.19.' in k:
+                        k_new = k.replace('model.19.', 'model.25.')
+                    elif 'model.21.' in k:
+                        k_new = k.replace('model.21.', 'model.27.')
+                    elif 'model.22.' in k:
+                        if 'model.22.cv2.0' in k:
+                            k_new = k.replace('model.22.cv2.0', 'model.28.cv2.1')
+                        elif 'model.22.cv2.1' in k:
+                            k_new = k.replace('model.22.cv2.1', 'model.28.cv2.2')
+                        elif 'model.22.cv2.2' in k:
+                            k_new = k.replace('model.22.cv2.2', 'model.28.cv2.3')
+                        elif 'model.22.cv3.0' in k:
+                            k_new = k.replace('model.22.cv3.0', 'model.28.cv3.1')
+                        elif 'model.22.cv3.1' in k:
+                            k_new = k.replace('model.22.cv3.1', 'model.28.cv3.2')
+                        elif 'model.22.cv3.2' in k:
+                            k_new = k.replace('model.22.cv3.2', 'model.28.cv3.3')
+                        else:
+                            k_new = k.replace('model.22.', 'model.28.')
+                    else:
+                        k_new = k
+                    if k_new in db and all(x not in k_new for x in exclude) and v.shape == db[k_new].shape:
+                        data[k_new] = v
+            else:
+                data = {}
+                for k, v in da.items():
+                    if k in db and all(x not in k for x in exclude) and v.shape == db[k].shape:
+                        data[k] = v
+            return data
 
         model = weights["model"] if isinstance(weights, dict) else weights  # torchvision models are not dicts
         csd = model.float().state_dict()  # checkpoint state_dict as FP32
-        # usd = not_supported_dicts(csd, self.state_dict())
-        csd = intersect_dicts(csd, self.state_dict())  # intersect
+        if hasattr(self, 'args'):
+            if 'p2' in self.args['model'] and 'yolov8x' in self.args['model'] and len(csd) != len(self.state_dict()):
+                insert = True
+            else:
+                insert = False
+            # TODO usd_model1 confirm
+            usd_file1, usd_model1 = not_supported_dicts(csd, self.state_dict(), insert=insert)
+            csd1 = supported_dicts(csd, self.state_dict(), insert=insert)
+            csd = csd1
+        else:
+            usd_file0, usd_model0 = not_supported_dicts(csd, self.state_dict())
+            csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
         if verbose:
             LOGGER.info(f"\n++++++++++ Transferred [{len(csd)}/{len(self.model.state_dict())}] items from pretrained weights ++++++++++\n")
@@ -315,19 +433,7 @@ class BaseModel(torch.nn.Module):
         if getattr(self, "criterion", None) is None:
             self.criterion = self.init_criterion()
 
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1000.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1001.pth'
-        # torch.save(self.state_dict(), save_ckpt_path)
-        # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg1001.pth'
-        # torch.save(batch, save_data_path)
         preds = self.forward(batch["img"]) if preds is None else preds
-        # save_pred_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/pred_seg1000.pth'
-        # torch.save(preds, save_pred_path)
-        # loss = self.criterion(preds, batch)
-        # # save_loss_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/loss_seg1000.pth'
-        # # torch.save(loss, save_loss_path)
-        # return
         return self.criterion(preds, batch)
 
     def init_criterion(self):
@@ -363,71 +469,26 @@ class DetectionModel(BaseModel):
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml["nc"] = nc  # override YAML value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102501.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.inplace = self.yaml.get("inplace", True)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102502.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.end2end = getattr(self.model[-1], "end2end", False)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102503.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Build strides
         m = self.model[-1]  # Detect()
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102504.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         if isinstance(m, Detect):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102505.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             s = 256  # 2x min stride
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102506.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.inplace = self.inplace
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102507.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             def _forward(x):
                 """Perform a forward pass through the model, handling different Detect subclass types accordingly."""
                 if self.end2end:
                     return self.forward(x)["one2many"]
-                # if isinstance(m, (Segment, Pose, OBB)):
-                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg10000.pth'
-                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg10000.pth'
-                #     # torch.save(x, save_data_path)
-                #     # torch.save(self.model.state_dict(), save_ckpt_path)
-                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg10001.pth'
-                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg10001.pth'
-                #     # torch.save(x, save_data_path)
-                #     torch.save(self.state_dict(), save_ckpt_path)
-                #     z = self.forward(x)[0]
-                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg20000.pth'
-                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg20000.pth'
-                #     torch.save(z, save_data_path)
-                #     torch.save(self.model.state_dict(), save_ckpt_path)
-                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_seg20001.pth'
-                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg20001.pth'
-                #     torch.save(z, save_data_path)
-                #     torch.save(self.state_dict(), save_ckpt_path)
-                #     return z
                 return self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB)) else self.forward(x)
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102508.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))])  # forward
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg102509.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             self.stride = m.stride
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg1025.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.bias_init()  # only run once
         else:
             self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg103.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Init weights, biases
         initialize_weights(self)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg104.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         if verbose:
             self.info()
             LOGGER.info("")
@@ -533,74 +594,27 @@ class MDetectionModel(BaseModel):
             LOGGER.info(f"Overriding model.yaml nal={self.yaml['nal']} with nal={nal}")
             self.yaml["nal"] = nal  # override YAML value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102501.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.attribute_names = {i: f"{i}" for i in range(self.yaml["na"])}
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102511.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.inplace = self.yaml.get("inplace", True)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102502.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         self.end2end = getattr(self.model[-1], "end2end", False)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102503.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Build strides
         m = self.model[-1]  # Detect()
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102504.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         if isinstance(m, MDetect):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102505.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             s = 256  # 2x min stride
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102506.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.inplace = self.inplace
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102507.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             def _forward(x):
                 """Performs a forward pass through the model, handling different Detect subclass types accordingly."""
                 if self.end2end:
                     return self.forward(x)["one2many"]
-                # if isinstance(m, (MSegment, Pose, OBB)):
-                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg10000.pth'
-                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg10000.pth'
-                #     torch.save(x, save_data_path)
-                #     torch.save(self.model.state_dict(), save_ckpt_path)
-                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg10001.pth'
-                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg10001.pth'
-                #     # torch.save(x, save_data_path)
-                #     # torch.save(self.state_dict(), save_ckpt_path)
-                #     z = self.forward(x)[0]
-                #     save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg20000.pth'
-                #     save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg20000.pth'
-                #     torch.save(z, save_data_path)
-                #     torch.save(self.model.state_dict(), save_ckpt_path)
-                #     # save_data_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/data_mseg20001.pth'
-                #     # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg20001.pth'
-                #     # torch.save(z, save_data_path)
-                #     # torch.save(self.state_dict(), save_ckpt_path)
-                #     return z
                 return self.forward(x)[0] if isinstance(m, (MSegment, Pose, OBB)) else self.forward(x)
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102508.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))])  # forward
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg102509.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             self.stride = m.stride
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg1025.pth'
-            # torch.save(self.model.state_dict(), save_ckpt_path)
             m.bias_init()  # only run once
         else:
             self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg103.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         # Init weights, biases
         initialize_weights(self)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg104.pth'
-        # torch.save(self.model.state_dict(), save_ckpt_path)
         if verbose:
             self.info()
             LOGGER.info("")
