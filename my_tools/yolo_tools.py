@@ -192,5 +192,10 @@ if __name__ == '__main__':
     #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6_seg', cp_img=True)
 
 
-    mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611',
-             output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg', cp_img=True)
+    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611',
+    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg', cp_img=True)
+
+    mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618',
+             output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg', cp_img=True)
+    seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg',
+                 output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6', cp_img=True)
