@@ -1026,7 +1026,7 @@ class Metric(SimpleClass):
 
     def fitness(self):
         """Return model fitness as a weighted combination of metrics."""
-        w = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
+        w = [0.0, 0.0, 1.0, 0.0]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
         return (np.array(self.mean_results()) * w).sum()
 
     def update(self, results):
@@ -1278,7 +1278,7 @@ class MDetMetrics(SimpleClass):
     @property
     def fitness(self):
         """Returns the fitness of box object."""
-        return self.box.fitness()*100 + self.box.fitness() * self.attributes.map
+        return self.box.fitness()*100 + self.box.fitness() * self.attributes.mf1
 
     @property
     def ap_class_index(self):
@@ -1560,7 +1560,7 @@ class MSegmentMetrics(SimpleClass):
     @property
     def fitness(self):
         """Get the fitness score for both segmentation and bounding box models."""
-        return (self.seg.fitness() + self.box.fitness())* self.attributes.map
+        return (self.seg.fitness() + self.box.fitness())* (100 + self.attributes.mf1)
 
     @property
     def ap_class_index(self):
