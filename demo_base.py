@@ -19,8 +19,8 @@ FREEZE_NUMS = {
 
 # region meta tools
 
-def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, task=TASK, **kwargs):
-    model = network(cfg_path, task=task)
+def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
+    model = network(cfg_path, task=TASK)
     model.load(pretrain_path)
     train_params = {
         'data': DATA,
@@ -49,7 +49,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
 
     train_params.update(kwargs)
     if "name" not in train_params:
-        train_params["name"] = f"{train_params['data'].replace('.yaml', '')}-{cfg_path.replace('.yaml', '')}"
+        train_params["name"] = f"{train_params['data'].replace('.yaml', '')}-[{cfg_path.replace('.yaml', '')}]"
     model.train(**train_params)
 
 def model_val(weight_path, network=YOLO, **kwargs):

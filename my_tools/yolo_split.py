@@ -187,9 +187,9 @@ if __name__ == '__main__':
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/images',
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/labels',)
 
-    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6/images',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6/labels',
+    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/images',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/labels',
                   train_ratio=0.9)
     ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data389/val.txt',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6/images',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6/labels',)
+                  r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/images',
+                  r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/labels',)

@@ -3,7 +3,20 @@ import shutil
 
 from tqdm import tqdm
 from pathlib import Path
-
+def mseg2seg_gt(input_dir, output_dir):
+    label_list = os.listdir(input_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    for label_name in tqdm(label_list):
+        input_label_path = os.path.join(input_dir, label_name)
+        output_label_path = os.path.join(output_dir, label_name)
+        with open(input_label_path, 'r') as f_in, open(output_label_path, 'w+') as f_out:
+            lines = f_in.readlines()
+            for line in lines:
+                num_list = line.split(' ')
+                attribute_num = int(num_list[1])
+                num_list_seg = num_list[:1]+num_list[1+attribute_num+1:]
+                line_seg = ' '.join(num_list_seg)
+                f_out.write(line_seg)
 def mseg2seg(input_dir, output_dir, cp_img=True):
     input_label_dir = os.path.join(input_dir, 'labels')
     output_label_dir = os.path.join(output_dir, 'labels')
@@ -55,7 +68,22 @@ def mseg_class_update(input_dir, output_dir, cp_img=True):
             output_image_path = os.path.join(output_image_dir, image_name)
             shutil.copy(input_image_path, output_image_path)
 
+def seg_class_update_gt(input_dir, output_dir):
+    label_list = os.listdir(input_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    for label_name in tqdm(label_list):
+        input_label_path = os.path.join(input_dir, label_name)
+        output_label_path = os.path.join(output_dir, label_name)
 
+        with open(input_label_path, 'r') as f:
+            lines = f.readlines()
+            for idx, line in enumerate(lines):
+                if line[0] == '0':
+                    continue
+                else:
+                    lines[idx] = str(int(lines[idx][0])-1)+lines[idx][1:]
+        with open(output_label_path, 'w') as f:
+            f.writelines(lines)
 def seg_class_update(input_dir, output_dir, cp_img=True):
     input_label_dir = os.path.join(input_dir, 'labels')
     output_label_dir = os.path.join(output_dir, 'labels')
@@ -158,6 +186,22 @@ def filter_yolo_segmentation(input_file, output_file, threshold, with_attribute=
         if src_count != dst_count:
             print(f'{os.path.basename(input_file)} change from {src_count} --> {dst_count}')
 
+def data_copy(input_dir, output_dir):
+    input_image_dir = os.path.join(input_dir, 'images')
+    input_label_dir = os.path.join(input_dir, 'labels')
+    output_image_dir = os.path.join(output_dir, 'images')
+    output_label_dir = os.path.join(output_dir, 'labels')
+    os.makedirs(output_image_dir, exist_ok=True)
+    os.makedirs(output_label_dir, exist_ok=True)
+    image_list = os.listdir(input_image_dir)
+    for image_name in tqdm(image_list):
+        label_name = Path(image_name).stem + '.txt'
+        input_image_path = os.path.join(input_image_dir, image_name)
+        input_label_path = os.path.join(input_label_dir, label_name)
+        output_image_path = os.path.join(output_image_dir, image_name)
+        output_label_path = os.path.join(output_label_dir, label_name)
+        shutil.copy(input_image_path, output_image_path)
+        shutil.copy(input_label_path, output_label_path)
 
 if __name__ == '__main__':
     pass
@@ -195,7 +239,24 @@ if __name__ == '__main__':
     # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611',
     #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg', cp_img=True)
 
-    mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618',
-             output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg', cp_img=True)
-    seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg',
-                 output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6', cp_img=True)
+    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618',
+    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg', cp_img=True)
+    # seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg',
+    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6', cp_img=True)
+
+    # seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618',
+    #                  output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_mseg_c6', cp_img=True)
+
+    # data_copy(input_dir='/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6',
+    #           output_dir='/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6',
+    #           )
+
+    # mseg2seg_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels',
+    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels_seg')
+    # seg_class_update_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels_seg',
+    #                     output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels_seg_c6')
+
+    # mseg2seg_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6/added_labels/labels',
+    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6/added_labels/labels_seg')
+    seg_class_update_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg',
+                        output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg_c6')
