@@ -11,8 +11,8 @@ demo_base.CONF = 0.5
 if __name__ == '__main__':
     pass
     # demo_base.yolo8x('yolov8x.yaml', auto_optim=False, data=".yaml")
-    demo_base.model_val('/localnvme/project/ultralytics/runs/detect/obj_t-[yolov8x]2/weights/best.pt', batch=32)
-    demo_base.model_predict('/localnvme/project/ultralytics/runs/detect/obj_t-[yolov8x]2/weights/best.pt',
+    demo_base.model_val('/localnvme/project/ultralytics/runs/detect/obj_t-[yolov8x]5/weights/best.pt', batch=32)
+    demo_base.model_predict('/localnvme/project/ultralytics/runs/detect/obj_t-[yolov8x]5/weights/best.pt',
                             r'/localnvme/data/added_data/rgbt/Testset/TIR',
                             name=r'/localnvme/data/added_data/rgbt/Testset/TIR_infer_obj_rgb-[yolov8x]-%.2f'%demo_base.CONF,
                             batch=32, save_conf=True)

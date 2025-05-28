@@ -10,8 +10,8 @@ demo_base.DATA = "fusedata870_seg_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False)
-    demo_base.yolo8x('yolov8x-seg-dlka3res.yaml', auto_optim=False)
+    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False)
+    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
     # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_c6.yaml", name='debug')
     # demo_base.yolo8x('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_f001_c6.yaml")
     # demo_base.yolo8x('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata244_seg_c6.yaml")

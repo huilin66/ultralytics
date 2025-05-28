@@ -56,12 +56,13 @@ def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
     model.val(device=DEVICE, **kwargs)
 
-def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True,**kwargs):
+def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):
     model = network(weight_path, task=TASK)
     result = model.predict(
         img_dir,
         save=save,
         save_txt=save_txt,
+        stream=stream,
         conf=CONF,
         device=DEVICE,
         imgsz=IMGSZ,

@@ -10,5 +10,5 @@ demo_base.DATA = ".yaml"
 if __name__ == '__main__':
     pass
     # demo_base.yolo8x('yolov8x.yaml', auto_optim=False, data="obj_rgb.yaml")
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="obj_t.yaml")
-    # demo_base.yolo8x('yolov8x.yaml', auto_optim=False, data="obj_t.yaml", epochs=500)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="obj_t.yaml")
+    demo_base.yolo12('yolo12x.yaml', auto_optim=False, data="obj_t.yaml")
