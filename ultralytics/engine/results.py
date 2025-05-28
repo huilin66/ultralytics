@@ -1276,7 +1276,7 @@ class MdetResults(SimpleClass):
                 br_poss = []
                 for idx, (k, v) in enumerate(attribute.items()):
                     label = f'{k}-{v}'
-                    if filter_no and not v:
+                    if filter_no and (not v or 'no' in v):
                         continue
                     count += 1
                     pos = [pos_base[0], pos_base[1]+15*(count+1)-10]

@@ -36,22 +36,7 @@ class MDetectionPredictor(BasePredictor):
             orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
 
         return self.construct_results(preds, img, orig_imgs, **kwargs)
-        # results = []
-        # for i, pred in enumerate(preds):
-        #     orig_img = orig_imgs[i]
-        #     pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-        #     img_path = self.batch[0][i]
-        #     results.append(
-        #         MdetResults(
-        #             orig_img,
-        #             path=img_path,
-        #             names=self.model.model.names,
-        #             boxes=pred[:, :6],
-        #             attributes=pred[:, 6:],
-        #             attribute_names=self.model.model.attribute_names,
-        #         )
-        #     )
-        # return results
+
     def construct_results(self, preds, img, orig_imgs):
         """
         Construct a list of Results objects from model predictions.

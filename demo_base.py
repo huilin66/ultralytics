@@ -56,17 +56,18 @@ def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
     model.val(device=DEVICE, **kwargs)
 
-def model_predict(weight_path, img_dir, network=YOLO, **kwargs):
+def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True,**kwargs):
     model = network(weight_path, task=TASK)
-    model.predict(
+    result = model.predict(
         img_dir,
-        save=True,
+        save=save,
+        save_txt=save_txt,
         conf=CONF,
         device=DEVICE,
         imgsz=IMGSZ,
-        save_txt=True,
         **kwargs,
     )
+    for _ in result: pass
 
 def model_export(weight_path, format='onnx', network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
@@ -89,23 +90,23 @@ def get_freeze_num(cfg_path):
 
 # region run tools
 
-def yolo8x(cfg_path, weight_path='yolov8x.pt', auto_optim=True, retrain=False, **kwargs):
+def yolo8(cfg_path, weight_path='yolov8x.pt', auto_optim=True, retrain=False, **kwargs):
     assert 'yolov8' in cfg_path or 'yolo8' in cfg_path, ValueError(cfg_path, 'is not yolov8 config!')
     model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
-def yolo9e(cfg_path, weight_path='yolov9e.pt', auto_optim=True, retrain=False, **kwargs):
+def yolo9(cfg_path, weight_path='yolov9e.pt', auto_optim=True, retrain=False, **kwargs):
     assert 'yolov9' in cfg_path or 'yolo9' in cfg_path, ValueError(cfg_path, 'is not yolov9 config!')
     model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
-def yolo10x(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False, **kwargs):
+def yolo10(cfg_path, weight_path='yolov10x.pt', auto_optim=True, retrain=False, **kwargs):
     assert 'yolov10' in cfg_path or 'yolo10' in cfg_path, ValueError(cfg_path, 'is not yolov10 config!')
     model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
-def yolo11x(cfg_path, weight_path='yolo11x.pt', auto_optim=True, retrain=False, **kwargs):
+def yolo11(cfg_path, weight_path='yolo11x.pt', auto_optim=True, retrain=False, **kwargs):
     assert 'yolov11' in cfg_path or 'yolo11' in cfg_path, ValueError(cfg_path, 'is not yolov11 config!')
     model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 
-def yolo12x(cfg_path, weight_path='yolo12x.pt', auto_optim=True, retrain=False, **kwargs):
+def yolo12(cfg_path, weight_path='yolo12x.pt', auto_optim=True, retrain=False, **kwargs):
     assert 'yolov12' in cfg_path or 'yolo12' in cfg_path, ValueError(cfg_path, 'is not yolov12 config!')
     model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
 # endregion

@@ -187,9 +187,51 @@ if __name__ == '__main__':
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/images',
     #               r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg/labels',)
 
-    random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/images',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/labels',
+    # random_select(r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data389/val.txt',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/images',
+    #               r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/labels',)
+
+    # random_select(r'/localnvme/data/billboard/bd_data/data626_seg_c6/images',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_c6/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/localnvme/data/billboard/bd_data/data389/val.txt',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_c6/images',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_c6/labels',)
+
+    # random_select(r'/localnvme/data/billboard/bd_data/data626_seg_f001_c6/images',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_f001_c6/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/localnvme/data/billboard/bd_data/data389/val.txt',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_f001_c6/images',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_f001_c6/labels',)
+    # random_select(r'/localnvme/data/billboard/bd_data/data626_seg_f010_c6/images',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_f010_c6/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/localnvme/data/billboard/bd_data/data389/val.txt',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_f010_c6/images',
+    #               r'/localnvme/data/billboard/bd_data/data626_seg_f010_c6/labels',)
+    #
+
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata122_seg_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata122_seg_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata122_seg_f001_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata122_seg_f001_c6/labels',
+    #               train_ratio=0.9)
+
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata244_seg_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata244_seg_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata244_seg_f001_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata244_seg_f001_c6/labels',
+    #               train_ratio=0.9)
+
+    # random_select(r'/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/images',
+    #               r'/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/labels',
+    #               train_ratio=0.9)
+    random_select(r'/localnvme/data/added_data/rgbt/ODinMJ/t_data/images',
+                  r'/localnvme/data/added_data/rgbt/ODinMJ/t_data/labels',
                   train_ratio=0.9)
-    ref_split(r'/nfsv4/23039356r/data/billboard/bd_data/data389/val.txt',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/images',
-                  r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/labels',)

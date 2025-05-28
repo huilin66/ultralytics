@@ -616,13 +616,18 @@ class v8PoseLoss(v8DetectionLoss):
 class v8ClassificationLoss:
     """Criterion class for computing training losses for classification."""
 
+    # def __call__(self, preds, batch):
+    #     """Compute the classification loss between predictions and true labels."""
+    #     preds = preds[1] if isinstance(preds, (list, tuple)) else preds
+    #     loss = F.cross_entropy(preds, batch["cls"], reduction="mean")
+    #     loss_items = loss.detach()
+    #     return loss, loss_items
     def __call__(self, preds, batch):
         """Compute the classification loss between predictions and true labels."""
         preds = preds[1] if isinstance(preds, (list, tuple)) else preds
-        loss = F.cross_entropy(preds, batch["cls"], reduction="mean")
+        loss = F.cross_entropy(preds, batch["cls"], reduction="mean", weight=torch.tensor([1, 50, 50], dtype=preds.dtype, device=preds.device))
         loss_items = loss.detach()
         return loss, loss_items
-
 
 class v8OBBLoss(v8DetectionLoss):
     """Calculates losses for object detection, classification, and box distribution in rotated YOLO models."""

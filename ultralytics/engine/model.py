@@ -785,14 +785,7 @@ class Model(torch.nn.Module):
         self.trainer = (trainer or self._smart_load("trainer"))(overrides=args, _callbacks=self.callbacks)
         if not args.get("resume"):  # manually set model only if not resuming
             self.trainer.model = self.trainer.get_model(weights=self.model if self.ckpt else None, cfg=self.model.yaml)
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg100.pth'
-            # torch.save(self.trainer.model.model.state_dict(), save_ckpt_path)
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg101.pth'
-            # torch.save(self.model.model.state_dict(), save_ckpt_path)
             self.model = self.trainer.model
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_mseg4.pth'
-        # torch.save(self.trainer.model.model.state_dict(), save_ckpt_path)
-        # return
         self.trainer.hub_session = self.session  # attach optional HUB session
         self.trainer.train()
         # Update model and cfg after training

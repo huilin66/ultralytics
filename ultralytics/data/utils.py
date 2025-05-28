@@ -509,6 +509,9 @@ def check_cls_dataset(dataset, split=""):
     elif Path(dataset).suffix in {".zip", ".tar", ".gz"}:
         file = check_file(dataset)
         dataset = safe_download(file, dir=DATASETS_DIR, unzip=True, delete=False)
+    elif Path(dataset).suffix in {".yaml"}:
+        file = check_file(dataset)
+        dataset = yaml_load(file)['path']
 
     dataset = Path(dataset)
     data_dir = (dataset if dataset.is_dir() else (DATASETS_DIR / dataset)).resolve()

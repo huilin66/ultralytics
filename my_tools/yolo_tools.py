@@ -258,5 +258,36 @@ if __name__ == '__main__':
 
     # mseg2seg_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6/added_labels/labels',
     #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6/added_labels/labels_seg')
-    seg_class_update_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg',
-                        output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg_c6')
+    # seg_class_update_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg',
+    #                     output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg_c6')
+
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/bd_data/data626_mseg',
+    #          output_dir=r'/localnvme/data/billboard/bd_data/data626_seg', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/bd_data/data626_seg',
+    #                     output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_c6', cp_img=True)
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/bd_data/data626_mseg_f001',
+    #          output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f001', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f001',
+    #                     output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f001_c6', cp_img=True)
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/bd_data/data626_mseg_f010',
+    #          output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f010', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f010',
+    #                     output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f010_c6', cp_img=True)
+
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_mseg',
+    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg',
+    #                  output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_c6', cp_img=True)
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_mseg_f001',
+    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001',
+    #                     output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001_c6', cp_img=True)
+
+    mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg',
+             output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg', cp_img=True)
+    seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg',
+                     output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_c6', cp_img=True)
+    mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg_f001',
+             output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001', cp_img=True)
+    seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001',
+                        output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001_c6', cp_img=True)

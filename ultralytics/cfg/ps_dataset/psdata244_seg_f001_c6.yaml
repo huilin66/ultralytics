@@ -1,4 +1,4 @@
-path: /localnvme/data/billboard/bd_data/data389_c6 # dataset root dir
+path: /localnvme/data/billboard/ps_data/psdata244_seg_f001_c6 # dataset root dir
 train: train.txt # train images (relative to 'path') 118287 images
 val: val.txt # val images (relative to 'path') 5000 images
 test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
@@ -13,21 +13,3 @@ names:
   4: hanging frame
   5: hanging display
   6: other
-
-attributes:
-  deformation:
-    - no
-    - medium
-    - high
-  broken:
-    - no
-    - medium
-    - high
-  abandonment:
-    - no
-    - medium
-    - high
-  corrosion:
-    - no
-    - medium
-    - high
