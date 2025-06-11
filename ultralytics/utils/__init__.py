@@ -845,7 +845,7 @@ GIT_DIR = get_git_dir()
 IS_GIT_DIR = is_git_dir()
 USER_CONFIG_DIR = Path(os.getenv("YOLO_CONFIG_DIR") or get_user_config_dir())  # Ultralytics settings dir
 SETTINGS_FILE = USER_CONFIG_DIR / "settings.json"
-
+SETTINGS_YAML = USER_CONFIG_DIR / "settings.yaml"
 
 def colorstr(*input):
     r"""
