@@ -1,6 +1,7 @@
 import os
 import shutil
 
+import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 def mseg2seg_gt(input_dir, output_dir):
@@ -194,7 +195,8 @@ def data_copy(input_dir, output_dir):
     os.makedirs(output_image_dir, exist_ok=True)
     os.makedirs(output_label_dir, exist_ok=True)
     image_list = os.listdir(input_image_dir)
-    for image_name in tqdm(image_list):
+
+    for image_name in tqdm(image_list, desc = f'copy from {input_dir} to {output_dir}'):
         label_name = Path(image_name).stem + '.txt'
         input_image_path = os.path.join(input_image_dir, image_name)
         input_label_path = os.path.join(input_label_dir, label_name)
@@ -202,6 +204,24 @@ def data_copy(input_dir, output_dir):
         output_label_path = os.path.join(output_label_dir, label_name)
         shutil.copy(input_image_path, output_image_path)
         shutil.copy(input_label_path, output_label_path)
+
+def data_merge(input_dir1, input_dir2, output_dir):
+    data_copy(input_dir1, output_dir)
+    data_copy(input_dir2, output_dir)
+    input_train_path1 = os.path.join(input_dir1, 'train.txt')
+    input_train_path2 = os.path.join(input_dir2, 'train.txt')
+    output_train_path = os.path.join(output_dir, 'train.txt')
+    input_val_path1 = os.path.join(input_dir1, 'val.txt')
+    input_val_path2 = os.path.join(input_dir2, 'val.txt')
+    output_val_path = os.path.join(output_dir, 'val.txt')
+    df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
+    df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
+    df_output_train = pd.concat([df_input_train1, df_input_train2])
+    df_output_train.to_csv(output_train_path, index=False, header=False)
+    df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
+    df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
+    df_output_val = pd.concat([df_input_val1, df_input_val2])
+    df_output_val.to_csv(output_val_path, index=False, header=False)
 
 if __name__ == '__main__':
     pass
@@ -283,11 +303,35 @@ if __name__ == '__main__':
     # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001',
     #                     output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001_c6', cp_img=True)
 
-    mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg',
-             output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg', cp_img=True)
-    seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg',
-                     output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_c6', cp_img=True)
-    mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg_f001',
-             output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001', cp_img=True)
-    seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001',
-                        output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001_c6', cp_img=True)
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg',
+    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg',
+    #                  output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_c6', cp_img=True)
+    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg_f001',
+    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001', cp_img=True)
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001',
+    #                     output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001_c6', cp_img=True)
+
+    # seg_class_update(input_dir=r'/localnvme/data/billboard/fused_data/data870_mseg',
+    #                  output_dir=r'/localnvme/data/billboard/fused_data/data870_mseg_c6', cp_img=True)
+
+
+    # mseg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg',
+    #              output_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg_c6', cp_img=True)
+
+    # data_merge(r'/localnvme/data/billboard/ps_data/psdata244_mseg_c6',
+    #            r'/localnvme/data/billboard/ps_data/psdata167_mseg_c6',
+    #            r'/localnvme/data/billboard/ps_data/psdata411_mseg_c6')
+    #
+    # data_merge(r'/localnvme/data/billboard/ps_data/psdata244_seg_c6',
+    #            r'/localnvme/data/billboard/ps_data/psdata167_seg_c6',
+    #            r'/localnvme/data/billboard/ps_data/psdata411_seg_c6')
+
+
+    data_merge(r'/localnvme/data/billboard/fused_data/data870_mseg_c6',
+               r'/localnvme/data/billboard/ps_data/psdata167_mseg_c6',
+               r'/localnvme/data/billboard/fused_data/data1037_mseg_c6')
+
+    data_merge(r'/localnvme/data/billboard/fused_data/data870_seg_c6',
+               r'/localnvme/data/billboard/ps_data/psdata167_seg_c6',
+               r'/localnvme/data/billboard/fused_data/data1037_seg_c6')

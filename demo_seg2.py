@@ -3,17 +3,20 @@ import torch
 
 demo_base.TASK = 'segment'
 demo_base.EPOCHS = 500
-demo_base.IMGSZ = 1280
-demo_base.BATCH_SIZE = 8
+demo_base.IMGSZ = 960
+demo_base.BATCH_SIZE = 16
 demo_base.DEVICE = torch.device('cuda:1')
 demo_base.DATA = "billboard_seg_626_f010_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_c6.yaml")
-    demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_f001_c6.yaml")
-    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata244_seg_c6.yaml")
-    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata244_seg_f001_c6.yaml")
+    demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="fusedata1037_seg_c6.yaml")
+    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="fusedata1037_seg_c6.yaml")
+
+    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_f001_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata244_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata244_seg_f001_c6.yaml")
     # demo_base.yolo8x('yolov8x-seg.yaml', auto_optim=False, data="billboard_seg_626_f010_c6.yaml")
     # demo_base.yolo8x('yolov8x-seg.yaml', auto_optim=False, data="billboard_seg_626_f010_c6_ref.yaml")
     # demo_base.yolo8x('yolov8x-seg-p2.yaml', auto_optim=False)

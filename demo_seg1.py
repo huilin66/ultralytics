@@ -10,8 +10,14 @@ demo_base.DATA = "fusedata870_seg_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False)
-    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
+    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata167_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata167_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata411_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata411_seg_c6.yaml")
+
+    demo_base.model_predict('psdata411_seg_c6-[yolov8x-seg]', auto_optim=False, data="psdata411_seg_c6.yaml")
+    
+
     # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_c6.yaml", name='debug')
     # demo_base.yolo8x('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_f001_c6.yaml")
     # demo_base.yolo8x('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata244_seg_c6.yaml")
@@ -50,3 +56,14 @@ if __name__ == '__main__':
     # demo_base.model_val(r'runs/segment/billboard_seg_389_c618/weights/best.pt', data="billboard_seg_389_c6.yaml", imgsz=960)
     # demo_base.model_val(r'runs/segment/billboard_seg_389_c618/weights/best.pt', data="billboard_seg_389_c6.yaml", imgsz=1600)
     # demo_base.model_val(r'runs/segment/billboard_seg_389_c618/weights/best.pt', data="billboard_seg_389_c6.yaml", imgsz=1920)
+
+    # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]/weights/best.pt', data="billboard_seg_626_f001_c6.yaml")
+    # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
+
+
+
+    # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_c6.yaml")
+    # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
+    # demo_base.model_val(r'runs/segment/billboard_seg_626_f010_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
+    # demo_base.model_val(r'runs/segment/fusedata870_seg_c6-[yolov8x-seg]/weights/best.pt', data="fusedata870_seg_c6.yaml")
+    # demo_base.model_val(r'runs/segment/fusedata870_seg_c6-[yolov8x-seg]/weights/best.pt', data="fusedata870_seg_c6_f010_ref.yaml")

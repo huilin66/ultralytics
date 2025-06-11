@@ -232,6 +232,19 @@ if __name__ == '__main__':
     # random_select(r'/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/images',
     #               r'/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/labels',
     #               train_ratio=0.9)
-    random_select(r'/localnvme/data/added_data/rgbt/ODinMJ/t_data/images',
-                  r'/localnvme/data/added_data/rgbt/ODinMJ/t_data/labels',
-                  train_ratio=0.9)
+    # random_select(r'/localnvme/data/added_data/rgbt/ODinMJ/t_data/images',
+    #               r'/localnvme/data/added_data/rgbt/ODinMJ/t_data/labels',
+    #               train_ratio=0.9)
+    # ref_split(r'/localnvme/data/billboard/fused_data/data870_seg_c6/val.txt',
+    #               r'/localnvme/data/billboard/fused_data/data870_seg_c6_f010/images',
+    #               r'/localnvme/data/billboard/fused_data/data870_seg_c6_f010/labels',)
+
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata244_mseg_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata244_mseg_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata167_mseg_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata167_mseg_c6/labels',
+    #               train_ratio=0.9)
+    # random_select(r'/localnvme/data/billboard/ps_data/psdata167_seg_c6/images',
+    #               r'/localnvme/data/billboard/ps_data/psdata167_seg_c6/labels',
+    #               train_ratio=0.9)
