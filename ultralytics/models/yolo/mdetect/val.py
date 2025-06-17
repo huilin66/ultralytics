@@ -269,6 +269,23 @@ class MDetectionValidator(BaseValidator):
         pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=nal-1)
         iou50 = iou >= 0.5
         correct_box = correct_class & iou50 # n * 300
+
+        correct_box_match = torch.zeros_like(iou, dtype=torch.bool, device=iou.device)
+        matches = iou50.nonzero(as_tuple=False)
+        if matches.numel() != 0:
+            matches_np = matches.cpu().numpy()
+            iou_np = iou.cpu().numpy()
+
+            matches_np = matches_np[iou_np[matches_np[:, 0], matches_np[:, 1]].argsort()[::-1]]
+            matches_np = matches_np[np.unique(matches_np[:, 1], return_index=True)[1]]
+            matches_np = matches_np[np.unique(matches_np[:, 0], return_index=True)[1]]
+
+            if len(matches_np) > 0:
+                gt_idx = torch.tensor(matches_np[:, 0], dtype=torch.long, device=iou.device)
+                pred_idx = torch.tensor(matches_np[:, 1], dtype=torch.long, device=iou.device)
+                correct_box_match[gt_idx, pred_idx] = True
+        correct_box = correct_box_match
+        # print(torch.sum(correct_box).cpu().numpy())
         correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
         ap = []
         for i in range(correct_attributes.shape[0]):
