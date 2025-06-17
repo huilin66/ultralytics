@@ -306,30 +306,7 @@ class MDetectionValidator(BaseValidator):
                 f1 = 2 * (precision * recall) / (precision + recall)  if (precision + recall)>0 else 0
             f1_scores.append(f1)
 
-
-            # f1_per_level = []
-            # for a in range(nal):
-            #     # if no label
-            #     # level_sum = (correct_gt_attributes == a).sum().item()
-            #     # if level_sum==0:
-            #     #     f1_per_level.append(float('nan'))
-            #     #     continue
-            #
-            #     tp = ((correct_gt_attributes == a) & (correct_pre_attributes == a)).sum().item()
-            #     fp = ((correct_gt_attributes != a) & (correct_pre_attributes == a)).sum().item()
-            #     fn = ((correct_gt_attributes == a) & (correct_pre_attributes != a)).sum().item()
-            #
-            #     precision = tp/(tp+fp) if (tp+fp)>0 else 0.0
-            #     recall = tp/(tp+fn) if (tp+fn)>0 else 0.0
-            #
-            #     f1 = 2*(precision*recall)/(precision+recall) if (precision+recall)>0 else float('nan')
-            #     f1_per_level.append(f1)
-            #
-            # macro_f1 = sum(f1_per_level)/len(f1_per_level) if len(f1_per_level)>0 else float('nan')
-            # f1_scores.append(macro_f1)
-
         f1_scores = torch.tensor(f1_scores).unsqueeze(0).to(self.device)
-
 
         iou = iou.cpu().numpy()
 

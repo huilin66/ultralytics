@@ -505,9 +505,6 @@ class MConfusionMatrix:
             gt_bboxes (Array[M, 4]| Array[N, 5]): Ground truth bounding boxes with xyxy/xyxyr format.
             gt_cls (Array[M]): The class labels.
         """
-        pred_attributes = detections[:, 6:6+self.na]
-        pred_attributes = torch.floor(pred_attributes * (self.nal)).long()
-        pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
         if gt_cls.shape[0] == 0:  # Check if labels is empty
             if detections is not None:
                 detections = detections[detections[:, 4] > self.conf]
@@ -520,6 +517,10 @@ class MConfusionMatrix:
             for gc in gt_classes:
                 self.matrix[self.nc, gc] += 1  # background FN
             return
+
+        pred_attributes = detections[:, 6:6+self.na]
+        pred_attributes = torch.floor(pred_attributes * (self.nal)).long()
+        pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
 
         detections = detections[detections[:, 4] > self.conf]
         gt_classes = gt_cls.int()

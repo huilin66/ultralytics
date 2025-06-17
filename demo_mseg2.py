@@ -5,13 +5,32 @@ demo_base.TASK = 'msegment'
 demo_base.EPOCHS = 100
 demo_base.IMGSZ = 960
 demo_base.BATCH_SIZE = 16
-demo_base.DEVICE = torch.device('cuda:0')
-demo_base.DATA = "psdata411_mseg_c6.yaml"
+demo_base.DEVICE = torch.device('cuda:1')
+demo_base.DATA = "fusedata1361_mseg_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
-           weight_path=r'runs/segment/psdata411_seg_c6-[yolov8x-seg]/weights/best.pt', )
+    # demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
+    #                 data="psdata735_mseg_c6.yaml",
+    #        weight_path=r'runs/segment/psdata735_seg_c6-[yolov8x-seg]3/weights/best.pt', )
+    # demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
+    #                 data="psdata735_mseg_c6_update.yaml",
+    #        weight_path=r'runs/segment/psdata735_seg_c6-[yolov8x-seg]3/weights/best.pt', )
+    # demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
+    #         data="fusedata1361_mseg_c6.yaml",
+    #        weight_path=r'runs/segment/fusedata1361_seg_c6-[yolov8x-seg]3/weights/best.pt')
+    # demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
+    #         data="fusedata1361_mseg_c6_update.yaml",
+    #        weight_path=r'runs/segment/fusedata1361_seg_c6-[yolov8x-seg]3/weights/best.pt')
+
+
+
+    demo_base.model_val(r'runs/msegment/fusedata1361_mseg_c6_update-[yolov8x-mseg-7]/weights/best.pt',
+                        data='fusedata1361_mseg_c6_update.yaml',
+                        save_txt=True, save_npy=True
+                        )
+
+
 
     # demo_base.model_val(r'runs/msegment/fusedata870_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt', data='fusedata870_mseg_c6.yaml')
     # demo_base.model_val(r'runs/msegment/fusedata870_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt', data='fusedata870_mseg_c6_f010_ref.yaml')
@@ -56,5 +75,5 @@ if __name__ == '__main__':
     #                         r'/localnvme/data/billboard/ps_data/test_20250527021438500.jpg')
 
 
-    # demo_base.model_val(r'runs/msegment/psdata411_seg_c6-[yolov8x-seg]/weights/best.pt',
-    #                     data='billboard_mseg_389_c6.yaml', conf=0.3)
+    # demo_base.model_val(r'runs/msegment/billboard_mseg_389_c6-[yolov8x-mseg-dlka3res-7]4/weights/best.pt', data='billboard_mseg_389_c6.yaml')
+    # demo_base.model_val(r'runs/msegment/fusedata1037_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt')

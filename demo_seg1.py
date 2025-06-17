@@ -10,12 +10,10 @@ demo_base.DATA = "fusedata870_seg_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata167_seg_c6.yaml")
-    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata167_seg_c6.yaml")
-    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata411_seg_c6.yaml")
-    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata411_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata735_seg_c6.yaml")
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata735_seg_c6.yaml")
 
-    demo_base.model_predict('psdata411_seg_c6-[yolov8x-seg]', auto_optim=False, data="psdata411_seg_c6.yaml")
+    # demo_base.model_predict('psdata411_seg_c6-[yolov8x-seg]', auto_optim=False, data="psdata411_seg_c6.yaml")
     
 
     # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata244_seg_c6.yaml", name='debug')
@@ -65,5 +63,5 @@ if __name__ == '__main__':
     # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_c6.yaml")
     # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
     # demo_base.model_val(r'runs/segment/billboard_seg_626_f010_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
-    # demo_base.model_val(r'runs/segment/fusedata870_seg_c6-[yolov8x-seg]/weights/best.pt', data="fusedata870_seg_c6.yaml")
-    # demo_base.model_val(r'runs/segment/fusedata870_seg_c6-[yolov8x-seg]/weights/best.pt', data="fusedata870_seg_c6_f010_ref.yaml")
+    # demo_base.model_val(r'runs/segment/fusedata1037_seg_c6-[yolov8x-seg]/weights/best.pt',)
+    demo_base.model_val(r'runs/segment/fusedata1361_seg_c6-[yolov8x-seg]3/weights/best.pt', )

@@ -152,6 +152,12 @@ class MSegmentationValidator(MDetectionValidator):
             if self.args.save_txt:
                 file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
                 self.save_one_txt(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file)
+            if self.args.save_npy:
+                file = self.save_dir / "predicts_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
+                self.save_one_npy(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file, label=False)
+                file = self.save_dir / "labels_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
+                self.save_one_npy(predn, gt_masks, self.args.save_conf, pbatch["ori_shape"], file,
+                                  label=True, gt_cls=cls, overlap=self.args.overlap_mask)
 
     def finalize_metrics(self, *args, **kwargs):
         """Set speed and confusion matrix for evaluation metrics."""
@@ -214,17 +220,6 @@ class MSegmentationValidator(MDetectionValidator):
 
     def save_one_txt(self, predn, pred_masks, save_conf, shape, file):
         """Save YOLO detections to a txt file in normalized coordinates in a specific format."""
-        # gn = torch.tensor(shape)[[1, 0, 1, 0]]  # normalization gain whwh
-        # for row in predn.tolist():
-        #     xyxy = row[:4]  # Bounding box coordinates
-        #     conf = row[4]  # Confidence
-        #     cls = row[5]  # Class ID
-        #     att = row[6:]  # Attributes
-        #
-        #     xywh = (ops.xyxy2xywh(toMrch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-        #     line = (cls, len(att), *att, *xywh, conf) if save_conf else (cls, len(att), *att, *xywh)  # label format
-        #     with open(file, "a") as f:
-        #         f.write(("%g " * len(line)).rstrip() % line + "\n")
         from ultralytics.engine.results import MdetResults
 
         MdetResults(
@@ -239,6 +234,32 @@ class MSegmentationValidator(MDetectionValidator):
             na=self.na,
             nal=self.nal
         ).save_txt(file, save_conf=save_conf)
+
+    def save_one_npy(self, predn, pred_masks, save_conf, shape, file, label=True, gt_cls=None, overlap=False):
+        """Save YOLO detections to a txt file in normalized coordinates in a specific format."""
+        from ultralytics.engine.results import MdetResults
+        if label:
+            if overlap:
+                nl = len(gt_cls)
+                index = torch.arange(nl, device=pred_masks.device).view(nl, 1, 1) + 1
+                pred_masks = pred_masks.repeat(nl, 1, 1)  # shape(1,640,640) -> (n,640,640)
+                pred_masks = torch.where(pred_masks == index, 1.0, 0.0)
+                gt_cls_npy = gt_cls.cpu().numpy()
+                gt_cls_npy_path = file.parent.with_name('labels_npy_cls')/file.name
+                Path(gt_cls_npy_path).parent.mkdir(parents=True, exist_ok=True)
+                np.save(gt_cls_npy_path, gt_cls_npy)
+        MdetResults(
+            np.zeros((shape[0], shape[1]), dtype=np.uint8),
+            path=None,
+            names=self.names,
+            boxes=predn[:, :6],
+            attributes=predn[:, 6:6+len(self.attribute_names)],
+            attribute_names=self.attribute_names,
+            masks=pred_masks,
+            nc=self.nc,
+            na=self.na,
+            nal=self.nal
+        ).save_npy(file)
 
     def pred_to_json(self, predn, filename, pred_masks):
         """

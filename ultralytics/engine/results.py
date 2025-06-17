@@ -1376,6 +1376,14 @@ class MdetResults(SimpleClass):
             with open(txt_file, "a") as f:
                 f.writelines(text + "\n" for text in texts)
 
+
+    def save_npy(self, npy_file):
+        masks = self.masks
+        seg = masks.data.cpu().numpy()
+        Path(npy_file).parent.mkdir(parents=True, exist_ok=True)
+        np.save(npy_file, seg)
+
+
     def save_crop(self, save_dir, file_name=Path("im.jpg")):
         """
         Save cropped predictions to `save_dir/cls/file_name.jpg`.

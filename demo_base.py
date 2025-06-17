@@ -1,10 +1,12 @@
+import os
 import torch
 from ultralytics import YOLO
 
 BATCH_SIZE = 32
 EPOCHS = 500
 IMGSZ = 640
-CONF = 0.5
+CONF_VAL = 0.001
+CONF_PREDICT = 0.25
 TASK = 'msegment'
 DEVICE = torch.device('cuda:0')
 DATA = "billboard_mseg_389.yaml"
@@ -54,21 +56,49 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
 
 def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
-    model.val(device=DEVICE, **kwargs)
+
+    val_params = {
+        'device': DEVICE,
+        'batch': BATCH_SIZE,
+        'conf': CONF_VAL
+    }
+    val_params.update(kwargs)
+    model.val(**val_params)
 
 def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):
     model = network(weight_path, task=TASK)
-    result = model.predict(
-        img_dir,
-        save=save,
-        save_txt=save_txt,
-        stream=stream,
-        conf=CONF,
-        device=DEVICE,
-        imgsz=IMGSZ,
-        **kwargs,
-    )
+    predict_params = {
+        'device': DEVICE,
+        'batch': BATCH_SIZE,
+        'conf': CONF_PREDICT,
+        'save' : save,
+        'save_txt' : save_txt,
+        'stream' : stream,
+    }
+    predict_params.update(kwargs)
+
+    result = model.predict(img_dir, **predict_params,)
     for _ in result: pass
+
+def model_track(weight_path, img_dir, network=YOLO, single=False, save=True, save_txt=True, stream=True, **kwargs):
+    model = network(weight_path, task=TASK)
+    predict_params = {
+        'device': DEVICE,
+        'batch': BATCH_SIZE,
+        'conf': CONF_PREDICT,
+        'save' : save,
+        'save_txt' : save_txt,
+        'stream' : stream,
+    }
+    predict_params.update(kwargs)
+    if single:
+        image_list = os.listdir(img_dir)
+        for image_name in image_list:
+            image_path = os.path.join(img_dir, image_name)
+            result = model.predict(image_path, **predict_params, )
+    else:
+        result = model.predict(img_dir, **predict_params,)
+        for _ in result: pass
 
 def model_export(weight_path, format='onnx', network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
