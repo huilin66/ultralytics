@@ -54,7 +54,7 @@ class MSegmentationValidator(MDetectionValidator):
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 12) % (
+        return ("%22s" + "%11s" * 13) % (
             "Class",
             "Images",
             "Instances",
@@ -67,7 +67,8 @@ class MSegmentationValidator(MDetectionValidator):
             "mAP50",
             "mAP50-95)",
             "OA",
-            "F1",
+            "F1_marco",
+            "F1_mirco",
         )
 
     def postprocess(self, preds):
@@ -101,7 +102,8 @@ class MSegmentationValidator(MDetectionValidator):
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1 = torch.zeros((0, self.na), device=self.device),
+                f1_macro = torch.zeros((0, self.na), device=self.device),
+                f1_micro=torch.zeros((0, self.na), device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -128,8 +130,8 @@ class MSegmentationValidator(MDetectionValidator):
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"], stat["f1"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
-                stat["tp_m"], _, _ = self._process_batch(
+                stat["tp"], stat["ap"], stat["f1_macro"], stat["f1_micro"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
+                stat["tp_m"], _, _, _ = self._process_batch(
                     predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True, gt_attributes=mdet_attributes
                 )
                 if self.args.plots:

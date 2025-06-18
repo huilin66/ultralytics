@@ -1008,6 +1008,54 @@ class Metric(SimpleClass):
             else:
                 f1_mean = 0
             return f1_mean
+    @property
+    def mf1_macro(self):
+        """
+        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+
+        Returns:
+            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        """
+        if isinstance(self.all_f1_macro, list):
+            all_f1_macro = np.array(self.all_f1_macro)
+            all_f1_macro = np.nanmean(all_f1_macro)
+            if np.isnan(all_f1_macro):
+                return 0
+            else:
+                return all_f1_macro
+        else:
+            if len(self.all_f1_macro)> 0:
+                assert isinstance(self.all_f1_macro, np.ndarray), ValueError(self.all_f1_macro)
+                f1_class = np.nanmean(self.all_f1_macro, axis=0)
+                f1_mean = np.nanmean(f1_class)
+            else:
+                f1_mean = 0
+            return f1_mean
+
+    @property
+    def mf1_micro(self):
+        """
+        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+
+        Returns:
+            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        """
+        if isinstance(self.all_f1_micro, list):
+            all_f1_micro = np.array(self.all_f1_micro)
+            all_f1_micro = np.nanmean(all_f1_micro)
+            if np.isnan(all_f1_micro):
+                return 0
+            else:
+                return all_f1_micro
+        else:
+            if len(self.all_f1_micro) > 0:
+                assert isinstance(self.all_f1_micro, np.ndarray), ValueError(self.all_f1_micro)
+                f1_class = np.nanmean(self.all_f1_micro, axis=0)
+                f1_mean = np.nanmean(f1_class)
+            else:
+                f1_mean = 0
+            return f1_mean
+
 
     def mean_results(self):
         """Return mean of results, mp, mr, map50, map."""
@@ -1234,7 +1282,7 @@ class MDetMetrics(SimpleClass):
                 print('Error in get_attribute_names')
         self.attribute_names = attribute_names
 
-    def process(self, tp, ap, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1):
+    def process(self, tp, ap, conf, pred_cls, target_cls, f1_macro, f1_micro, **kwargs):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1250,26 +1298,27 @@ class MDetMetrics(SimpleClass):
         self.box.update(results)
         self.attributes.nc = self.na
         self.attributes.all_ap = np.mean(ap, axis=0)
-        self.attributes.f1 = np.mean(f1)
-        # self.attribute_names = self.get_attribute_names(self.attribute_names)
+        self.attributes.all_f1_macro = np.nanmean(f1_macro, axis=0)
+        self.attributes.all_f1_micro = np.nanmean(f1_micro, axis=0)
 
 
     @property
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mAP", "metrics/F1"]
+        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mAP",
+                "metrics/f1_macro", "metrics/f1_micro"]
 
 
     def mean_results(self):
         """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results() + [self.attributes.map, self.attributes.f1]
+        return self.box.mean_results() + [self.attributes.map, self.attributes.f1_macro, self.attributes.f1_micro]
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
         if i < self.nc:
-            return self.box.class_result(i) + (0, 0)
+            return self.box.class_result(i) + (0, 0, 0)
         else:
-            return (0, 0, 0, 0) + (self.attributes.all_ap[i-self.nc], 0)
+            return (0, 0, 0, 0) + (self.attributes.all_ap[i-self.nc], self.attributes.all_f1_macro[i - self.nc], self.attributes.all_f1_micro[i - self.nc])
 
     @property
     def maps(self):
@@ -1279,7 +1328,7 @@ class MDetMetrics(SimpleClass):
     @property
     def fitness(self):
         """Returns the fitness of box object."""
-        return self.box.fitness()*100 + self.box.fitness() * self.attributes.mf1
+        return self.box.fitness()*100 + self.box.fitness() * (self.attributes.f1_macro + self.attributes.f1_micro)
 
     @property
     def ap_class_index(self):
@@ -1484,7 +1533,7 @@ class MSegmentMetrics(SimpleClass):
         self.nal = nal
 
 
-    def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1):
+    def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, f1_macro, f1_micro, **kwargs):
         """
         Processes the detection and segmentation metrics over the given set of predictions.
 
@@ -1524,7 +1573,8 @@ class MSegmentMetrics(SimpleClass):
         self.box.update(results_box)
         self.attributes.nc = self.na
         self.attributes.all_ap = np.nanmean(ap, axis=0)
-        self.attributes.all_f1 = np.nanmean(f1, axis=0)
+        self.attributes.all_f1_macro = np.nanmean(f1_macro, axis=1)
+        self.attributes.all_f1_micro = np.nanmean(f1_micro, axis=0)
 
     @property
     def keys(self):
@@ -1539,19 +1589,20 @@ class MSegmentMetrics(SimpleClass):
             "metrics/mAP50(M)",
             "metrics/mAP50-95(M)",
             "metrics/mAP",
-            "metrics/f1",
+            "metrics/f1_macro",
+            "metrics/f1_micro"
         ]
 
     def mean_results(self):
         """Return the mean metrics for bounding box and segmentation results."""
-        return self.box.mean_results() + self.seg.mean_results() + [self.attributes.map, self.attributes.mf1]
+        return self.box.mean_results() + self.seg.mean_results() + [self.attributes.map, self.attributes.mf1_macro, self.attributes.mf1_micro]
 
     def class_result(self, i):
         """Returns classification results for a specified class index."""
         if i < self.nc:
-            return self.box.class_result(i) + self.seg.class_result(i) + (0, 0)
+            return self.box.class_result(i) + self.seg.class_result(i) + (0, 0, 0)
         else:
-            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc], self.attributes.all_f1[i - self.nc])
+            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc], self.attributes.all_f1_macro[i - self.nc], self.attributes.all_f1_micro[i - self.nc])
 
     @property
     def maps(self):
@@ -1561,7 +1612,7 @@ class MSegmentMetrics(SimpleClass):
     @property
     def fitness(self):
         """Get the fitness score for both segmentation and bounding box models."""
-        return (self.seg.fitness() + self.box.fitness())* (100 + self.attributes.mf1)
+        return (self.seg.fitness() + self.box.fitness())*100 + (self.attributes.mf1_macro + self.attributes.mf1_micro)
 
     @property
     def ap_class_index(self):
@@ -1756,20 +1807,46 @@ class ClassifyMetrics(SimpleClass):
         acc = torch.stack((correct[:, 0], correct.max(1).values), dim=1)  # (top1, top5) accuracy
         self.top1, self.top5 = acc.mean(0).tolist()
 
+        pred_class = pred[:, 0]
+
+        num_classes = int(pred.max().item() + 1)
+        conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=targets.device)
+        for t, p in zip(targets, pred_class):
+            conf_mat[t.long(), p.long()] += 1
+
+        TP = conf_mat.diag()
+        FP = conf_mat.sum(0) - TP
+        FN = conf_mat.sum(1) - TP
+
+        precision = TP / (TP + FP + 1e-8)
+        recall = TP / (TP + FN + 1e-8)
+        f1 = 2 * precision * recall / (precision + recall + 1e-8)
+
+        self.f1_macro = f1.mean().item()
+
+        tp_sum = TP.sum().item()
+        fp_sum = FP.sum().item()
+        fn_sum = FN.sum().item()
+
+        precision_micro = tp_sum / (tp_sum + fp_sum + 1e-8)
+        recall_micro = tp_sum / (tp_sum + fn_sum + 1e-8)
+        self.f1_micro = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
+
+
     @property
     def fitness(self):
         """Return mean of top-1 and top-5 accuracies as fitness score."""
-        return (self.top1 + self.top5) / 2
+        return (self.top1 + self.top5) / 2 + self.f1_macro * 10 + self.f1_micro * 10
 
     @property
     def results_dict(self):
         """Return a dictionary with model's performance metrics and fitness score."""
-        return dict(zip(self.keys + ["fitness"], [self.top1, self.top5, self.fitness]))
+        return dict(zip(self.keys + ["fitness"], [self.top1, self.top5, self.f1_macro, self.f1_micro, self.fitness]))
 
     @property
     def keys(self):
         """Return a list of keys for the results_dict property."""
-        return ["metrics/accuracy_top1", "metrics/accuracy_top5"]
+        return ["metrics/accuracy_top1", "metrics/accuracy_top5", "metrics/f1_macro", "metrics/f1_micro"]
 
     @property
     def curves(self):

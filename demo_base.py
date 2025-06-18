@@ -52,7 +52,8 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
     train_params.update(kwargs)
     if "name" not in train_params:
         train_params["name"] = f"{train_params['data'].replace('.yaml', '')}-[{cfg_path.replace('.yaml', '')}]"
-    model.train(**train_params)
+    result = model.train(**train_params)
+    return result
 
 def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
@@ -63,7 +64,8 @@ def model_val(weight_path, network=YOLO, **kwargs):
         'conf': CONF_VAL
     }
     val_params.update(kwargs)
-    model.val(**val_params)
+    result = model.val(**val_params)
+    return result
 
 def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):
     model = network(weight_path, task=TASK)

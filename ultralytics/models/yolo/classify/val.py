@@ -58,7 +58,7 @@ class ClassificationValidator(BaseValidator):
 
     def get_desc(self):
         """Return a formatted string summarizing classification metrics."""
-        return ("%22s" + "%11s" * 2) % ("classes", "top1_acc", "top5_acc")
+        return ("%22s" + "%11s" * 4) % ("classes", "top1_acc", "top5_acc", "f1_macro", "f1_micro")
 
     def init_metrics(self, model):
         """Initialize confusion matrix, class names, and tracking containers for predictions and targets."""
@@ -114,7 +114,7 @@ class ClassificationValidator(BaseValidator):
     def print_results(self):
         """Print evaluation metrics for the classification model."""
         pf = "%22s" + "%11.3g" * len(self.metrics.keys)  # print format
-        LOGGER.info(pf % ("all", self.metrics.top1, self.metrics.top5))
+        LOGGER.info(pf % ("all", self.metrics.top1, self.metrics.top5, self.metrics.f1_macro, self.metrics.f1_micro))
 
     def plot_val_samples(self, batch, ni):
         """Plot validation image samples with their ground truth labels."""

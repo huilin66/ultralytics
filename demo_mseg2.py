@@ -25,12 +25,13 @@ if __name__ == '__main__':
 
 
 
-    demo_base.model_val(r'runs/msegment/fusedata1361_mseg_c6_update-[yolov8x-mseg-7]/weights/best.pt',
-                        data='fusedata1361_mseg_c6_update.yaml',
-                        save_txt=True, save_npy=True
-                        )
+    # demo_base.model_val(r'runs/msegment/fusedata1361_mseg_c6_update-[yolov8x-mseg-7]/weights/best.pt',
+    #                     data='fusedata1361_mseg_c6_update.yaml',
+    #                     save_txt=True, save_npy=True
+    #                     )
 
-
+    demo_base.model_val(r'runs/msegment/psdata735_mseg_c6_check0618-[yolov8x-mseg-7]6/weights/best.pt',
+                        save_txt=True, save_npy=True)
 
     # demo_base.model_val(r'runs/msegment/fusedata870_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt', data='fusedata870_mseg_c6.yaml')
     # demo_base.model_val(r'runs/msegment/fusedata870_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt', data='fusedata870_mseg_c6_f010_ref.yaml')
