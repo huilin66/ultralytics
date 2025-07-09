@@ -341,8 +341,10 @@ class Instances:
         segments = self.segments[index] if len(self.segments) else self.segments
         keypoints = self.keypoints[index] if self.keypoints is not None else None
         bboxes = self.bboxes[index]
-        if self.mdet_attributes.shape[0] != index.shape[0]:
-            print()
+        # if self.mdet_attributes is None:
+        #     print()
+        # if self.mdet_attributes.shape[0] != index.shape[0]:
+        #     print()
         mdet_attributes = self.mdet_attributes[index] if self.mdet_attributes is not None else None
         bbox_format = self._bboxes.format
         return Instances(

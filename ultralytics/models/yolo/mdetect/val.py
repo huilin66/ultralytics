@@ -94,7 +94,7 @@ class MDetectionValidator(BaseValidator):
         self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], ap=[], f1_macro=[], f1_micro=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
+        self.stats = dict(tp=[], ap=[], conf_mat=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -148,8 +148,7 @@ class MDetectionValidator(BaseValidator):
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1_macro = torch.zeros((0, self.na), device=self.device),
-                f1_micro=torch.zeros((0, self.na), device=self.device),
+                conf_mat=torch.zeros((0, self.na, self.nal, self.nal), device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -175,7 +174,7 @@ class MDetectionValidator(BaseValidator):
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"], stat["f1_macro"], stat["f1_micro"] = self._process_batch(predn, bbox, cls, mdet_attributes)
+                stat["tp"], stat["ap"], stat["conf_mat"]= self._process_batch(predn, bbox, cls, mdet_attributes)
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
             for k in self.stats.keys():
@@ -246,6 +245,19 @@ class MDetectionValidator(BaseValidator):
         iou = box_iou(gt_bboxes, detections[:, :4])
         return self.match_predictions(detections[:, 5], gt_cls, iou, detections[:, 6:], gt_attributes)
 
+    def get_conf_mats(self, gt_attributes, pred_attributes_result, correct_attributes, correct_box, num_classes, device):
+        batch_conf_mat = torch.zeros((correct_attributes.shape[-1], num_classes, num_classes), dtype=torch.int64, device=device)
+        for k in range(correct_attributes.shape[-1]):  # 每个属性维度
+            idx_i, idx_j = torch.where(correct_box)  # 匹配对
+            gt_attr = gt_attributes[idx_i, k]
+            pred_attr = pred_attributes_result[idx_j, k]
+
+            for g, p in zip(gt_attr, pred_attr):
+                gi = int(g.item())
+                pi = int(p.item())
+                batch_conf_mat[k, gi, pi] += 1
+        return batch_conf_mat.unsqueeze(0)
+
     def match_predictions(self, pred_classes, true_classes, iou, pred_attributes,
                           gt_attributes, nal, use_scipy=False):
         """
@@ -296,53 +308,60 @@ class MDetectionValidator(BaseValidator):
             ap.append(p.unsqueeze(0))
         ap = torch.cat(ap, dim=0)
 
-        f1_micro_scores = []
-        f1_macro_scores = []
-        for k in range(correct_attributes.shape[-1]):  # 每个属性维度
-            idx_i, idx_j = torch.where(correct_box)  # 匹配对
-            gt_attr = gt_attributes[idx_i, k]
-            pred_attr = pred_attributes_result[idx_j, k]
+        num_classes = self.nal
+        device = pred_classes.device
+        batch_conf_mat = self.get_conf_mats(gt_attributes, pred_attributes_result, correct_attributes, correct_box, num_classes, device)
 
-            unique_labels = torch.cat([gt_attr, pred_attr]).unique()
-            num_classes = unique_labels.numel()
-
-            if num_classes == 0:
-                f1_micro_scores.append(float('nan'))
-                f1_macro_scores.append(float('nan'))
-                continue
-
-            conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=gt_attr.device)
-
-            label2idx = {int(lbl): i for i, lbl in enumerate(unique_labels.tolist())}
-            for g, p in zip(gt_attr, pred_attr):
-                gi = label2idx[int(g.item())]
-                pi = label2idx[int(p.item())]
-                conf_mat[gi, pi] += 1
-
-            TP = conf_mat.diag()
-            FP = conf_mat.sum(0) - TP
-            FN = conf_mat.sum(1) - TP
-
-            precision = TP / (TP + FP + 1e-8)
-            recall = TP / (TP + FN + 1e-8)
-            f1 = 2 * precision * recall / (precision + recall + 1e-8)
-            f1_macro = f1.mean().item()
-            f1_macro_scores.append(f1_macro)
-
-            tp_sum = TP.sum().item()
-            fp_sum = FP.sum().item()
-            fn_sum = FN.sum().item()
-
-            precision_micro = tp_sum / (tp_sum + fp_sum + 1e-8)
-            recall_micro = tp_sum / (tp_sum + fn_sum + 1e-8)
-            f1_micro = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
-            f1_micro_scores.append(f1_micro)
-
-        f1_macro_scores = torch.tensor(f1_macro_scores).unsqueeze(0).to(self.device)
-        f1_micro_scores = torch.tensor(f1_micro_scores).unsqueeze(0).to(self.device)
+        # conf_mats = []
+        # f1_micro_scores = []
+        # f1_macro_scores = []
+        # for k in range(correct_attributes.shape[-1]):  # 每个属性维度
+        #     idx_i, idx_j = torch.where(correct_box)  # 匹配对
+        #     gt_attr = gt_attributes[idx_i, k]
+        #     pred_attr = pred_attributes_result[idx_j, k]
+        #
+        #     unique_labels = torch.cat([gt_attr, pred_attr]).unique()
+        #     num_classes = unique_labels.numel()
+        #
+        #     if num_classes == 0:
+        #         f1_micro_scores.append(float('nan'))
+        #         f1_macro_scores.append(float('nan'))
+        #         continue
+        #
+        #     conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=gt_attr.device)
+        #
+        #     label2idx = {int(lbl): i for i, lbl in enumerate(unique_labels.tolist())}
+        #     for g, p in zip(gt_attr, pred_attr):
+        #         gi = label2idx[int(g.item())]
+        #         pi = label2idx[int(p.item())]
+        #         conf_mat[gi, pi] += 1
+        #
+        #     conf_mats.append(conf_mat)
+        #
+        #     TP = conf_mat.diag()
+        #     FP = conf_mat.sum(0) - TP
+        #     FN = conf_mat.sum(1) - TP
+        #
+        #     precision = TP / (TP + FP + 1e-8)
+        #     recall = TP / (TP + FN + 1e-8)
+        #     f1 = 2 * precision * recall / (precision + recall + 1e-8)
+        #     f1_macro = f1.mean().item()
+        #     f1_macro_scores.append(f1_macro)
+        #
+        #     tp_sum = TP.sum().item()
+        #     fp_sum = FP.sum().item()
+        #     fn_sum = FN.sum().item()
+        #
+        #     precision_micro = tp_sum / (tp_sum + fp_sum + 1e-8)
+        #     recall_micro = tp_sum / (tp_sum + fn_sum + 1e-8)
+        #     f1_micro = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
+        #     f1_micro_scores.append(f1_micro)
+        #
+        # f1_macro_scores = torch.tensor(f1_macro_scores).unsqueeze(0).to(self.device)
+        # f1_micro_scores = torch.tensor(f1_micro_scores).unsqueeze(0).to(self.device)
+        # conf_mats = torch.tensor(conf_mats).unsqueeze(0).to(self.device)
 
         iou = iou.cpu().numpy()
-
         for i, threshold in enumerate(self.iouv.cpu().tolist()):
             if use_scipy:
                 # WARNING: known issue that reduces mAP in https://github.com/ultralytics/ultralytics/pull/4708
@@ -365,7 +384,7 @@ class MDetectionValidator(BaseValidator):
                         matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
                     correct[matches[:, 1].astype(int), i] = True
         correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
-        return correct, ap, f1_macro_scores, f1_micro_scores
+        return correct, ap, batch_conf_mat
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

@@ -1016,21 +1016,21 @@ class Metric(SimpleClass):
         Returns:
             (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
         """
-        if isinstance(self.all_f1_macro, list):
-            all_f1_macro = np.array(self.all_f1_macro)
-            all_f1_macro = np.nanmean(all_f1_macro)
-            if np.isnan(all_f1_macro):
-                return 0
-            else:
-                return all_f1_macro
-        else:
-            if len(self.all_f1_macro)> 0:
-                assert isinstance(self.all_f1_macro, np.ndarray), ValueError(self.all_f1_macro)
-                f1_class = np.nanmean(self.all_f1_macro, axis=0)
-                f1_mean = np.nanmean(f1_class)
-            else:
-                f1_mean = 0
-            return f1_mean
+        conf_mats = self.all_conf_mat
+        all_f1_macro = []
+        for conf_mat in conf_mats:
+            TP = conf_mat.diagonal()
+            FP = conf_mat.sum(0) - TP
+            FN = conf_mat.sum(1) - TP
+
+            precision = TP / (TP + FP + 1e-8)
+            recall = TP / (TP + FN + 1e-8)
+            f1 = 2 * precision * recall / (precision + recall + 1e-8)
+            f1_macro = f1.mean()
+            all_f1_macro.append(f1_macro)
+        self.all_f1_macro = all_f1_macro
+        f1_macro = np.mean(all_f1_macro)
+        return f1_macro
 
     @property
     def mf1_micro(self):
@@ -1040,22 +1040,21 @@ class Metric(SimpleClass):
         Returns:
             (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
         """
-        if isinstance(self.all_f1_micro, list):
-            all_f1_micro = np.array(self.all_f1_micro)
-            all_f1_micro = np.nanmean(all_f1_micro)
-            if np.isnan(all_f1_micro):
-                return 0
-            else:
-                return all_f1_micro
-        else:
-            if len(self.all_f1_micro) > 0:
-                assert isinstance(self.all_f1_micro, np.ndarray), ValueError(self.all_f1_micro)
-                f1_class = np.nanmean(self.all_f1_micro, axis=0)
-                f1_mean = np.nanmean(f1_class)
-            else:
-                f1_mean = 0
-            return f1_mean
+        conf_mat = self.all_conf_mat
+        conf_mat = np.sum(conf_mat, axis=0)
+        TP = conf_mat.diagonal()
+        FP = conf_mat.sum(0) - TP
+        FN = conf_mat.sum(1) - TP
 
+        tp_sum = TP.sum()
+
+        fp_sum = FP.sum()
+        fn_sum = FN.sum()
+
+        precision_micro = tp_sum / (tp_sum + fp_sum + 1e-8)
+        recall_micro = tp_sum / (tp_sum + fn_sum + 1e-8)
+        f1_micro = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
+        return f1_micro
 
     def mean_results(self):
         """Return mean of results, mp, mr, map50, map."""
@@ -1282,7 +1281,7 @@ class MDetMetrics(SimpleClass):
                 print('Error in get_attribute_names')
         self.attribute_names = attribute_names
 
-    def process(self, tp, ap, conf, pred_cls, target_cls, f1_macro, f1_micro, **kwargs):
+    def process(self, tp, ap, conf, pred_cls, target_cls, conf_mat, **kwargs):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1298,8 +1297,7 @@ class MDetMetrics(SimpleClass):
         self.box.update(results)
         self.attributes.nc = self.na
         self.attributes.all_ap = np.mean(ap, axis=0)
-        self.attributes.all_f1_macro = np.nanmean(f1_macro, axis=0)
-        self.attributes.all_f1_micro = np.nanmean(f1_micro, axis=0)
+        self.attributes.all_conf_mat = np.sum(conf_mat, axis=0)
 
 
     @property
@@ -1533,7 +1531,7 @@ class MSegmentMetrics(SimpleClass):
         self.nal = nal
 
 
-    def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, f1_macro, f1_micro, **kwargs):
+    def process(self, tp, ap, tp_m, conf, pred_cls, target_cls, conf_mat, **kwargs):
         """
         Processes the detection and segmentation metrics over the given set of predictions.
 
@@ -1573,8 +1571,7 @@ class MSegmentMetrics(SimpleClass):
         self.box.update(results_box)
         self.attributes.nc = self.na
         self.attributes.all_ap = np.nanmean(ap, axis=0)
-        self.attributes.all_f1_macro = np.nanmean(f1_macro, axis=1)
-        self.attributes.all_f1_micro = np.nanmean(f1_micro, axis=0)
+        self.attributes.all_conf_mat = np.sum(conf_mat, axis=0)
 
     @property
     def keys(self):
@@ -1602,7 +1599,7 @@ class MSegmentMetrics(SimpleClass):
         if i < self.nc:
             return self.box.class_result(i) + self.seg.class_result(i) + (0, 0, 0)
         else:
-            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc], self.attributes.all_f1_macro[i - self.nc], self.attributes.all_f1_micro[i - self.nc])
+            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc], self.attributes.all_f1_macro[i - self.nc], 0)
 
     @property
     def maps(self):

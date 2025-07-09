@@ -5,13 +5,13 @@ demo_base.TASK = 'segment'
 demo_base.EPOCHS = 500
 demo_base.IMGSZ = 960
 demo_base.BATCH_SIZE = 16
-demo_base.DEVICE = torch.device('cuda:0')
+demo_base.DEVICE = torch.device('cuda:1')
 demo_base.DATA = "fusedata870_seg_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="psdata735_seg_c6.yaml")
-    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="psdata735_seg_c6.yaml")
+    demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False, data="fusedata1422_seg_c6_check0708.yaml")
+    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False, data="fusedata1422_seg_c6_check0708.yaml")
 
     # demo_base.model_predict('psdata411_seg_c6-[yolov8x-seg]', auto_optim=False, data="psdata411_seg_c6.yaml")
     
@@ -64,4 +64,4 @@ if __name__ == '__main__':
     # demo_base.model_val(r'runs/segment/billboard_seg_626_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
     # demo_base.model_val(r'runs/segment/billboard_seg_626_f010_c6-[yolov8x-seg]2/weights/best.pt', data="billboard_seg_626_f010_c6.yaml")
     # demo_base.model_val(r'runs/segment/fusedata1037_seg_c6-[yolov8x-seg]/weights/best.pt',)
-    demo_base.model_val(r'runs/segment/fusedata1361_seg_c6-[yolov8x-seg]3/weights/best.pt', )
+    # demo_base.model_val(r'runs/segment/fusedata1361_seg_c6-[yolov8x-seg]3/weights/best.pt', )

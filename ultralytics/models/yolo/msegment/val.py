@@ -102,8 +102,7 @@ class MSegmentationValidator(MDetectionValidator):
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1_macro = torch.zeros((0, self.na), device=self.device),
-                f1_micro=torch.zeros((0, self.na), device=self.device),
+                conf_mat = torch.zeros((0, self.na, self.nal, self.nal), device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -130,8 +129,8 @@ class MSegmentationValidator(MDetectionValidator):
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"], stat["f1_macro"], stat["f1_micro"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
-                stat["tp_m"], _, _, _ = self._process_batch(
+                stat["tp"], stat["ap"], stat["conf_mat"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
+                stat["tp_m"], _, _ = self._process_batch(
                     predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True, gt_attributes=mdet_attributes
                 )
                 if self.args.plots:

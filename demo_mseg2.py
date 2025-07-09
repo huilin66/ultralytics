@@ -1,3 +1,5 @@
+from torch.onnx import dynamo_export
+
 import demo_base
 import torch
 
@@ -10,9 +12,9 @@ demo_base.DATA = "fusedata1361_mseg_c6.yaml"
 
 if __name__ == '__main__':
     pass
-    # demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
-    #                 data="psdata735_mseg_c6.yaml",
-    #        weight_path=r'runs/segment/psdata735_seg_c6-[yolov8x-seg]3/weights/best.pt', )
+    demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
+                    data="fusedata1422_mseg_c6.yaml",
+                    weight_path=r'runs/segment/fusedata1422_seg_c6-[yolov8x-seg]3/weights/best.pt', )
     # demo_base.yolo8('yolov8x-mseg-7.yaml', auto_optim=False, retrain=True, mloss_mask=True, mloss_weight=True,
     #                 data="psdata735_mseg_c6_update.yaml",
     #        weight_path=r'runs/segment/psdata735_seg_c6-[yolov8x-seg]3/weights/best.pt', )
@@ -30,8 +32,8 @@ if __name__ == '__main__':
     #                     save_txt=True, save_npy=True
     #                     )
 
-    demo_base.model_val(r'runs/msegment/psdata735_mseg_c6_check0618-[yolov8x-mseg-7]6/weights/best.pt',
-                        save_txt=True, save_npy=True)
+    # demo_base.model_val(r'runs/msegment/psdata735_mseg_c6_check0618-[yolov8x-mseg-7]6/weights/best.pt',
+    #                     save_txt=True, save_npy=True)
 
     # demo_base.model_val(r'runs/msegment/fusedata870_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt', data='fusedata870_mseg_c6.yaml')
     # demo_base.model_val(r'runs/msegment/fusedata870_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt', data='fusedata870_mseg_c6_f010_ref.yaml')
@@ -78,3 +80,19 @@ if __name__ == '__main__':
 
     # demo_base.model_val(r'runs/msegment/billboard_mseg_389_c6-[yolov8x-mseg-dlka3res-7]4/weights/best.pt', data='billboard_mseg_389_c6.yaml')
     # demo_base.model_val(r'runs/msegment/fusedata1037_mseg_c6-[yolov8x-mseg-7]2/weights/best.pt')
+
+
+    # demo_base.model_export(r'runs/msegment/fusedata1361_mseg_c6_check0618-[yolov8x-mseg-7]/weights/best.pt', imgsz=(608,960))
+    # demo_base.model_export(r'runs/msegment/fusedata1361_mseg_c6_check0624-[yolov8x-mseg-7]7/weights/best.pt',
+    #                         imgsz=(608,960),
+    #                         # dynamic=True,
+    #                         batch=6,
+    #                        )
+
+    # demo_base.model_predict(r'runs/msegment/fusedata1361_mseg_c6_check0618-[yolov8x-mseg-7]/weights/best.pt',
+    #                         r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment',
+    #                         name='/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment_labels')
+
+    # demo_base.model_predict(r'runs/msegment/fusedata1361_mseg_c6_check0618-[yolov8x-mseg-7]/weights/best.pt',
+    #                         r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment_data/images',
+    #                         name='/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment_labels')
