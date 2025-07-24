@@ -47,7 +47,17 @@ class COCOeval_diy(COCOeval):
                 mean_s = -1
             else:
                 mean_s = np.mean(s[s>-1])
-            print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            category_dim = 1+int(ap)
+            if s.shape[category_dim] > 1:
+                iStr += ", per category = {}"
+                mean_axis = (0, )
+                if ap==1:
+                    mean_axis = (0, 1)
+                per_category_mean_s = np.mean(s, axis=mean_axis).flatten()
+                with np.printoptions(precision=3, suppress=True, sign=" ", floatmode="fixed"):
+                    print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s, per_category_mean_s))
+            else:
+                print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             return mean_s
         def _summarizeDets():
             stats = np.zeros((12,))
@@ -225,19 +235,19 @@ if __name__ == '__main__':
         {"id": 7, "name": "other"},
     ]  # 根据实际情况修改
 
-    data_dir = r'/localnvme/data/billboard/fused_data/data1422_seg_c6_check0708'
+    data_dir = r'/localnvme/data/billboard/fused_data/data1948_seg_c5_0715'
 
-    # select_val(data_dir)
+    select_val(data_dir)
 
-    # yolo_to_coco(
-    #     os.path.join(data_dir, 'val', 'labels'),
-    #     os.path.join(data_dir, 'val', 'images'),
-    #     os.path.join(data_dir, 'val', "coco_annotations.json"),
-    #     categories)
+    yolo_to_coco(
+        os.path.join(data_dir, 'val', 'labels'),
+        os.path.join(data_dir, 'val', 'images'),
+        os.path.join(data_dir, 'val', "coco_annotations.json"),
+        categories)
 
     coco_val(
-        r'/localnvme/data/billboard/fused_data/data1422_seg_c6_check0708/val/coco_annotations.json',
-        r'/localnvme/project/ultralytics/runs/segment/val154/predictions.json',
+        os.path.join(data_dir, 'val', 'coco_annotations.json'),
+        r'/localnvme/project/ultralytics/runs/segment/val163/predictions.json',
     )
 
 

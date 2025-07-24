@@ -191,8 +191,6 @@ def verify_image_label_mdet(args):
             nf = 1  # label found
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
-                xx = lb[0][1]
-                yy = int(xx)
                 na = int(lb[0][1])
                 if seg:  # is segment
                     classes = np.array([x[0] for x in lb], dtype=np.float32)
@@ -224,6 +222,7 @@ def verify_image_label_mdet(args):
                 _, i = np.unique(lb, axis=0, return_index=True)
                 if len(i) < nl:  # duplicate row check
                     lb = lb[i]  # remove duplicates
+                    mdet_attributes = mdet_attributes[i]
                     if segments:
                         segments = [segments[x] for x in i]
                     msg = f"{prefix}WARNING ⚠️ {im_file}: {nl - len(i)} duplicate labels removed"
@@ -233,7 +232,6 @@ def verify_image_label_mdet(args):
         else:
             nm = 1  # label missing
             lb = np.zeros((0, (5 + nkpt * ndim) if keypoints else 5), dtype=np.float32)
-        # lb = lb[:, :5]
         return im_file, lb, shape, segments, keypoints, mdet_attributes, nm, nf, ne, nc, msg
     except Exception as e:
         nc = 1

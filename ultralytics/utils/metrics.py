@@ -1609,7 +1609,7 @@ class MSegmentMetrics(SimpleClass):
     @property
     def fitness(self):
         """Get the fitness score for both segmentation and bounding box models."""
-        return (self.seg.fitness() + self.box.fitness())*100 + (self.attributes.mf1_macro + self.attributes.mf1_micro)
+        return (self.seg.fitness() + self.box.fitness())*100 + (self.attributes.mf1_macro*10 + self.attributes.mf1_micro*0)
 
     @property
     def ap_class_index(self):

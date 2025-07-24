@@ -35,24 +35,24 @@ if __name__ == '__main__':
     #                     # name='debug'
     #                     )
 
-    demo_base.yolo8('yolov8x-mseg-dlka3res-7.yaml',
-                    weight_path=r'runs/segment/fusedata2177_seg_c5_0718-[yolov8x-seg-dlka3res]/weights/best.pt',
-                    auto_optim=False,
-                    retrain=True,
-                    # mloss_mask=True,
-                    mloss_weight=0,
-                    mloss_enlarge=2,
-                    # name='debug'
-                    )
-    demo_base.yolo8('yolov8x-mseg-dlka3res-7.yaml',
-                    weight_path=r'runs/segment/fusedata2177_seg_c5_0718-[yolov8x-seg-dlka3res]/weights/best.pt',
-                    auto_optim=False,
-                    retrain=True,
-                    mloss_mask=True,
-                    mloss_weight=0,
-                    # mloss_enlarge=0,
-                    # name='debug'
-                    )
+    # demo_base.yolo8('yolov8x-mseg-dlka3res-7.yaml',
+    #                 weight_path=r'runs/segment/fusedata2177_seg_c5_0718-[yolov8x-seg-dlka3res]/weights/best.pt',
+    #                 auto_optim=False,
+    #                 retrain=True,
+    #                 # mloss_mask=True,
+    #                 mloss_weight=0,
+    #                 mloss_enlarge=2,
+    #                 # name='debug'
+    #                 )
+    # demo_base.yolo8('yolov8x-mseg-dlka3res-7.yaml',
+    #                 weight_path=r'runs/segment/fusedata2177_seg_c5_0718-[yolov8x-seg-dlka3res]/weights/best.pt',
+    #                 auto_optim=False,
+    #                 retrain=True,
+    #                 mloss_mask=True,
+    #                 mloss_weight=0,
+    #                 # mloss_enlarge=0,
+    #                 # name='debug'
+    #                 )
 
     # demo_base.model_val(r'runs/msegment/fusedata2177_mseg_c5_0718-[yolov8x-mseg-dlka3res-7]/weights/best.pt',
     #                     # save_txt=True, save_npy=True
@@ -62,13 +62,13 @@ if __name__ == '__main__':
     #                     )
 
     # demo_base.model_predict(
-    #     r'runs/msegment/fusedata1600_mseg_c6_0710-[yolov8x-mseg-7]/weights/best.pt',
+    #     r'runs/msegment/fusedata2177_mseg_c5_0718-[yolov8x-mseg-dlka3res-7]10/weights/best.pt',
     #     img_dir = r'/localnvme/data/billboard/ps_data/0702/images',
     #     name=r'/localnvme/data/billboard/ps_data/0702/images_infer',
     # )
 
-    # demo_base.model_export(r'runs/msegment/fusedata1600_mseg_c6_0710-[yolov8x-mseg-7]/weights/best.pt',
-    #                         imgsz=(608,960),
-    #                         # dynamic=True,
-    #                         batch=6,
-    #                        )
+    demo_base.model_export(r'runs/msegment/fusedata2177_mseg_c5_0718-[yolov8x-mseg-dlka3res-7]10/weights/best.pt',
+                            imgsz=(608,960),
+                            # dynamic=True,
+                            batch=6,
+                           )
