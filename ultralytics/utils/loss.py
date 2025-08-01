@@ -1003,7 +1003,7 @@ class v8MSegmentationLoss(v8MDetectionLoss):
             else:
                 loss_active = 0
 
-            loss[4] = loss_exists + self.mloss_weight * loss_active
+            loss[4] = (1-self.mloss_weight) * loss_exists + self.mloss_weight * loss_active
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.seg  # seg gain

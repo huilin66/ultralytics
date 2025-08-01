@@ -110,7 +110,7 @@ def model_track(weight_path, img_dir, network=YOLO, single=False, save=True, sav
 
 def model_export(weight_path, format='onnx', network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
-    model.export(format=format, **kwargs)
+    model.export(format=format, device=DEVICE, **kwargs)
 
 # endregion
 

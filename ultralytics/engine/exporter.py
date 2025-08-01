@@ -107,6 +107,8 @@ from ultralytics.utils.files import file_size, spaces_in_path
 from ultralytics.utils.ops import Profile, nms_rotated, xywh2xyxy
 from ultralytics.utils.torch_utils import TORCH_1_13, get_latest_opset, select_device
 
+import deform_conv2d_onnx_exporter
+deform_conv2d_onnx_exporter.register_deform_conv2d_onnx_op()
 
 def export_formats():
     """Return a dictionary of Ultralytics YOLO export formats."""

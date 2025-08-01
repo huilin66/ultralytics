@@ -235,7 +235,7 @@ if __name__ == '__main__':
         {"id": 7, "name": "other"},
     ]  # 根据实际情况修改
 
-    data_dir = r'/localnvme/data/billboard/fused_data/data1948_seg_c5_0715'
+    data_dir = r'/localnvme/data/billboard/fused_data/data2419_seg_c5_0730'
 
     select_val(data_dir)
 
@@ -247,7 +247,7 @@ if __name__ == '__main__':
 
     coco_val(
         os.path.join(data_dir, 'val', 'coco_annotations.json'),
-        r'/localnvme/project/ultralytics/runs/segment/val163/predictions.json',
+        r'/localnvme/project/ultralytics/runs/segment/val170/predictions.json',
     )
 
 
