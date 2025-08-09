@@ -19,17 +19,13 @@ names:
 attributes:
   deformation:
     - no
-    - medium
     - high
   broken:
     - no
-    - medium
     - high
   abandonment:
     - no
-    - medium
     - high
   corrosion:
     - no
-    - medium
     - high

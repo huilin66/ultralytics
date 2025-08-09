@@ -1,4 +1,4 @@
-path: /localnvme/data/billboard/fused_data/data3044_mseg_c5_0731 # dataset root dir
+path: /localnvme/data/billboard/fused_data/data3072_seg_c5_0809 # dataset root dir
 train: train.txt # train images (relative to 'path') 118287 images
 val: val.txt # val images (relative to 'path') 5000 images
 test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794

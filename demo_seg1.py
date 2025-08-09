@@ -6,13 +6,13 @@ demo_base.EPOCHS = 500
 demo_base.IMGSZ = 960
 demo_base.BATCH_SIZE = 16
 demo_base.DEVICE = torch.device('cuda:0')
-demo_base.DATA = "fusedata2419_seg_c6_0730.yaml"
+demo_base.DATA = "fusedata3072_seg_c6_0809.yaml"
 
 if __name__ == '__main__':
     pass
 
-    # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False)
-    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
+    demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False)
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
 
     # demo_base.model_val(
     #     r'runs/segment/fusedata2177_seg_c5_0718-[yolov8x-seg-dlka3res]/weights/best.pt',
