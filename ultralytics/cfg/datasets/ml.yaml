@@ -1,0 +1,18 @@
+path: /nfsv4/23039356r/data/mmdet/ml # dataset root dir
+train: train.txt # train images (relative to path) 118287 images
+val: val.txt # val images (relative to path) 5000 images
+test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+names:
+    0: Small Car
+    1: Bus
+    2: Cargo Truck
+    3: Dump Truck
+    4: Van
+    5: Trailer
+    6: Tractor
+    7: Excavator
+    8: Truck Tractor
+    9: other-vehicle
+

@@ -1,0 +1,19 @@
+path: /nfsv4/23039356r/data/building_defect/BD_1212/2024_defect_pure_yolo_merge/ # dataset root dir
+train: train.txt # train images (relative to 'path') 118287 images
+val: val.txt # val images (relative to 'path') 5000 images
+test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+names:
+  0: background
+  1: crack
+  2: hole
+  3: blister
+  4: delamination
+  5: peeling
+  6: spalling
+  7: mold
+  8: corrosion
+  9: condensation
+  10: stain
+  11: vegetation
