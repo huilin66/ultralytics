@@ -3,9 +3,9 @@ import numpy as np
 import argparse
 import os
 from pathlib import Path
+pd.set_option("display.precision", 4)
 
-
-def load_confusion_matrix(file_path):
+def load_confusion_matrix(file_path, risk_name):
     """加载混淆矩阵CSV文件"""
     # 检查文件是否存在
     if not Path(file_path).exists():
@@ -22,21 +22,16 @@ def load_confusion_matrix(file_path):
     display_df.columns = [f"label: {cls}" for cls in display_df.columns]
     
     # 计算各level的总标签数
-    label_totals = cm_df.sum(axis=1)
-    
-    # 计算所有level的总和
-    total_sum = label_totals.sum()
-    
-    # 将label_totals合并到display_df中
-    display_df['label_total'] = label_totals.values
-    
+    label_totals = cm_df.sum(axis=0)
+    display_df.loc['label:total'] = label_totals.values 
+    pred_totals = display_df.sum(axis=1)
+    display_df['pred:total'] = pred_totals.values
+
+    display_df = display_df.astype(int)
     # 打印混淆矩阵（含总数，带网格）
-    print("混淆矩阵 (含各level总标签数):")
+    print(f"{' ':20} {risk_name} confusion matrix:")
     print(display_df.to_string(index=True, header=True, justify='center', col_space=12))
-    
-    # 打印总和
-    print(f"\n所有level的总标签数: {total_sum}")
-    
+    print('')
     return cm_df
 
 
@@ -106,8 +101,30 @@ def process_folder(folder_path):
         "confusion_matrix_for_attribute_deformation.csv": "deformation"
     }
     
+    # 确定列定义
+    # 先检查第一个文件的类别结构
+    if file_patterns:
+        first_pattern = file_patterns[0]
+        first_file_path = os.path.join(folder_path, first_pattern)
+        try:
+            first_cm_df = pd.read_csv(first_file_path, index_col=0)
+            classes = first_cm_df.index.tolist()
+            if "medium" in classes:
+                columns = ["no", "medium", "high", "overall"]
+                print('find "medium"')
+            else:
+                columns = ["no", "high", "overall"]
+                print('not find "medium"')
+        except Exception as e:
+            print(f"读取第一个文件 {first_file_path} 时出错: {e}")
+            # 默认使用包含medium的列定义
+            columns = ["no", "medium", "high", "overall"]
+    else:
+        # 如果没有文件，默认使用包含medium的列定义
+        columns = ["no", "medium", "high", "overall"]
+    print(f'set columns with {columns}')
+
     # 创建结果DataFrame
-    columns = ["no", "medium", "high", "overall"]
     results_df = pd.DataFrame(index=risk_names.values(), columns=columns)
     results_df_precision = pd.DataFrame(index=risk_names.values(), columns=columns)
     results_df_recall = pd.DataFrame(index=risk_names.values(), columns=columns)
@@ -122,8 +139,7 @@ def process_folder(folder_path):
         
         try:
             # 加载混淆矩阵
-            cm_df = load_confusion_matrix(file_path)
-            print(f"成功加载混淆矩阵: {file_path}")
+            cm_df = load_confusion_matrix(file_path, risk_name)
             
             # 计算指标
             f1_scores, precision_scores, recall_scores, macro_f1 = calculate_f1_scores(cm_df)
@@ -132,26 +148,29 @@ def process_folder(folder_path):
             # 注意: 这里假设类别顺序是False, medium, high
             # 我们将False映射到'no'
             results_df.loc[risk_name, "no"] = f1_scores.get("False", 0)
-            results_df.loc[risk_name, "medium"] = f1_scores.get("medium", 0)
+            if "medium" in columns:
+                results_df.loc[risk_name, "medium"] = f1_scores.get("medium", 0)
             results_df.loc[risk_name, "high"] = f1_scores.get("high", 0)
             results_df.loc[risk_name, "overall"] = macro_f1
             
             results_df_precision.loc[risk_name, "no"] = precision_scores.get("False", 0)
-            results_df_precision.loc[risk_name, "medium"] = precision_scores.get("medium", 0)
+            if "medium" in columns:
+                results_df_precision.loc[risk_name, "medium"] = precision_scores.get("medium", 0)
             results_df_precision.loc[risk_name, "high"] = precision_scores.get("high", 0)
             results_df_precision.loc[risk_name, "overall"] = sum(precision_scores.values()) / len(precision_scores) if precision_scores else 0
             
             results_df_recall.loc[risk_name, "no"] = recall_scores.get("False", 0)
-            results_df_recall.loc[risk_name, "medium"] = recall_scores.get("medium", 0)
+            if "medium" in columns:
+                results_df_recall.loc[risk_name, "medium"] = recall_scores.get("medium", 0)
             results_df_recall.loc[risk_name, "high"] = recall_scores.get("high", 0)
             results_df_recall.loc[risk_name, "overall"] = sum(recall_scores.values()) / len(recall_scores) if recall_scores else 0
             
         except Exception as e:
             print(f"处理文件 {file_path} 时出错: {e}")
             # 填充NaN表示处理失败
-            results_df.loc[risk_name] = [np.nan, np.nan, np.nan, np.nan]
-            results_df_precision.loc[risk_name] = [np.nan, np.nan, np.nan, np.nan]
-            results_df_recall.loc[risk_name] = [np.nan, np.nan, np.nan, np.nan]
+            results_df.loc[risk_name] = [np.nan] * len(columns)
+            results_df_precision.loc[risk_name] = [np.nan] * len(columns)
+            results_df_recall.loc[risk_name] = [np.nan] * len(columns)
     
     return results_df, results_df_precision, results_df_recall
 
@@ -159,7 +178,7 @@ def process_folder(folder_path):
 def main():
     # 解析命令行参数
     parser = argparse.ArgumentParser(description='处理文件夹中的混淆矩阵文件并计算评估指标')
-    parser.add_argument('folder_path', type=str, help='包含混淆矩阵CSV文件的文件夹路径')
+    parser.add_argument('--folder_path', type=str, default='/localnvme/project/ultralytics/runs/msegment/val282', help='包含混淆矩阵CSV文件的文件夹路径')
     parser.add_argument('--output_f1', type=str, default='f1_results.csv', help='F1结果输出文件名(默认: f1_results.csv)')
     parser.add_argument('--output_precision', type=str, default='precision_results.csv', help='精确率结果输出文件名(默认: precision_results.csv)')
     parser.add_argument('--output_recall', type=str, default='recall_results.csv', help='召回率结果输出文件名(默认: recall_results.csv)')
@@ -173,16 +192,25 @@ def main():
         # 处理文件夹
         results_df, results_df_precision, results_df_recall = process_folder(args.folder_path)
         
+        # 计算4个risk的overall指标平均值
+        f1_overall_avg = results_df['overall'].mean()
+        precision_overall_avg = results_df_precision['overall'].mean()
+        recall_overall_avg = results_df_recall['overall'].mean()
+
         # 打印结果
-        print("\nF1分数计算结果:")
+        print(f"{' ':15}F1 result:")
         print(results_df)
-        
-        print("\n精确率计算结果:")
+        print(f"Average: {f1_overall_avg:.4f}\n")
+
+        print(f"{' ':15}precision result:")
         print(results_df_precision)
-        
-        print("\n召回率计算结果:")
+        print(f"Average: {precision_overall_avg:.4f}\n")
+
+        print(f"{' ':15}recall result:")
         print(results_df_recall)
-        
+        print(f"Average: {recall_overall_avg:.4f}\n")
+
+
         # 保存结果
         output_f1_path = os.path.join(args.folder_path, args.output_f1)
         results_df.to_csv(output_f1_path)
@@ -195,15 +223,6 @@ def main():
         output_recall_path = os.path.join(args.folder_path, args.output_recall)
         results_df_recall.to_csv(output_recall_path)
         print(f"召回率结果已保存到: {output_recall_path}")
-        
-        # 计算4个risk的overall指标平均值
-        f1_overall_avg = results_df['overall'].mean()
-        precision_overall_avg = results_df_precision['overall'].mean()
-        recall_overall_avg = results_df_recall['overall'].mean()
-        
-        print(f"\n4个risk的overall F1平均值: {f1_overall_avg}")
-        print(f"4个risk的overall 精确率平均值: {precision_overall_avg}")
-        print(f"4个risk的overall 召回率平均值: {recall_overall_avg}")
         
     except Exception as e:
         print(f"错误: {e}")

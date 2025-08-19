@@ -970,9 +970,11 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         if fg_mask.sum() and self.mloss_mask:
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]
-
-            weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
-
+            if self.mloss_enlarge == 0:
+                weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
+            else:
+                weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device,
+                                              dtype=pred_attributes.dtype) if self.mloss_weight else None
             loss[4] = F.binary_cross_entropy_with_logits(
                 input=pred_attributes_fg,
                 target=gt_attributes_fg,

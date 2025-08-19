@@ -97,14 +97,18 @@ class COCOeval_diy(COCOeval):
         self.stats = summarize()
 
 
-def select_val(input_dir):
+def select_val(input_dir, val_txt='val.txt'):
     pass
-    val_txt_path = os.path.join(input_dir, 'val.txt')
+    val_txt_path = os.path.join(input_dir, val_txt)
     image_dir = os.path.join(input_dir, 'images')
     label_dir = os.path.join(input_dir, 'labels')
     val_dir = os.path.join(input_dir, 'val')
     val_image_dir = os.path.join(val_dir, 'images')
     val_label_dir = os.path.join(val_dir, 'labels')
+    if os.path.exists(val_label_dir):
+        shutil.rmtree(val_label_dir)
+    if os.path.exists(val_image_dir):
+        shutil.rmtree(val_image_dir)
     os.makedirs(val_image_dir, exist_ok=True)
     os.makedirs(val_label_dir, exist_ok=True)
 
@@ -235,10 +239,10 @@ if __name__ == '__main__':
         {"id": 7, "name": "other"},
     ]  # 根据实际情况修改
 
-    data_dir = r'/localnvme/data/billboard/fused_data/data2419_seg_c5_0730'
+    data_dir = r'/localnvme/data/billboard/fused_data/data3072_seg_c5_0809'
 
-    select_val(data_dir)
-
+    # select_val(data_dir, val_txt='val.txt')
+    select_val(data_dir, val_txt='val_80p.txt')
     yolo_to_coco(
         os.path.join(data_dir, 'val', 'labels'),
         os.path.join(data_dir, 'val', 'images'),
@@ -247,7 +251,7 @@ if __name__ == '__main__':
 
     coco_val(
         os.path.join(data_dir, 'val', 'coco_annotations.json'),
-        r'/localnvme/project/ultralytics/runs/segment/val170/predictions.json',
+        r'/localnvme/project/ultralytics/runs/segment/val172/predictions.json',
     )
 
 

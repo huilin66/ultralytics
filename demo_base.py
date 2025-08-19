@@ -62,6 +62,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
     return result
 
 def model_val(weight_path, network=YOLO, **kwargs):
+    print(f'val with {weight_path}')
     model = network(weight_path, task=TASK)
 
     val_params = {
