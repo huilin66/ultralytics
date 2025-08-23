@@ -10,7 +10,7 @@ from torch.nn.init import constant_, xavier_uniform_
 import torch.nn.functional as F
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
-from .block import DFL, BNContrastiveHead, ContrastiveHead, Proto, RepNCSPELAN4, C2fCIB
+from .block import DFL, BNContrastiveHead, ContrastiveHead, Proto, RepNCSPELAN4, C2fCIB, Deformable_LKA, Deformable_LKA_Attention, C3STR
 from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer, SwinTransformerBlock, MLP
 from .utils import bias_init_with_prob, linear_init
@@ -334,8 +334,18 @@ class MDetect(nn.Module):
             self.end2end = False
         self.com_path = com_path
         ca = c3 if ca is None else ca
+        self.N = 3
         if not self.sep:
             self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
+        elif self.sep=='dlka':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Deformable_LKA(ca), nn.Conv2d(ca, self.na, 1)) for x in ch)
+        elif self.sep == 'dlkaatt':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Deformable_LKA_Attention(ca), nn.Conv2d(ca, self.na, 1)) for x in ch)
+        elif self.sep == 'c3str':
+            self.cva = nn.ModuleList( nn.Sequential(Conv(x, ca, 3), C3STR(ca, ca), nn.Conv2d(ca, self.na, 1)) for x in ch)
+        elif self.sep == 'dfl':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na*self.N, 1)) for x in ch)
+            self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
         else:
             self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
 
@@ -357,7 +367,11 @@ class MDetect(nn.Module):
             return self.forward_end2end(x)
 
         for i in range(self.nl):
-            x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
+            if not self.sep:
+                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
+            else:
+                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
+
         if self.training:  # Training path
             return x
         y = self._inference(x)
@@ -389,6 +403,21 @@ class MDetect(nn.Module):
         return y if self.export else (y, {"one2many": x, "one2one": one2one})
 
     def _inference(self, x):
+        def predict_score(feats):
+            # feats: [B, C, na*N]
+            B, _, C = feats.shape
+
+            # reshape
+            logits = feats.view(B, self.na, self.N, C)  # [B, C, na, N]
+            probs = torch.softmax(logits, dim=-1)  # [B, C, na, N]
+
+            # 区间中心，可以按实际需求修改
+            # centers = torch.arange(self.N, device=feats.device, dtype=torch.float)
+            centers = torch.linspace(0, 1, self.N, device=feats.device)
+
+            # [B, C, na]
+            score = (probs * centers.view(1, 1, self.N, 1)).sum(dim=-2)
+            return score
         """Decode predicted bounding boxes and class probabilities based on multiple-level feature maps."""
         # Inference path
         shape = x[0].shape  # BCHW
@@ -402,6 +431,8 @@ class MDetect(nn.Module):
             box = x_cat[:, : self.reg_max * 4]
             cls = x_cat[:, self.reg_max * 4 : self.reg_max * 4 + self.nc]
             att = x_cat[:, self.reg_max * 4 + self.nc : ]
+        elif self.sep=='dfl':
+            box, cls, att = x_cat.split((self.reg_max * 4, self.nc, self.na*self.N), 1)
         else:
             box, cls, att = x_cat.split((self.reg_max * 4, self.nc, self.na), 1)
 
@@ -415,7 +446,9 @@ class MDetect(nn.Module):
             dbox = self.decode_bboxes(self.dfl(box) * norm, self.anchors.unsqueeze(0) * norm[:, :2])
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
-
+        if self.sep=='dfl':
+            att = predict_score(att)
+            return torch.cat((dbox, cls.sigmoid(), att), 1)
         return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
         # return torch.cat((dbox, cls.sigmoid(), att), 1)
 

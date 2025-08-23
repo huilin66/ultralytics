@@ -10,15 +10,69 @@ demo_base.DATA = "fusedata2419_mseg_c5_0730.yaml"
 
 MODEL1 = 'yolov8x-mseg-7.yaml'
 MODEL2 = 'yolov8x-mseg-dlka3res-7.yaml'
-SEG_WEIGHT = "runs/segment/fusedata3072_seg_c5_0809_80p-[yolov8x-seg-dlka3res]2/weights/best.pt"
-DATA1 = "fusedata3072_mseg_c5_0809_80p.yaml"
-DATA2 = "fusedata3072_mseg_c5_l2_0809_80p.yaml"
+SEG_WEIGHT = "runs/segment/fusedata3899_seg_c5_0818_80p-[yolov8x-seg-dlka3res]/weights/best.pt"
+DATA1 = "fusedata3899_mseg_c5_0818_80p.yaml"
+DATA2 = "fusedata3899_mseg_c5_l2_0818_80p.yaml"
 
 
 if __name__ == '__main__':
     pass
 
     # 1 loss
+    demo_base.yolo8(
+        MODEL2, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
+        mloss_mask=True, mloss_weight=False, mloss_enlarge=0
+    )
+    demo_base.yolo8(
+        MODEL2, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
+        mloss_mask=True, mloss_weight=True, mloss_enlarge=0
+    )
+    demo_base.yolo8(
+        MODEL2, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
+        mloss_mask=True, mloss_weight=True, mloss_enlarge=2
+    )
+    demo_base.yolo8(
+        MODEL2, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
+        mloss_mask=True, mloss_weight=True, mloss_enlarge=5
+    )
+    # # 2 loss
+    # # loss=loss1
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=0
+    # )
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=1
+    # )
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=2
+    # )
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5
+    # )
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10
+    # )
+    # # loss=0.75loss1+0.25loss2
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0.25, mloss_enlarge=1
+    # )
+    # # loss=0.5loss1+0.5loss2
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0.5, mloss_enlarge=1
+    # )
+    # # loss=0.75loss1+0.25loss2
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0.75, mloss_enlarge=1
+    # )
+
     demo_base.yolo8(
         MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
         mloss_mask=True, mloss_weight=False, mloss_enlarge=0
@@ -35,12 +89,6 @@ if __name__ == '__main__':
         MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
         mloss_mask=True, mloss_weight=True, mloss_enlarge=5
     )
-    # 2 loss
-    # loss=loss1
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=0
-    )
     demo_base.yolo8(
         MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
         mloss_mask=False, mloss_weight=0, mloss_enlarge=1
@@ -48,29 +96,6 @@ if __name__ == '__main__':
     demo_base.yolo8(
         MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
         mloss_mask=False, mloss_weight=0, mloss_enlarge=2
-    )
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=5
-    )
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=10
-    )
-    # loss=0.75loss1+0.25loss2
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0.25, mloss_enlarge=1
-    )
-    # loss=0.5loss1+0.5loss2
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0.5, mloss_enlarge=1
-    )
-    # loss=0.75loss1+0.25loss2
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0.75, mloss_enlarge=1
     )
 
     # demo_base.model_val(r'runs/msegment/fusedata3044_mseg_c5_0731-[yolov8x-mseg-dlka3res-7]4/weights/best.pt',

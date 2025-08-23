@@ -98,15 +98,16 @@ def model_track(weight_path, img_dir, network=YOLO, single=False, save=True, sav
         'save' : save,
         'save_txt' : save_txt,
         'stream' : stream,
+        'tracker' : "bytetrack.yaml",
     }
     predict_params.update(kwargs)
     if single:
         image_list = os.listdir(img_dir)
         for image_name in image_list:
             image_path = os.path.join(img_dir, image_name)
-            result = model.predict(image_path, **predict_params, )
+            result = model.track(image_path, **predict_params, )
     else:
-        result = model.predict(img_dir, **predict_params,)
+        result = model.track(img_dir, **predict_params,)
         for _ in result: pass
 
 def model_export(weight_path, format='onnx', network=YOLO, **kwargs):
