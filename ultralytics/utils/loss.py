@@ -979,6 +979,8 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         if att_dfl:
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]
+
+
             loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3)
 
         else:
@@ -1030,30 +1032,30 @@ class v8MSegmentationLoss(v8MDetectionLoss):
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
-    @staticmethod
     def _att_df_loss(
+            self,
             logits,
             target,
-            N,
+            N=3,
             gamma: float = 2.0,
-            eps: float = 1e-8):
+            eps: float = 1e-8, 
+            alpha=None):
         """
         Return sum of left and right DFL losses.
 
         Distribution Focal Loss (DFL) proposed in Generalized Focal Loss
         https://ieeexplore.ieee.org/document/9792391
         """
-
         C, _ = logits.shape
         na = target.shape[1]
 
+        target = target.view(C, na, 1)
         # reshape 成分布: [C, na, N]
-        logits = logits.view(C, na, N)
+        logits = logits.view(C, na, 3)
         probs = torch.softmax(logits, dim=2)
 
-
         # gather 概率
-        pt = probs.gather(2, target.unsqueeze(2)).squeeze(2)  # [C, na]
+        pt = probs.gather(2, target.long()).squeeze(2)  # [C, na]
 
         # focal 调制（可选）
         if gamma > 0:
@@ -1064,30 +1066,7 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         # loss = -log(pt)
         loss = -(focal_weight * torch.log(pt + eps))
 
-        return loss
-
-        # C, _ = logits.shape
-        #
-        # # reshape 成分布: [C, na, N]
-        # logits = logits.view(C, -1, N)
-        # probs = torch.softmax(logits, dim=2)  # 在N维上softmax
-        #
-        # # 左右区间
-        # l = target.long()  # floor
-        # r = torch.clamp(l + 1, max=N - 1)  # ceil
-        #
-        # wl = (r.float() - target).unsqueeze(2)  # [C, na, 1]
-        # wr = (target - l.float()).unsqueeze(2)  # [C, na, 1]
-        #
-        # # gather 概率
-        # pl = probs.gather(2, l.unsqueeze(2)).squeeze(2)  # [C, na]
-        # pr = probs.gather(2, r.unsqueeze(2)).squeeze(2)  # [C, na]
-        #
-        # # DFL loss
-        # loss = -(wl.squeeze(2) * torch.log(pl + 1e-8) +
-        #          wr.squeeze(2) * torch.log(pr + 1e-8))
-        #
-        # return loss.mean()
+        return loss.mean()
 
     @staticmethod
     def single_mask_loss(

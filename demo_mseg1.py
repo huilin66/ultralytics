@@ -116,7 +116,7 @@ if __name__ == '__main__':
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=2
     # )
 
-    # demo_base.model_val(r'runs/msegment/fusedata3899_mseg_c5_0818_80p-[yolov8x-mseg-dlka3res-7-dlka]3/weights/best.pt',
+    # demo_base.model_val(r'runs/msegment/fusedata3899_mseg_c5_0818_80p-[yolov8x-mseg-dlka3res-7]/weights/best.pt',
     #                     # save_txt=True, save_npy=True
     #                     )
     # demo_base.model_val(r'runs/msegment/fusedata2177_mseg_c5_0718-[yolov8x-mseg-dlka3res-7]19/weights/best.pt',
@@ -130,15 +130,15 @@ if __name__ == '__main__':
     #     name=r'/localnvme/data/billboard/bd_data/data626_mseg_c6_check0624/demo_images_infer',
     # )
 
-    # demo_base.model_export(r'runs/msegment/fusedata3044_mseg_c5_0731-[yolov8x-mseg-dlka3res-7]4/weights/best.pt',
+    # demo_base.model_export(r'runs/msegment/fusedata3899_mseg_c5_0818_80p-[yolov8x-mseg-dlka3res-7]/weights/best.pt',
     #                         imgsz=(608,960),
     #                         # dynamic=True,
     #                         batch=6,
     #                        )
 
 
-    demo_base.model_track(
-        r'runs/msegment/fusedata3044_mseg_c5_0731-[yolov8x-mseg-dlka3res-7]4/weights/best.pt',
-        img_dir=r'/localnvme/data/billboard/demo_data/data118_mseg/images',
-        name=r'/localnvme/data/billboard/demo_data/data118_mseg/images_infer',
-    )
+    # demo_base.model_track(
+    #     r'runs/msegment/fusedata3044_mseg_c5_0731-[yolov8x-mseg-dlka3res-7]4/weights/best.pt',
+    #     img_dir=r'/localnvme/data/billboard/demo_data/data118_mseg/images',
+    #     name=r'/localnvme/data/billboard/demo_data/data118_mseg/images_infer',
+    # )
