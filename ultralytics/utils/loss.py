@@ -980,8 +980,13 @@ class v8MSegmentationLoss(v8MDetectionLoss):
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]
 
-
-            loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3)
+            if self.mloss_weight:
+                loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3,
+                                            # alpha=torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype),
+                                            alpha=torch.tensor([0.175, 3.5, 7.0], device=pred_attributes.device, dtype=pred_attributes.dtype),
+                                            )
+            else:
+                loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3)
 
         else:
             if fg_mask.sum() and self.mloss_mask:
@@ -1049,23 +1054,32 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         C, _ = logits.shape
         na = target.shape[1]
 
-        target = target.view(C, na, 1)
         # reshape 成分布: [C, na, N]
-        logits = logits.view(C, na, 3)
+        logits = logits.view(C, na, N) 
         probs = torch.softmax(logits, dim=2)
 
-        # gather 概率
-        pt = probs.gather(2, target.long()).squeeze(2)  # [C, na]
+        # 转换 target 为 one-hot 分布
+        target = target.clamp(0, N - 1).long().view(C, na, 1)
+        target_dist = torch.zeros_like(probs).scatter_(-1, target, 1)
+
+        # 正确类别的概率
+        pt = (probs * target_dist).sum(dim=2)  # [C, na]
 
         # focal 调制（可选）
-        if gamma > 0:
-            focal_weight = (1.0 - pt).pow(gamma)
-        else:
-            focal_weight = 1.0
+        focal_weight = (1.0 - pt).pow(gamma)
 
-        # loss = -log(pt)
-        loss = -(focal_weight * torch.log(pt + eps))
+        if alpha is not None:
+            class_weight = alpha[target.squeeze(-1).long()]  # [C, na]
+            focal_weight = focal_weight * class_weight
+        
 
+
+        # cross entropy (对整个分布)
+        prob_log = torch.log(probs + eps)
+        ce_loss = -(target_dist * prob_log).sum(dim=2)  # [C, na]
+
+        # focal * ce
+        loss = focal_weight * ce_loss
         return loss.mean()
 
     @staticmethod

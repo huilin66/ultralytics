@@ -1438,7 +1438,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                     args[3] = True
             if m is A2C2f:
                 legacy = False
-                if scale in "lx":  # for L/X sizes
+                if scale in "lx" and len(args)==5:  # for L/X sizes
                     args.extend((True, 1.2))
         elif m is AIFI:
             args = [ch[f], *args]

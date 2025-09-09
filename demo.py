@@ -32,11 +32,15 @@
 
 
 
+# from ultralytics import YOLO
+# YOLO("yolov8n.pt").train(
+#     data="fusedata3072_seg_c5_0809_80p.yaml",
+#     epochs=1, imgsz=960, batch=8,
+#     mixup=1.0,
+#     plots=True, save=True,
+#     task='segment'
+# )
 from ultralytics import YOLO
-YOLO("yolov8n.pt").train(
-    data="fusedata3072_seg_c5_0809_80p.yaml",
-    epochs=1, imgsz=960, batch=8,
-    mixup=1.0,
-    plots=True, save=True,
-    task='segment'
-)
+
+model = YOLO("runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt")
+model.train(resume=True)

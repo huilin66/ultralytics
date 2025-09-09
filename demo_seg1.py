@@ -12,7 +12,7 @@ if __name__ == '__main__':
     pass
 
     # demo_base.yolo8('yolov8x-seg.yaml', auto_optim=False)
-    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
 
     # demo_base.model_val(
     #     r'runs/segment/fusedata3899_seg_c5_0818-[yolov8x-seg-dlka3res]/weights/best.pt',
@@ -27,3 +27,41 @@ if __name__ == '__main__':
     #     r'/localnvme/data/billboard/fused_data/data1422_seg_c6_check0708/val/images',
     # )
 
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov8x-seg]2/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov9e-seg]3/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg]/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov11x-seg]/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov12x-seg]6/weights/best.pt',
+    # )
+    #
+    #
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov8x-seg-dlka3res]/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov9e-seg-dlka3res]2/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov11x-seg-dlka3res]2/weights/best.pt',
+    # )
+    # demo_base.model_val(
+    #     r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov12x-seg-dlka3res]/weights/best.pt',
+    # )
+
+    demo_base.model_val(
+        r'runs/segment/fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2/weights/best.pt',
+        # save_json=True,
+        augment=True,
+    )

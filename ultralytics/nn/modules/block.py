@@ -1590,6 +1590,12 @@ class SPPELAN(nn.Module):
             self.layer_module = C3STR(self.c1_module, self.c2_module)
         elif self.add_module == 'c3ghost':
             self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'dlka':
+            self.layer_module = Deformable_LKA(self.c1_module)
+        elif self.add_module == 'dlkaatt':
+            self.layer_module = Deformable_LKA_Attention(self.c1_module)
+        elif self.add_module == 'bot3':
+            self.layer_module = BoT3(self.c1_module, self.c2_module)
         else:
             self.layer_module = None
 
@@ -2185,7 +2191,11 @@ class C2PSA(nn.Module):
         >>> output_tensor = c2psa(input_tensor)
     """
 
-    def __init__(self, c1, c2, n=1, e=0.5):
+    def __init__(self, c1, c2, n=1, e=0.5,
+                 add_module=None,
+                 res_module=False,
+                 pos_module=None,
+                 ):
         """
         Initialize C2PSA module.
 
@@ -2203,6 +2213,33 @@ class C2PSA(nn.Module):
 
         self.m = nn.Sequential(*(PSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
 
+        self.add_module = add_module
+        self.res_module = res_module
+        self.pos_module = pos_module
+        if self.pos_module == 1:
+            self.c1_module, self.c2_module = c1, c1
+        elif self.pos_module == 3:
+            self.c1_module, self.c2_module = c2, c2
+        elif self.pos_module is None:
+            self.c1_module, self.c2_module = None, None
+        else:
+            raise ValueError(self.pos_module, 'not support!')
+
+        if self.add_module == 'c3tr':
+            self.layer_module = C3TR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3str':
+            self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3ghost':
+            self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'dlka':
+            self.layer_module = Deformable_LKA(self.c1_module)
+        elif self.add_module == 'dlkaatt':
+            self.layer_module = Deformable_LKA_Attention(self.c1_module)
+        elif self.add_module == 'bot3':
+            self.layer_module = BoT3(self.c1_module, self.c2_module)
+        else:
+            self.layer_module = None
+
     def forward(self, x):
         """
         Process the input tensor through a series of PSA blocks.
@@ -2213,10 +2250,18 @@ class C2PSA(nn.Module):
         Returns:
             (torch.Tensor): Output tensor after processing.
         """
+        if hasattr(self, 'pos_module') and self.pos_module==1:
+            memory = self.layer_module(x)
+            x = memory + x if self.res_module else memory
+
         a, b = self.cv1(x).split((self.c, self.c), dim=1)
         b = self.m(b)
-        return self.cv2(torch.cat((a, b), 1))
+        z = self.cv2(torch.cat((a, b), 1))
 
+        if hasattr(self, 'pos_module') and self.pos_module==3:
+            memory = self.layer_module(z)
+            z = memory + z if self.res_module else memory
+        return z
 
 class C2fPSA(C2f):
     """
@@ -2550,7 +2595,11 @@ class A2C2f(nn.Module):
         torch.Size([1, 512, 32, 32])
     """
 
-    def __init__(self, c1, c2, n=1, a2=True, area=1, residual=False, mlp_ratio=2.0, e=0.5, g=1, shortcut=True):
+    def __init__(self, c1, c2, n=1, a2=True, area=1, residual=False, mlp_ratio=2.0, e=0.5, g=1, shortcut=True,
+                 add_module=None,
+                 res_module=False,
+                 pos_module=None,
+                 ):
         """
         Initialize Area-Attention C2f module.
 
@@ -2581,6 +2630,34 @@ class A2C2f(nn.Module):
             for _ in range(n)
         )
 
+        self.add_module = add_module
+        self.res_module = res_module
+        self.pos_module = pos_module
+        if self.pos_module == 1:
+            self.c1_module, self.c2_module = c1, c1
+        elif self.pos_module == 2:
+            self.c1_module, self.c2_module = c_, c_
+        elif self.pos_module == 3:
+            self.c1_module, self.c2_module = c2, c2
+        elif self.pos_module is None:
+            self.c1_module, self.c2_module = None, None
+        else:
+            raise ValueError(self.pos_module, 'not support!')
+        if self.add_module == 'c3tr':
+            self.layer_module = C3TR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3str':
+            self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'c3ghost':
+            self.layer_module = C3STR(self.c1_module, self.c2_module)
+        elif self.add_module == 'dlka':
+            self.layer_module = Deformable_LKA(self.c1_module)
+        elif self.add_module == 'dlkaatt':
+            self.layer_module = Deformable_LKA_Attention(self.c1_module)
+        elif self.add_module == 'bot3':
+            self.layer_module = BoT3(self.c1_module, self.c2_module)
+        else:
+            self.layer_module = None
+
     def forward(self, x):
         """
         Forward pass through A2C2f layer.
@@ -2591,9 +2668,22 @@ class A2C2f(nn.Module):
         Returns:
             (torch.Tensor): Output tensor after processing.
         """
+        if hasattr(self, 'pos_module') and self.pos_module==1:
+            memory = self.layer_module(x)
+            x = memory + x if self.res_module else memory
+
         y = [self.cv1(x)]
+
+        if hasattr(self, 'pos_module') and self.pos_module==2:
+            memory = self.layer_module(y[0])
+            y = [memory + y[0]] if self.res_module else [memory]
+
         y.extend(m(y[-1]) for m in self.m)
-        y = self.cv2(torch.cat(y, 1))
+        z = self.cv2(torch.cat(y, 1))
         if self.gamma is not None:
-            return x + self.gamma.view(-1, len(self.gamma), 1, 1) * y
-        return y
+            z = x + self.gamma.view(-1, len(self.gamma), 1, 1) * z
+
+        if hasattr(self, 'pos_module') and self.pos_module==3:
+            memory = self.layer_module(z)
+            z = memory + z if self.res_module else memory
+        return z

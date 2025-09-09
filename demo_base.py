@@ -98,7 +98,8 @@ def model_track(weight_path, img_dir, network=YOLO, single=False, save=True, sav
         'save' : save,
         'save_txt' : save_txt,
         'stream' : stream,
-        'tracker' : "bytetrack.yaml",
+        'tracker' : "botsort.yaml",
+        'persist' : True,
     }
     predict_params.update(kwargs)
     if single:

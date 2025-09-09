@@ -178,7 +178,7 @@ def process_folder(folder_path):
 def main():
     # 解析命令行参数
     parser = argparse.ArgumentParser(description='处理文件夹中的混淆矩阵文件并计算评估指标')
-    parser.add_argument('--folder_path', type=str, default='/localnvme/project/ultralytics/runs/msegment/val287', help='包含混淆矩阵CSV文件的文件夹路径')
+    parser.add_argument('--folder_path', type=str, default='/localnvme/project/ultralytics/runs/msegment/val309', help='包含混淆矩阵CSV文件的文件夹路径')
     parser.add_argument('--output_f1', type=str, default='f1_results.csv', help='F1结果输出文件名(默认: f1_results.csv)')
     parser.add_argument('--output_precision', type=str, default='precision_results.csv', help='精确率结果输出文件名(默认: precision_results.csv)')
     parser.add_argument('--output_recall', type=str, default='recall_results.csv', help='召回率结果输出文件名(默认: recall_results.csv)')
