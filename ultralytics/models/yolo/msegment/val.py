@@ -73,8 +73,35 @@ class MSegmentationValidator(MDetectionValidator):
 
     def postprocess(self, preds):
         """Post-processes YOLO predictions and returns output detections with proto."""
-        p = super().postprocess(preds[0])
-        proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]  # second output is len 3 if pt, but only 1 if exported
+        pred = preds[0]
+        if isinstance(pred, list):
+            p = []
+            for predi in pred:
+                pi = ops.non_max_suppression_with_attributes(
+                    predi,
+                    self.args.conf,
+                    self.args.iou,
+                    labels=self.lb,
+                    multi_label=True,
+                    agnostic=self.args.single_cls,
+                    max_det=self.args.max_det,
+                    nc=self.nc,
+                    na=self.na,
+                )
+                p.append(pi)
+        else:
+            p = ops.non_max_suppression_with_attributes(
+                pred,
+                self.args.conf,
+                self.args.iou,
+                labels=self.lb,
+                multi_label=True,
+                agnostic=self.args.single_cls,
+                max_det=self.args.max_det,
+                nc=self.nc,
+                na=self.na,
+            )
+        proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]
         return p, proto
 
     def _prepare_batch(self, si, batch):
@@ -92,73 +119,158 @@ class MSegmentationValidator(MDetectionValidator):
 
     def update_metrics(self, preds, batch):
         """Metrics."""
-        for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
-            self.seen += 1
-            npr = len(pred)
-            stat = dict(
-                conf=torch.zeros(0, device=self.device),
-                pred_cls=torch.zeros(0, device=self.device),
-                tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                pred_attributes=torch.zeros(0, device=self.device),
-                ap = torch.zeros((0, self.na), device=self.device),
-                conf_mat = torch.zeros((0, self.na, self.nal, self.nal), device=self.device),
-            )
-            pbatch = self._prepare_batch(si, batch)
-            cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
-            nl = len(cls)
-            stat["target_cls"] = cls
-            stat["target_img"] = cls.unique()
-            stat["target_attributes"] = mdet_attributes
-            if npr == 0:
-                if nl:
+        if isinstance(preds[1], list):
+            size_b = preds[1][0].shape[0]
+            num_p = len(preds[1])
+            pred_list, proto_list = preds[0], preds[1]
+            for pi in range(num_p):
+                self.seen += 1
+                predn_list, pred_masks_list  = [], []
+                for si in range(size_b):
+                    pred, proto = pred_list[pi][si], proto_list[pi][si]
+                    npr = len(pred)
+                    stat = dict(
+                        conf=torch.zeros(0, device=self.device),
+                        pred_cls=torch.zeros(0, device=self.device),
+                        tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                        tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                        pred_attributes=torch.zeros(0, device=self.device),
+                        ap=torch.zeros((0, self.na), device=self.device),
+                        conf_mat=torch.zeros((0, self.na, self.nal, self.nal), device=self.device),
+                    )
+
+                    pbatch = self._prepare_batch(si, batch)
+                    cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
+                    nl = len(cls)
+                    stat["target_cls"] = cls
+                    stat["target_img"] = cls.unique()
+                    stat["target_attributes"] = mdet_attributes
+                    if npr == 0:
+                        if nl:
+                            for k in self.stats.keys():
+                                self.stats[k].append(stat[k])
+                            if self.args.plots:
+                                self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls,
+                                                                    gt_attributes=mdet_attributes)
+                        continue
+
+                    gt_masks = pbatch.pop("masks")
+                    # Predictions
+                    if self.args.single_cls:
+                        pred[:, 5] = 0
+
+                    predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
+                    stat["conf"] = predn[:, 4]
+                    stat["pred_cls"] = predn[:, 5]
+                    stat["pred_attributes"] = predn[:, 6:6 + self.na]
+
+                    # Evaluate
+                    if nl:
+                        stat["tp"], stat["ap"], stat["conf_mat"] = self._process_batch(predn, bbox, cls,
+                                                                                       gt_attributes=mdet_attributes)
+                        stat["tp_m"], _, _ = self._process_batch(
+                            predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True,
+                            gt_attributes=mdet_attributes
+                        )
+                        if self.args.plots:
+                            self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
                     for k in self.stats.keys():
                         self.stats[k].append(stat[k])
+
+                    pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
+                    if self.args.plots and self.batch_i < 3:
+                        self.plot_masks.append(pred_masks[:15].cpu())  # filter top 15 to plot
+                    predn_list.append(predn)
+                    pred_masks_list.append(pred_masks)
+
+                predn = torch.cat(predn_list, dim=0)
+                pred_masks = torch.cat(pred_masks_list, dim=0)
+
+                # Save
+                if self.args.save_json:
+                    pred_masks = ops.scale_image(
+                        pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+                        pbatch["ori_shape"],
+                        ratio_pad=batch["ratio_pad"][si],
+                    )
+                    self.pred_to_json(predn, batch["im_file"][si], pred_masks)
+                if self.args.save_txt:
+                    file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
+                    self.save_one_txt(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file,
+                                      self.args.save_risk_score)
+                if self.args.save_npy:
+                    file = self.save_dir / "predicts_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
+                    self.save_one_npy(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file, label=False)
+                    file = self.save_dir / "labels_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
+                    self.save_one_npy(predn, gt_masks, self.args.save_conf, pbatch["ori_shape"], file,
+                                      label=True, gt_cls=cls, overlap=self.args.overlap_mask)
+        else:
+            for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
+                self.seen += 1
+                npr = len(pred)
+                stat = dict(
+                    conf=torch.zeros(0, device=self.device),
+                    pred_cls=torch.zeros(0, device=self.device),
+                    tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                    tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                    pred_attributes=torch.zeros(0, device=self.device),
+                    ap = torch.zeros((0, self.na), device=self.device),
+                    conf_mat = torch.zeros((0, self.na, self.nal, self.nal), device=self.device),
+                )
+                pbatch = self._prepare_batch(si, batch)
+                cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
+                nl = len(cls)
+                stat["target_cls"] = cls
+                stat["target_img"] = cls.unique()
+                stat["target_attributes"] = mdet_attributes
+                if npr == 0:
+                    if nl:
+                        for k in self.stats.keys():
+                            self.stats[k].append(stat[k])
+                        if self.args.plots:
+                            self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls, gt_attributes=mdet_attributes)
+                    continue
+
+                gt_masks = pbatch.pop("masks")
+                # Predictions
+                if self.args.single_cls:
+                    pred[:, 5] = 0
+                predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
+                stat["conf"] = predn[:, 4]
+                stat["pred_cls"] = predn[:, 5]
+                stat["pred_attributes"] = predn[:, 6:6+self.na]
+
+                # Evaluate
+                if nl:
+                    stat["tp"], stat["ap"], stat["conf_mat"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
+                    stat["tp_m"], _, _ = self._process_batch(
+                        predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True, gt_attributes=mdet_attributes
+                    )
                     if self.args.plots:
-                        self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls, gt_attributes=mdet_attributes)
-                continue
+                        self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+                for k in self.stats.keys():
+                    self.stats[k].append(stat[k])
+                pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
+                if self.args.plots and self.batch_i < 3:
+                    self.plot_masks.append(pred_masks[:15].cpu())  # filter top 15 to plot
 
-            gt_masks = pbatch.pop("masks")
-            # Predictions
-            if self.args.single_cls:
-                pred[:, 5] = 0
-            predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
-            stat["conf"] = predn[:, 4]
-            stat["pred_cls"] = predn[:, 5]
-            stat["pred_attributes"] = predn[:, 6:6+self.na]
-
-            # Evaluate
-            if nl:
-                stat["tp"], stat["ap"], stat["conf_mat"] = self._process_batch(predn, bbox, cls, gt_attributes=mdet_attributes)
-                stat["tp_m"], _, _ = self._process_batch(
-                    predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True, gt_attributes=mdet_attributes
-                )
-                if self.args.plots:
-                    self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
-            for k in self.stats.keys():
-                self.stats[k].append(stat[k])
-
-            pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
-            if self.args.plots and self.batch_i < 3:
-                self.plot_masks.append(pred_masks[:15].cpu())  # filter top 15 to plot
-
-            # Save
-            if self.args.save_json:
-                pred_masks = ops.scale_image(
-                    pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
-                    pbatch["ori_shape"],
-                    ratio_pad=batch["ratio_pad"][si],
-                )
-                self.pred_to_json(predn, batch["im_file"][si], pred_masks)
-            if self.args.save_txt:
-                file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
-                self.save_one_txt(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file)
-            if self.args.save_npy:
-                file = self.save_dir / "predicts_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
-                self.save_one_npy(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file, label=False)
-                file = self.save_dir / "labels_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
-                self.save_one_npy(predn, gt_masks, self.args.save_conf, pbatch["ori_shape"], file,
-                                  label=True, gt_cls=cls, overlap=self.args.overlap_mask)
+                # Save
+                if self.args.save_json:
+                    pred_masks = ops.scale_image(
+                        pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+                        pbatch["ori_shape"],
+                        ratio_pad=batch["ratio_pad"][si],
+                    )
+                    self.pred_to_json(predn, batch["im_file"][si], pred_masks)
+                if self.args.save_txt:
+                    file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
+                    self.save_one_txt(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file, self.args.save_risk_score)
+                if self.args.save_npy:
+                    file = self.save_dir / "predicts_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
+                    self.save_one_npy(predn, pred_masks, self.args.save_conf, pbatch["ori_shape"], file, label=False)
+                    file = self.save_dir / "labels_npy" / f'{Path(batch["im_file"][si]).stem}.npy'
+                    self.save_one_npy(predn, gt_masks, self.args.save_conf, pbatch["ori_shape"], file,
+                                      label=True, gt_cls=cls, overlap=self.args.overlap_mask)
 
     def finalize_metrics(self, *args, **kwargs):
         """Set speed and confusion matrix for evaluation metrics."""
@@ -219,7 +331,7 @@ class MSegmentationValidator(MDetectionValidator):
         )  # pred
         self.plot_masks.clear()
 
-    def save_one_txt(self, predn, pred_masks, save_conf, shape, file):
+    def save_one_txt(self, predn, pred_masks, save_conf, shape, file, save_risk_score=False):
         """Save YOLO detections to a txt file in normalized coordinates in a specific format."""
         from ultralytics.engine.results import MdetResults
 
@@ -234,7 +346,7 @@ class MSegmentationValidator(MDetectionValidator):
             nc=self.nc,
             na=self.na,
             nal=self.nal
-        ).save_txt(file, save_conf=save_conf)
+        ).save_txt(file, save_conf=save_conf, save_risk_score=save_risk_score)
 
     def save_one_npy(self, predn, pred_masks, save_conf, shape, file, label=True, gt_cls=None, overlap=False):
         """Save YOLO detections to a txt file in normalized coordinates in a specific format."""

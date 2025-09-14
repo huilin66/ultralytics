@@ -18,16 +18,9 @@ if __name__ == '__main__':
     # demo_base.yolo12('yolov12x-seg.yaml', auto_optim=False)
     #
     # demo_base.yolo9('yolov9e-seg-dlka3res.yaml', auto_optim=False)
-    demo_base.yolo10('yolov10x-seg-dlka3res.yaml', auto_optim=False)
-    # model = demo_base.YOLO('yolov10x-seg-dlka3res.yaml')
-    # model.load("runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt")
-    # model.train(resume=True)
+    demo_base.yolo10('yolov10x-seg-dlka3res.yaml', auto_optim=False,
+                     weight_path=r'runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt')
 
-    # from ultralytics import YOLO
-    # model = YOLO("runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt")
-    # model.train(resume=True)
-    # demo_base.yolo10('yolov10x-seg-dlka3res.yaml', weight_path="runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt",
-    #                  auto_optim=False, resume=True)
 
     # demo_base.yolo11('yolov11x-seg-dlka3res.yaml', auto_optim=False)
     # demo_base.yolo12('yolov12x-seg-dlka3res.yaml', auto_optim=False)

@@ -109,19 +109,109 @@ def compare_mseg_seg_data():
     # print(result)
 
 def compare_mseg_seg_pred():
-    pred_a = torch.load('pred_seg2000.pth')
-    pred_b = torch.load('pred_mseg2000.pth')
+    print('+++++++++++++++F0+++++++++++++++++')
+    pred_a = torch.load('aug_f0.pt')
+    pred_b = torch.load('noaug_f0.pt')
+    result = torch.equal(pred_a, pred_b)
+    print(result)
 
-    result = torch.equal(pred_a[0][0], pred_b[0][0][:,:68])
+    print('+++++++++++++++F1+++++++++++++++++')
+    pred_a = torch.load('aug_f1.pt')
+    pred_b = torch.load('noaug_f1.pt')
+    if len(pred_a) != len(pred_b):
+        print(f'{len(pred_a)} vs {len(pred_b)}')
+    else:
+        for i in range(len(pred_a)):
+            result = torch.equal(pred_a[i], pred_b[i])
+            print(i, result)
+    print('+++++++++++++++F2+++++++++++++++++')
+    pred_a = torch.load('aug_f2.pt')
+    pred_b = torch.load('noaug_f2.pt')
+    result = torch.equal(pred_a, pred_b)
     print(result)
-    result = torch.equal(pred_a[0][1], pred_b[0][1][:,:68])
+
+    print('+++++++++++++++F3+++++++++++++++++')
+    pred_a = torch.load('aug_f3.pt')
+    pred_b = torch.load('noaug_f3.pt')
+
+    for k in pred_a.keys():
+        pred_a_k = pred_a[k]
+        pred_b_k = pred_b[k]
+        result = torch.equal(pred_a_k, pred_b_k)
+        print(k, result)
     print(result)
-    result = torch.equal(pred_a[0][2], pred_b[0][2][:,:68])
+
+    print('+++++++++++++++F4+++++++++++++++++')
+    pred_a = torch.load('aug_f4.pt')
+    pred_b = torch.load('noaug_f4.pt')
+
+    for k in pred_a.keys():
+        pred_a_k = pred_a[k]
+        pred_b_k = pred_b[k]
+        if not isinstance(pred_a_k, torch.Tensor):
+            result = pred_a_k==pred_b_k
+        else:
+            result = torch.equal(pred_a_k, pred_b_k)
+        print(k, result)
     print(result)
-    result = torch.equal(pred_a[1], pred_b[1])
+
+    print('+++++++++++++++F5+++++++++++++++++')
+    pred_a = torch.load('aug_f5.pt')
+    pred_b = torch.load('noaug_f5.pt')
+    result = torch.equal(pred_a, pred_b)
     print(result)
-    result = torch.equal(pred_a[2], pred_b[2])
+
+
+    print('+++++++++++++++F6+++++++++++++++++')
+    pred_a = torch.load('aug_f6.pt')
+    pred_b = torch.load('noaug_f6.pt')
+
+    for k in pred_a.keys():
+        pred_a_k = pred_a[k]
+        pred_b_k = pred_b[k]
+        if not isinstance(pred_a_k, torch.Tensor):
+            result = pred_a_k==pred_b_k
+        else:
+            result = torch.equal(pred_a_k, pred_b_k)
+        print(k, result)
     print(result)
+
+    print('+++++++++++++++F7+++++++++++++++++')
+    pred_a = torch.load('aug_f7.pt')
+    pred_b = torch.load('noaug_f7.pt')
+    result = torch.equal(pred_a, pred_b)
+    print(result)
+
+
+    print('+++++++++++++++F8+++++++++++++++++')
+    pred_a = torch.load('aug_f8.pt')
+    pred_b = torch.load('noaug_f8.pt')
+
+    for k in pred_a.keys():
+        pred_a_k = pred_a[k]
+        pred_b_k = pred_b[k]
+        if isinstance(pred_a_k, torch.Tensor):
+            result = torch.equal(pred_a_k, pred_b_k)
+        elif isinstance(pred_a_k, list):
+            for j in range(len(pred_a_k)):
+                pred_a_k_j = pred_a_k[j]
+                pred_b_k_j = pred_b_k[j]
+                result = pred_a_k_j == pred_b_k_j
+                print(k,j, result)
+        else:
+            result = pred_a_k == pred_b_k
+        print(k, result)
+    print(result)
+    # result = torch.equal(pred_a[0][0], pred_b[0][0][:,:68])
+    # print(result)
+    # result = torch.equal(pred_a[0][1], pred_b[0][1][:,:68])
+    # print(result)
+    # result = torch.equal(pred_a[0][2], pred_b[0][2][:,:68])
+    # print(result)
+    # result = torch.equal(pred_a[1], pred_b[1])
+    # print(result)
+    # result = torch.equal(pred_a[2], pred_b[2])
+    # print(result)
 
 
 def compare_mseg_seg_loss():
@@ -155,8 +245,8 @@ if __name__ == '__main__':
     # compare_c4(True, False)
     # compare_mseg_seg_ckpt()
     # compare_mseg_seg_data()
-    # compare_mseg_seg_pred()
-    compare_mseg_seg_loss()
+    compare_mseg_seg_pred()
+    # compare_mseg_seg_loss()
 
     # for i in range(9):
     #     path_a = f'pred_seg201{i}.pth'

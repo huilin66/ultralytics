@@ -717,6 +717,85 @@ class MSegmentationModel(MDetectionModel):
         """Initialize the loss criterion for the SegmentationModel."""
         return v8MSegmentationLoss(self)
 
+    def _predict_augment(self, x):
+        """Perform augmentations on input image x and return augmented inference and train outputs."""
+        if getattr(self, "end2end", False):
+            LOGGER.warning(
+                "WARNING ⚠️ End2End model does not support 'augment=True' prediction. "
+                "Reverting to single-scale prediction."
+            )
+            return self._predict_once(x)
+        img_size = x.shape[-2:]  # height, width
+        s = [1, 0.83, 0.67]  # scales
+        f = [None, 3, None]  # flips (2-ud, 3-lr)
+        preds_list, raw_preds_list, mc_list, p_list = [], [], [], []
+        for si, fi in zip(s, f):
+            xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
+            pred, (raw_preds, mc, p) = super().predict(xi)  # forward
+            pred = self._descale_pred_with_att(self.na, pred, fi, si, img_size)
+
+            p_tf = p
+            if fi == 2:  # 上下翻转
+                p_tf = p_tf.flip(dims=[2])
+            elif fi == 3:  # 左右翻转
+                p_tf = p_tf.flip(dims=[3])
+
+            preds_list.append(pred)
+            raw_preds_list.append(raw_preds)
+            mc_list.append(mc)
+            p_list.append(p_tf)
+
+        preds_list = self._clip_augmented(preds_list)
+        return preds_list, (raw_preds_list, mc_list, p_list)
+
+    @staticmethod
+    def _descale_pred_with_att(na, p, flips, scale, img_size, dim=1):
+        """
+        De-scale predictions following augmented inference (inverse operation).
+
+        Args:
+            p (torch.Tensor): Predictions tensor.
+            flips (int): Flip type (0=none, 2=ud, 3=lr).
+            scale (float): Scale factor.
+            img_size (tuple): Original image size (height, width).
+            dim (int): Dimension to split at.
+
+        Returns:
+            (torch.Tensor): De-scaled predictions.
+        """
+        p[:, :4] /= scale  # de-scale
+        x, y, wh, cls, att = p.split((1, 1, 2, p.shape[dim] - 4 - na, na), dim)
+        if flips == 2:
+            y = img_size[0] - y  # de-flip ud
+        elif flips == 3:
+            x = img_size[1] - x  # de-flip lr
+        return torch.cat((x, y, wh, cls, att), dim)
+
+    def _clip_aug_preds_and_mc(self, preds_list, mc_list):
+        """同步裁剪 pred 和 mc，保证索引对齐"""
+        if not preds_list:
+            return preds_list, mc_list
+
+        nl = self.model[-1].nl
+        g = sum(4 ** x for x in range(nl))
+        e = 1  # exclude layer count
+
+        # 裁剪第一个（large）
+        N0 = preds_list[0].shape[-1]
+        i0 = (N0 // g) * sum(4 ** x for x in range(e))
+        if i0 > 0:
+            preds_list[0] = preds_list[0][..., :-i0]
+            mc_list[0] = mc_list[0][..., :-i0]
+
+        # 裁剪最后一个（small）
+        Nl = preds_list[-1].shape[-1]
+        il = (Nl // g) * sum(4 ** (nl - 1 - x) for x in range(e))
+        if il > 0:
+            preds_list[-1] = preds_list[-1][..., il:]
+            mc_list[-1] = mc_list[-1][..., il:]
+
+        return preds_list, mc_list
+
 
 class PoseModel(DetectionModel):
     """YOLO pose model."""

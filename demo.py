@@ -40,7 +40,23 @@
 #     plots=True, save=True,
 #     task='segment'
 # )
-from ultralytics import YOLO
+# from ultralytics import YOLO
+#
+# model = YOLO("runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt")
+# model.train(resume=True)
+import os
+import re
+def find_matching_files(folder_path):
+    pattern1 = r"^cam_.*_cam_image_(20250722|20250812).*$"  # cam_..._cam_image_20250722...
+    pattern2 = r"^camera\d_.*_(20250722|20250812).*$"      # cameraX_..._20250812...
+    pattern3 = r".*_(20250722|20250812).*$"      # cameraX_..._20250812...
 
-model = YOLO("runs/segment/fusedata3899_seg_c5_0818_80p-[yolov10x-seg-dlka3res]2/weights/last.pt")
-model.train(resume=True)
+    matching_files = []
+    for filename in os.listdir(folder_path):
+        if re.match(pattern1, filename) or re.match(pattern2, filename) or re.match(pattern3, filename):
+            matching_files.append(filename)
+    num = len(matching_files)
+    matching_files.sort()
+    return matching_files
+
+find_matching_files(r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0912/images')

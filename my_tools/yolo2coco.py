@@ -239,19 +239,19 @@ if __name__ == '__main__':
         {"id": 7, "name": "other"},
     ]  # 根据实际情况修改
 
-    data_dir = r'/localnvme/data/billboard/fused_data/data5894_seg_c5_0822'
+    data_dir = r'/localnvme/data/billboard/fused_data/data5894_mseg_c5_0822'
 
-    # select_val(data_dir, val_txt='val.txt')
-    select_val(data_dir, val_txt='val_80p.txt')
-    yolo_to_coco(
-        os.path.join(data_dir, 'val', 'labels'),
-        os.path.join(data_dir, 'val', 'images'),
-        os.path.join(data_dir, 'val', "coco_annotations.json"),
-        categories)
-
-    coco_val(
-        os.path.join(data_dir, 'val', 'coco_annotations.json'),
-        r'/localnvme/project/ultralytics/runs/segment/val190/predictions.json',
-    )
+    select_val(data_dir, val_txt='val.txt')
+    # select_val(data_dir, val_txt='val_80p.txt')
+    # yolo_to_coco(
+    #     os.path.join(data_dir, 'val', 'labels'),
+    #     os.path.join(data_dir, 'val', 'images'),
+    #     os.path.join(data_dir, 'val', "coco_annotations.json"),
+    #     categories)
+    #
+    # coco_val(
+    #     os.path.join(data_dir, 'val', 'coco_annotations.json'),
+    #     r'/localnvme/project/ultralytics/runs/segment/val190/predictions.json',
+    # )
 
 

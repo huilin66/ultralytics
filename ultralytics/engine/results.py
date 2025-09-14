@@ -1335,7 +1335,7 @@ class MdetResults(SimpleClass):
                 log_string += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "
         return log_string
 
-    def save_txt(self, txt_file, save_conf=False):
+    def save_txt(self, txt_file, save_conf=False, save_risk_score=False):
         """
         Save predictions into txt file.
 
@@ -1357,9 +1357,9 @@ class MdetResults(SimpleClass):
             # Detect/segment/pose
             for j, d in enumerate(boxes):
                 att = attributes.data[j].cpu().numpy()
-                att = np.floor(att * self.nal).astype(np.int32)
-                att = np.clip(att, 0, self.nal-1)
-                # atts = *(att)
+                if not save_risk_score:
+                    att = np.floor(att * self.nal).astype(np.int32)
+                    att = np.clip(att, 0, self.nal-1)
                 c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
                 line = (c, len(att), *att, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
                 if masks:
