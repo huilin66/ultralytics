@@ -24,139 +24,18 @@ DATA5 = "fusedata6010_mseg_c5_0911_60p.yaml"
 if __name__ == '__main__':
     pass
     # demo_base.yolo8(
-    #     MODEL2, weight_path=MSEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
+    #     MODEL2, weight_path=r'runs/msegment/fusedata6010_mseg_c5_0903_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt', data=DATA1, auto_optim=False, retrain=True,
     #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    # )
-    demo_base.yolo8(
-        MODEL2, weight_path=MSEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    )
-    demo_base.yolo8(
-        MODEL2, weight_path=MSEG_WEIGHT, data=DATA3, auto_optim=False, retrain=True,
-        mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    )
-    demo_base.yolo8(
-        MODEL2, weight_path=MSEG_WEIGHT, data=DATA4, auto_optim=False, retrain=True,
-        mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    )
-    demo_base.yolo8(
-        MODEL2, weight_path=MSEG_WEIGHT, data=DATA5, auto_optim=False, retrain=True,
-        mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    )
-
-    # 1 loss
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=True, mloss_enlarge=0
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=True, mloss_enlarge=2
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=True, mloss_enlarge=5
-    # )
-    # # 2 loss
-    # # loss=loss1
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=0
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=1
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=2
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10
-    # )
-    # # loss=0.75loss1+0.25loss2
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0.25, mloss_enlarge=1
-    # )
-    # # loss=0.5loss1+0.5loss2
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0.5, mloss_enlarge=1
-    # )
-    # # loss=0.75loss1+0.25loss2
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0.75, mloss_enlarge=1
-    # )
-    #
-    #
-    # # 1 loss
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=True, mloss_enlarge=0
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=True, mloss_enlarge=2
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=True, mloss_weight=True, mloss_enlarge=5
-    # )
-    # # 2 loss
-    # # loss=loss1
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=0
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=1
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=2
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5
-    # )
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10
-    # )
-    # # loss=0.75loss1+0.25loss2
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0.25, mloss_enlarge=1
-    # )
-    # # loss=0.5loss1+0.5loss2
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0.5, mloss_enlarge=1
-    # )
-    # # loss=0.75loss1+0.25loss2
-    # demo_base.yolo8(
-    #     MODEL0, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-    #     mloss_mask=False, mloss_weight=0.75, mloss_enlarge=1
     # )
 
-    # demo_base.model_val(r'runs/msegment/fusedata6010_mseg_c5_0903_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata6010_mseg_c5_0903_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt', augment=True)
+
+    # demo_base.model_val(r'fusedata7436_mseg_c5_0912_80p-[yolov8x-mseg-dlka3res-7]')
+    # demo_base.model_val(r'fusedata4197_mseg_c5_l2_0912_80p-[yolov8x-mseg-dlka3res-7]')
+    # demo_base.model_val(r'fusedata7436_mseg_c5_0914_80p-[yolov8x-mseg-dlka3res-7]')
+    # demo_base.model_val(r'fusedata7436_mseg_c5_l2_0914_80p-[yolov8x-mseg-dlka3res-7]')
+    # demo_base.model_val(r'fusedata4197_mseg_c5_0914_80p-[yolov8x-mseg-dlka3res-7]')
+    # demo_base.model_val(r'fusedata4197_mseg_c5_l2_0914_80p-[yolov8x-mseg-dlka3res-7]')
+
 
     # demo_base.model_predict(
     #     r'runs/msegment/fusedata6010_mseg_c5_0903_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt',
@@ -164,27 +43,7 @@ if __name__ == '__main__':
     #     name=r'/localnvme/data/billboard/fused_data/data5894_mseg_c5_0822/val/images_infer_mseg',
     #     save_risk_score=True,
     # )
-    # demo_base.model_predict(
-    #     r'runs/msegment/fusedata6010_mseg_c5_0903_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt',
-    #     img_dir = r'/localnvme/data/billboard/fused_data/data5894_mseg_c5_0822/val/images',
-    #     name=r'/localnvme/data/billboard/fused_data/data5894_mseg_c5_0822/val/images_infer_mseg',
-    # )
-    # demo_base.model_export(r'runs/msegment/fusedata6010_mseg_c5_0903_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt',
-    #                         imgsz=(608,960),
-    #                         # dynamic=True,
-    #                         batch=6,
-    #                        )
-
-
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]2/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]3/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]4/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]5/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]6/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]7/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]8/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]9/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]10/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]11/weights/best.pt')
-    # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]12/weights/best.pt')
+    demo_base.model_export(r'fusedata4197_mseg_c5_0914_80p-[yolov8x-mseg-dlka3res-7]',
+                            imgsz=(608,960), batch=6,
+                            # dynamic=True,
+                           )

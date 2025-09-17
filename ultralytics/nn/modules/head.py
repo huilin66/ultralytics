@@ -450,7 +450,6 @@ class MDetect(nn.Module):
             att = predict_score(att)
             return torch.cat((dbox, cls.sigmoid(), att), 1)
         return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
-        # return torch.cat((dbox, cls.sigmoid(), att), 1)
 
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""

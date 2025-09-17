@@ -11,21 +11,26 @@ demo_base.DATA = "fusedata2419_mseg_c5_0730.yaml"
 MODEL1 = 'yolov8x-mseg-7.yaml'
 MODEL2 = 'yolov8x-mseg-dlka3res-7.yaml'
 SEG_WEIGHT = "runs/segment/fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2/weights/best.pt"
-DATA1 = "fusedata7436_mseg_c5_0912_80p.yaml"
-DATA2 = "fusedata4197_mseg_c5_l2_0912_80p.yaml"
-DATA3 = "fusedata7436_mseg_c5_0912_80p.yaml"
-DATA4 = "fusedata4197_mseg_c5_l2_0912_80p.yaml"
-
+DATA1 = "fusedata7436_mseg_c5_0914_80p.yaml"
+DATA2 = "fusedata7436_mseg_c5_l2_0914_80p.yaml"
+DATA3 = "fusedata4197_mseg_c5_0914_80p.yaml"
+DATA4 = "fusedata4197_mseg_c5_l2_0914_80p.yaml"
+DATA5 = "fusedata3617_mseg_c5_0915_80p.yaml"
+DATA6 = "fusedata3617_mseg_c5_l2_0915_80p.yaml"
+DATA7 = "fusedata4197_mseg_c5_l2_0914_80p_ref.yaml"
+DATA8 = "fusedata7436_mseg_c5_l2_0914_80p_ref.yaml"
+DATA9 = "fusedata4197_mseg_c5_0914_80p_ref.yaml"
+DATA10 = "fusedata7436_mseg_c5_0914_80p_ref.yaml"
 if __name__ == '__main__':
     pass
     demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA1, auto_optim=False, retrain=True,
+        MODEL2, weight_path=SEG_WEIGHT, data=DATA10, auto_optim=False, retrain=True,
         mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
     )
-    demo_base.yolo8(
-        MODEL2, weight_path=SEG_WEIGHT, data=DATA2, auto_optim=False, retrain=True,
-        mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
-    )
+    # demo_base.yolo8(
+    #     MODEL2, weight_path=SEG_WEIGHT, data=DATA3, auto_optim=False, retrain=True,
+    #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
+    # )
 
     # demo_base.model_val(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]/weights/best.pt',)
 

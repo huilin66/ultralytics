@@ -975,7 +975,6 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         # Attribute loss
         # gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
 
-
         if att_dfl:
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]

@@ -61,7 +61,9 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
     result = model.train(**train_params)
     return result
 
-def model_val(weight_path, network=YOLO, **kwargs):
+def model_val(weight_path, weight_name=True, network=YOLO, **kwargs):
+    if weight_name:
+        weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
     print(f'val with {weight_path}')
     model = network(weight_path, task=TASK)
 
@@ -74,7 +76,9 @@ def model_val(weight_path, network=YOLO, **kwargs):
     result = model.val(**val_params)
     return result
 
-def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):
+def model_predict(weight_path, img_dir, weight_name=True, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):
+    if weight_name:
+        weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
     model = network(weight_path, task=TASK)
     predict_params = {
         'device': DEVICE,
@@ -89,7 +93,9 @@ def model_predict(weight_path, img_dir, network=YOLO, save=True, save_txt=True, 
     result = model.predict(img_dir, **predict_params,)
     for _ in result: pass
 
-def model_track(weight_path, img_dir, network=YOLO, single=False, save=True, save_txt=True, stream=True, **kwargs):
+def model_track(weight_path, img_dir, weight_name=True, network=YOLO, single=False, save=True, save_txt=True, stream=True, **kwargs):
+    if weight_name:
+        weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
     model = network(weight_path, task=TASK)
     predict_params = {
         'device': DEVICE,
@@ -111,7 +117,9 @@ def model_track(weight_path, img_dir, network=YOLO, single=False, save=True, sav
         result = model.track(img_dir, **predict_params,)
         for _ in result: pass
 
-def model_export(weight_path, format='onnx', network=YOLO, **kwargs):
+def model_export(weight_path, format='onnx', weight_name=True, network=YOLO, **kwargs):
+    if weight_name:
+        weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
     model = network(weight_path, task=TASK)
     model.export(format=format, device=DEVICE, **kwargs)
 
