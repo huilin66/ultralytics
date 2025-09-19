@@ -61,7 +61,6 @@ if __name__ == '__main__':
     # )
 
     demo_base.model_val(
-        r'runs/segment/fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2/weights/best.pt',
-        # save_json=True,
-        augment=True,
+        r'fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2',
+        filter_small=0.05,
     )

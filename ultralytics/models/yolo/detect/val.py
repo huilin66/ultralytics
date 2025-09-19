@@ -119,7 +119,7 @@ class DetectionValidator(BaseValidator):
         self.confusion_matrix = ConfusionMatrix(nc=self.nc, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
+        self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], filter_small_gt=[], filter_small_pred=[])
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -202,6 +202,8 @@ class DetectionValidator(BaseValidator):
                 conf=torch.zeros(0, device=self.device),
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                filter_small_gt=torch.zeros(0, device=self.device),
+                filter_small_pred=torch.zeros(0, device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox = pbatch.pop("cls"), pbatch.pop("bbox")
@@ -225,7 +227,12 @@ class DetectionValidator(BaseValidator):
 
             # Evaluate
             if nl:
-                stat["tp"] = self._process_batch(predn, bbox, cls)
+                stat["tp"], stat["filter_small_gt"], stat["filter_small_pred"] = self._process_batch(predn, bbox, cls, pbatch=pbatch)
+                if stat["filter_small_gt"] is not None:
+                    stat["target_cls"] = stat["target_cls"][stat["filter_small_gt"]]
+                if stat["filter_small_pred"] is not None:
+                    stat["conf"] = stat["conf"][stat["filter_small_pred"]]
+                    stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, bbox, cls)
             for k in self.stats.keys():
@@ -260,7 +267,7 @@ class DetectionValidator(BaseValidator):
         Returns:
             (Dict): Dictionary containing metrics results.
         """
-        stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()}  # to numpy
+        stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items() if k not in ['filter_small_gt', 'filter_small_pred']}  # to numpy
         self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
         self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
         stats.pop("target_img", None)
@@ -288,7 +295,7 @@ class DetectionValidator(BaseValidator):
                     save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot
                 )
 
-    def _process_batch(self, detections, gt_bboxes, gt_cls):
+    def _process_batch(self, detections, gt_bboxes, gt_cls, pbatch=None):
         """
         Return correct prediction matrix.
 
@@ -303,7 +310,7 @@ class DetectionValidator(BaseValidator):
             (torch.Tensor): Correct prediction matrix of shape (N, 10) for 10 IoU levels.
         """
         iou = box_iou(gt_bboxes, detections[:, :4])
-        return self.match_predictions(detections[:, 5], gt_cls, iou)
+        return self.match_predictions(detections[:, :4], gt_bboxes, detections[:, 5], gt_cls, iou, pbatch=pbatch)
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

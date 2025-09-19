@@ -266,7 +266,7 @@ class BaseValidator:
             return stats
 
     def match_predictions(
-        self, pred_classes: torch.Tensor, true_classes: torch.Tensor, iou: torch.Tensor, use_scipy: bool = False
+        self, pred_boxes: torch.Tensor, gt_boxes: torch.Tensor, pred_classes: torch.Tensor, true_classes: torch.Tensor, iou: torch.Tensor, use_scipy: bool = False, pbatch=None
     ) -> torch.Tensor:
         """
         Match predictions to ground truth objects using IoU.
@@ -280,6 +280,23 @@ class BaseValidator:
         Returns:
             (torch.Tensor): Correct tensor of shape (N, 10) for 10 IoU thresholds.
         """
+        if self.args.filter_small != 0 and pbatch is not None:
+            img_height, img_width = pbatch['ori_shape']
+            min_w, min_h =  img_width*self.args.filter_small, img_height*self.args.filter_small
+
+            gt_wh = gt_boxes[:, 2:4] - gt_boxes[:, 0:2]
+            pred_wh = pred_boxes[:, 2:4] - pred_boxes[:, 0:2]
+            keep_gt = (gt_wh[:, 0] >= min_w) & (gt_wh[:, 1] >= min_h)
+            keep_pred = (pred_wh[:, 0] >= min_w) & (pred_wh[:, 1] >= min_h)
+
+            true_classes = true_classes[keep_gt]
+
+            pred_classes = pred_classes[keep_pred]
+
+            iou = iou[keep_gt][:, keep_pred]
+        else:
+            keep_gt = None
+            keep_pred = None
         # Dx10 matrix, where D - detections, 10 - IoU thresholds
         correct = np.zeros((pred_classes.shape[0], self.iouv.shape[0])).astype(bool)
         # LxD matrix where L - labels (rows), D - detections (columns)
@@ -307,7 +324,7 @@ class BaseValidator:
                         # matches = matches[matches[:, 2].argsort()[::-1]]
                         matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
                     correct[matches[:, 1].astype(int), i] = True
-        return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
+        return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device), keep_gt, keep_pred
 
     def add_callback(self, event: str, callback):
         """Append the given callback to the specified event."""

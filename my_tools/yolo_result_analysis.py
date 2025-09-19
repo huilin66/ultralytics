@@ -1,312 +1,314 @@
 import os
 import cv2
 import math
+import yaml
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from scipy.optimize import linear_sum_assignment
+from sklearn.metrics import confusion_matrix
 import warnings
+from pathlib import Path
 warnings.filterwarnings('ignore')
 
 
-def compute_iou_box(box1, box2):
-    xc1,xc2 = box1[0], box2[0]
-    yc1,yc2 = box1[1], box2[1]
-    w1,w2 = box1[2], box2[2]
-    h1,h2 = box1[3], box2[3]
-    x1_tp = xc1-w1*0.5
-    x2_tp = xc2-w2*0.5
-    y1_tp = yc1-h1*0.5
-    y2_tp = yc2-w2*0.5
-    x1_bt = xc1+w1*0.5
-    x2_bt = xc2+w2*0.5
-    y1_bt = yc1+h1*0.5
-    y2_bt = yc2+w2*0.5
-    x1 = max(x1_tp, x2_tp)
-    y1 = max(y1_tp, y2_tp)
-    x2 = min(x1_bt, x2_bt)
-    y2 = min(y1_bt, y2_bt)
-    inter_area = max(0, x2 - x1) * max(0, y2 - y1)
-    box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
-    box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
-    union_area = box1_area + box2_area - inter_area
-    return inter_area / union_area if union_area > 0 else 0
+def get_attributes(attribute_path):
+    if attribute_path is None:
+        return None
+    with open(attribute_path, 'r') as file:
+        attribute_dict = yaml.safe_load(file)['attributes']
+    attribute_keys = list(attribute_dict.keys())
+    return attribute_keys
 
-
-def poly2xywh(polygon):
-    x_min = np.min(polygon[:, 0])
-    y_min = np.min(polygon[:, 1])
-    x_max = np.max(polygon[:, 0])
-    y_max = np.max(polygon[:, 1])
-    x = (x_min + x_max)/2
-    y = (y_min + y_max)/2
+def poly2xywh(mask):
+    mask = np.array([mask[::2], mask[1::2]])
+    x_min,y_min = np.min(mask, axis=1)
+    x_max,y_max = np.max(mask, axis=1)
+    x_center = (x_max + x_min) / 2
+    y_center = (y_max + y_min) / 2
     width = x_max - x_min
     height = y_max - y_min
-    return [x, y, width, height]
+    return [x_center, y_center, width, height]
 
-def parse_boxes(file_path, image_width, image_height, pred=False, with_att=False, with_conf=False):
-    boxes = []
-    df = pd.DataFrame(None, columns=['class', 'x1', 'y1', 'x2', 'y2', 'conf'])
-    atts = []
-    with open(file_path, 'r') as f:
-        for idx, line in enumerate(f):
-            parts = line.strip().split()
-            cls = int(parts[0])
-            if with_att:
-                att_len = int(parts[1])
-                att = list(map(int, parts[2:2+att_len]))
-                if pred:
-                    att = [1 if x>0 else 0 for x in att]
-                coord_idx = 2+att_len
-            else:
-                att = []
-                coord_idx = 1
-            atts.append(att)
+def df_xywh_to_xyxy(df):
+    df = df.copy()
+    df["x1"] = df["x"] - df["w"] / 2
+    df["y1"] = df["y"] - df["h"] / 2
+    df["x2"] = df["x"] + df["w"] / 2
+    df["y2"] = df["y"] + df["h"] / 2
+    return df
 
-            x = float(parts[coord_idx + 0])
-            y = float(parts[coord_idx + 1])
-            h = float(parts[coord_idx + 2])
-            w = float(parts[coord_idx + 3])
-            boxes.append((cls, x, y, h, w))
-            if with_conf:
-                conf = float(parts[-1])
-            else:
-                conf = 1
-            df.loc[len(df)] = [cls, x, y, h, w, conf]
-    if with_att:
-        columns = ['att%d'%i for i in range(len(atts[0]))]
-        df_att = pd.DataFrame(atts, columns=columns)
-        df = pd.concat([df,df_att], axis=1)
-    boxes_abs = box2box_abs(boxes, image_width, image_height)
-    return boxes_abs, df
-
-
-def parse_masks(file_path, image_width, image_height, pred=False, with_att=False, with_conf=False):
-    boxes = []
-    masks = []
-    df = pd.DataFrame(None, columns=['class', 'xy', 'conf'])
-    atts = []
-    with open(file_path, 'r') as f:
-        for idx, line in enumerate(f):
-            parts = line.strip().split()
-            cls = int(parts[0])
-            if with_att:
-                att_len = int(parts[1])
-                att = list(map(int, parts[2:2 + att_len]))
-                if pred:
-                    att = [1 if x > 0 else 0 for x in att]
-                coord_idx = 2 + att_len
-            else:
-                att = []
-                coord_idx = 1
-            atts.append(att)
-
-            if with_conf:
-                conf = float(parts[-1])
-                mask = list(map(float, parts[coord_idx:-1]))
-            else:
-                conf = 1
-                mask = list(map(float, parts[coord_idx:]))
-            df.loc[len(df)] = [cls, mask, conf]
-            polygon = np.array(mask).reshape(-1, 2)
-            polygon[:, 0] = polygon[:, 0] * image_width
-            polygon[:, 1] = polygon[:, 1] * image_height
-            box = poly2xywh(polygon)
-            boxes.append([cls]+box)
-    if with_att:
-        columns = ['att%d' % i for i in range(len(atts[0]))]
-        df_att = pd.DataFrame(atts, columns=columns)
-        df = pd.concat([df, df_att], axis=1)
-    boxes_abs = box2box_abs(boxes, image_width, image_height)
-    masks_abs = mask2mask_abs(masks, image_width, image_height)
-    return boxes_abs, masks_abs, df
-
-
-def box2box_abs(boxes, W, H):
-    abs_boxes = []
-    for cls, x, y, h, w in boxes:
-        x_center = x * W
-        y_center = y * H
-        w_abs = w * W
-        h_abs = h * H
-        x1 = x_center - w_abs / 2
-        y1 = y_center - h_abs / 2
-        x2 = x_center + w_abs / 2
-        y2 = y_center + h_abs / 2
-        abs_boxes.append((cls, x1, y1, x2, y2))
-    return abs_boxes
-
-def mask2mask_abs(masks, W, H):
-    abs_masks = []
-    for i in range(0, len(masks), 2):
-        abs_masks[i] = masks[i]*W
-        abs_masks[i+1] = masks[i+1] * H
-    return abs_masks
-
-
-
-def compute_cost_matrix(label_boxes, pred_boxes, threshold=0.5):
-    n_labels = len(label_boxes)
-    n_preds = len(pred_boxes)
-    cost_matrix = np.full((n_labels, n_preds), np.inf)  # 初始化为 inf
-
-    for i, label_box in enumerate(label_boxes):
-        for j, pred_box in enumerate(pred_boxes):
-            if label_box[0] == pred_box[0]:  # 仅同类匹配
-                iou = compute_iou_box(label_box, pred_box)
-                if iou >= threshold:
-                    cost_matrix[i, j] = -iou  # 最小化 -iou ≈ 最大化 iou
-
-    return cost_matrix
-
-def match_boxes(label_boxes_abs, pred_boxes_abs, save_dir, threshold=0.5):
-    num_labels = len(label_boxes_abs)
-    num_preds = len(pred_boxes_abs)
-    cost_matrix = np.full((num_labels, num_preds), 100)
-    # cost_matrix = compute_cost_matrix(label_boxes_abs, pred_boxes_abs, threshold)
-
-    for i in range(num_labels):
-        cls_label, x1_l, y1_l, x2_l, y2_l = label_boxes_abs[i]
-        for j in range(num_preds):
-            cls_pred, x1_p, y1_p, x2_p, y2_p = pred_boxes_abs[j]
-            if cls_label != cls_pred:
-                continue
-            iou = compute_iou_box((x1_l, y1_l, x2_l, y2_l), (x1_p, y1_p, x2_p, y2_p))
-            if iou >= threshold:
-                cost_matrix[i][j] = -iou
-
-    row_ind, col_ind = linear_sum_assignment(cost_matrix)
-    match_dict = {}
-    for r, c in zip(row_ind, col_ind):
-        if cost_matrix[r][c] != np.inf:
-            match_dict[r] = c
-    return match_dict
-
-
-def process_files(label_path, pred_path, save_path, image_width=640, image_height=480, seg=False, with_conf=False,
-                  with_att=False, threshold=0.5, att_num=0):
-    if seg:
-        label_boxes, label_masks, labels_df = parse_masks(label_path, image_width, image_height, with_att=with_att, with_conf=with_conf)
-        pred_boxes, pred_mask, pred_df = parse_masks(pred_path, image_width, image_height, with_att=with_att, with_conf=with_conf, pred=True)
+def get_yolo_label_df(gt_path, mdet=False, attributes=None):
+    if mdet:
+        assert attributes is not None, 'attribute_path must be provided, which is "%s"' % attributes
+        if isinstance(attributes, str):
+            attribute_keys = get_attributes(attributes)
+        elif isinstance(attributes, list):
+            attribute_keys = attributes
+        names = ['id', 'category'] + ['attribute_len'] + attribute_keys + ['x', 'y', 'w', 'h']
     else:
-        label_boxes, labels_df = parse_boxes(label_path, image_width, image_height, with_att=with_att, with_conf=with_conf)
-        pred_boxes, pred_df = parse_boxes(pred_path, image_width, image_height, with_att=with_att, with_conf=with_conf, pred=True)
+        names = ['id', 'category', 'x', 'y', 'w', 'h']
 
+    df = pd.DataFrame(None, columns=names + ['image'])
+    with open(gt_path, 'r') as f:
+        data = f.readlines()
+        for id_line, line in enumerate(data):
+            parts = line.strip().split(' ')
+            category = int(parts[0])
+            image_name = Path(gt_path).stem
+            if mdet:
+                att_len = int(parts[1])
+                atts = list(map(float, parts[2:2 + att_len]))
+                polygons = list(map(float, parts[2 + att_len:]))
+                if len(polygons) == 0:
+                    continue
+                xywh = poly2xywh(polygons)
+                info = [id_line, category, att_len] + atts + xywh + [image_name]
+            else:
+                polygons = list(map(float, parts[1:]))
+                if len(polygons) == 0:
+                    continue
+                xywh = poly2xywh(polygons)
+                info = [id_line, category] + xywh + [image_name]
+            df.loc[len(df)] = info
+    df = df_xywh_to_xyxy(df)
+    return df
 
-    match_dict = match_boxes(label_boxes, pred_boxes, threshold)
+def box_iou(box1, box2):
+    # box1, box2: [x1,y1,x2,y2]
+    inter_x1 = max(box1[0], box2[0])
+    inter_y1 = max(box1[1], box2[1])
+    inter_x2 = min(box1[2], box2[2])
+    inter_y2 = min(box1[3], box2[3])
 
-    labels_df = labels_df.add_suffix('_labels')
-    pred_df = pred_df.add_suffix('_pred')
+    inter_w = max(inter_x2 - inter_x1, 0)
+    inter_h = max(inter_y2 - inter_y1, 0)
+    inter_area = inter_w * inter_h
 
-    merge_df = pd.DataFrame(None, columns=labels_df.columns.tolist()+pred_df.columns.tolist())
-    for i in range(len(label_boxes)):
-        if i in match_dict:
-            j = match_dict[i]
-            record = labels_df.iloc[i].tolist()+pred_df.iloc[j].tolist()
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    union = area1 + area2 - inter_area
+
+    return inter_area / union if union > 0 else 0
+
+def match_and_merge(df_pred, df_gt, iou_thr=0.5, att_list=None):
+    matched_gt_idx = set()
+    merged_rows = []
+
+    show_columns = ['id', "category", "x", "y", "w", "h"]
+    if att_list is not None:
+       show_columns += att_list
+    for i, pred_row in df_pred.iterrows():
+        pred_box = [pred_row.x1, pred_row.y1, pred_row.x2, pred_row.y2]
+        ious = [box_iou(pred_box, [gt.x1, gt.y1, gt.x2, gt.y2]) for _, gt in df_gt.iterrows()]
+        if ious:
+            max_iou = max(ious)
+            max_idx = np.argmax(ious)
         else:
-            record = labels_df.iloc[i].tolist()+[None]*len(pred_df.columns)
-        merge_df.loc[len(merge_df.index)] = record
+            max_iou = 0
+            max_idx = None
 
-    counts_all = []
-    counts_div = []
-    for i in range(att_num):
-        merge_df[f'precision_att{i}'] = merge_df[f'att{i}_labels'] == merge_df[f'att{i}_pred']
+        if max_iou > iou_thr and max_idx not in matched_gt_idx:
+            gt_row = df_gt.iloc[max_idx]
+            matched_gt_idx.add(max_idx)
+            merged_rows.append({
+                **{f"pred_{col}": pred_row[col] for col in show_columns},
+                **{f"gt_{col}": gt_row[col] for col in show_columns},
+                "iou": max_iou
+            })
+        else:
+            merged_rows.append({
+                **{f"pred_{col}": pred_row[col] for col in show_columns},
+                **{f"gt_{col}": None for col in show_columns},
+                "iou": None
+            })
 
-        count_all = (merge_df[f'att{i}_labels'] == 1).sum()
-        count_true = ((merge_df[f'att{i}_labels'] == 1) & (merge_df[f'att{i}_labels'] == merge_df[f'att{i}_pred'])).sum()
-        count_div = count_true/count_all if count_all != 0 else np.nan
-        counts_all.append(count_all)
-        counts_div.append(count_div)
+    # 把没被匹配的 GT 也补上
+    for j, gt_row in df_gt.iterrows():
+        if j not in matched_gt_idx:
+            merged_rows.append({
+                **{f"pred_{col}": None for col in show_columns},
+                **{f"gt_{col}": gt_row[col] for col in show_columns},
+                "iou": None
+            })
 
-    precision_cols = merge_df.filter(like='precision_att').columns
-    precision_means = merge_df[precision_cols].mean().tolist()
-    mean_precision = np.nanmean(precision_means)
+    return pd.DataFrame(merged_rows)
 
-    mean_num = np.sum(counts_all)
+def compute_macro_metrics(df, att_list, class_labels=[0, 1]):
+    results = {}
+    for att in att_list:
+        y_true = list(map(int, df[f"gt_{att}"].to_list()))
+        y_pred = list(map(int, df[f"pred_{att}"].to_list()))
+        labels = class_labels
+        cm = confusion_matrix(y_true, y_pred, labels=labels)
 
-    counts_div = [i for i in counts_div if not math.isnan(i)]
-    mean_true = np.mean(counts_div) if len(counts_div)>0 else np.nan
+        tp = np.diag(cm)  # 对角线
+        fp = cm.sum(axis=0) - tp  # 每列总和减去 TP
+        fn = cm.sum(axis=1) - tp  # 每行总和减去 TP
 
-    num_matched = len(match_dict)
-    precision = num_matched / len(pred_boxes) if len(pred_boxes) > 0 else 0.0
-    recall = num_matched / len(label_boxes) if len(label_boxes) > 0 else 0.0
-    merge_df.to_csv(save_path)
-    return precision, recall, mean_precision, mean_true, mean_num
+        # per-class precision, recall
+        precision_per_class = np.divide(tp, tp + fp, out=np.zeros_like(tp, dtype=float), where=(tp+fp)>0)
+        recall_per_class = np.divide(tp, tp + fn, out=np.zeros_like(tp, dtype=float), where=(tp+fn)>0)
+        f1_per_class = np.divide(2 * precision_per_class * recall_per_class,
+                                 precision_per_class + recall_per_class,
+                                 out=np.zeros_like(precision_per_class, dtype=float),
+                                 where=(precision_per_class + recall_per_class) > 0)
 
+        macro_precision = precision_per_class.mean()
+        macro_recall = recall_per_class.mean()
+        macro_f1 = f1_per_class.mean()
 
+        results.update({
+            f"{att}_precision": macro_precision,
+            f"{att}_recall": macro_recall,
+            f"{att}_f1": macro_f1,
+            f"{att}_confusion_matrix": pd.DataFrame(cm, index=[f"True_{l}" for l in labels],
+                                             columns=[f"Pred_{l}" for l in labels])
+        })
 
-def model_pred_compare(label_dir, pred_dir, save_dir=None, seg=False, with_conf=False, with_att=False, threshold=0.5, att_num=0):
+    return results
+
+def compute_precision_recall(df, att_list=None):
+    gt_len = len(df["pred_x"].notna())
+    pred_len = len(df["gt_x"].notna())
+    # 条件：有预测框、有 GT 框、类别一致
+    tp = ((df["pred_x"].notna()) & (df["gt_x"].notna()) & (df["pred_category"] == df["gt_category"])).sum()
+    # FP：有预测框，但 GT 不存在或类别不一致
+    fp = ((df["pred_x"].notna()) & ((df["gt_x"].isna()) | (df["pred_category"] != df["gt_category"]))).sum()
+    # FN：有 GT，但预测不存在或类别不一致
+    fn = ((df["gt_x"].notna()) & ((df["pred_x"].isna()) | (df["pred_category"] != df["gt_category"]))).sum()
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+    result = {"gt_len": gt_len, "pred_len": pred_len, "TP": tp, "FP": fp, "FN": fn, "precision": precision, "recall": recall}
+
+    if att_list is not None:
+        df_box_true = df[(df["pred_x"].notna()) & (df["gt_x"].notna()) & (df["pred_category"] == df["gt_category"]) & (df['iou'] >=0.5)]
+        result_att = compute_macro_metrics(df_box_true, att_list)
+        result.update(result_att)
+    return result
+
+def model_pred_compare(label_dir, pred_dir, save_dir=None, att_file=None, threshold=0.5):
+    att_list = get_attributes(att_file)
+    mdet = True if att_list is not None else False
+
     if save_dir is None:
-        save_dir = label_dir + f'_pred_compare'
-    columns = ['file_name', 'precision_box', 'recall_box', 'att_oa', 'att_oa_true', 'att_true_num',]
+        save_dir = label_dir + f'_compare_{os.path.basename(os.path.dirname(pred_dir))}'
     os.makedirs(save_dir, exist_ok=True)
-    pred_list = os.listdir(pred_dir)
-    df = pd.DataFrame(None, columns=columns)
-    for pred_file in tqdm(pred_list):
-        label_path = os.path.join(label_dir, pred_file)
-        save_path = os.path.join(save_dir, pred_file)
-        result = [pred_file]
-        pred_path = os.path.join(pred_dir, pred_file)
-        if not os.path.exists(label_path) or not os.path.exists(pred_path):
-            precision, recall, att_oa, att_oa_true, att_true_num = 0, 0, 0, 0, 0
-        else:
-            precision, recall, att_oa, att_oa_true, att_true_num = process_files(label_path, pred_path, save_path, seg=seg,
-                                                                                 with_conf=with_conf, with_att=with_att,
-                                                                                 threshold=threshold, att_num=att_num)
-        result += [precision, recall, att_oa, att_oa_true, att_true_num]
-        df.loc[len(df.index)] = result
+
+    merged_columns = ["gt_len", "pred_len", "TP", "FP", "FN", "precision", "recall"]
+    if att_list is not None:
+        for att in att_list:
+            merged_columns += [
+               f"{att}_precision",
+               f"{att}_recall",
+               f"{att}_f1",
+               f"{att}_confusion_matrix"
+            ]
+
+    df = pd.DataFrame(None, columns=merged_columns)
+
+    txt_list = os.listdir(pred_dir)
+    for txt_name in tqdm(txt_list):
+        pred_path = os.path.join(pred_dir, txt_name)
+        label_path = os.path.join(label_dir, txt_name)
+        save_path = os.path.join(save_dir, txt_name)
+
+        df_pred = get_yolo_label_df(pred_path, mdet=mdet, attributes=att_list)
+        df_label = get_yolo_label_df(label_path, mdet=mdet, attributes=att_list)
+
+        df_match = match_and_merge(df_pred, df_label, iou_thr=threshold, att_list=att_list)
+
+        df_stats = compute_precision_recall(df_match, att_list=att_list)
+        df.loc[txt_name] = df_stats
+        df_match.to_csv(save_path.replace('.txt', '.csv'))
     df.to_csv(save_dir+'.csv')
 
-def models_pred_compare(label_dir, preds_dir):
-    pass
 
-def img_merge(input_left_path, input_right_path, output_path):
-    img_left = cv2.imread(input_left_path)
-    img_right = cv2.imread(input_right_path)
-    img_output = np.hstack((img_left, img_right))
-    cv2.imwrite(output_path, img_output)
+def filter_pre_match_defect(df, idx, att_list, ):
+    row = df[df['pred_id'] == idx]
 
-def imgs_merge(input_dir_left, input_dir_right, output_dir):
-    img_list = os.listdir(input_dir_left)
-    img_list.remove('labels')
+    # not exists
+    if row.empty:
+        return False
+    row = row.iloc[0]
+
+    # match
+    if pd.isna(row['gt_id']):
+        return False
+    if row['pred_category'] != row['gt_category']:
+        return False
+
+    for att in att_list:
+        if row[f'pred_{att}'] != row[f'gt_{att}'] and row[f'pred_{att}'] > 0:
+            return True
+    return False
+
+    # att_gt_rows = [f'pred_{att}' for att in att_list]
+    # # no risk
+    # if row[att_gt_rows].sum() == 0:
+    #     return False
+    # else:
+    #     return True
+
+
+def filter_gt_match_defect(df, idx, att_list, ):
+    row = df[df['gt_id'] == idx]
+
+    # not exists
+    if row.empty:
+        return False
+    row = row.iloc[0]
+
+    # match
+    if pd.isna(row['pred_id']):
+        return False
+    if row['pred_category'] != row['gt_category']:
+        return False
+
+    for att in att_list:
+        if row[f'pred_{att}'] != row[f'gt_{att}'] and row[f'gt_{att}'] > 0:
+            return True
+    return False
+    # att_gt_rows = [f'gt_{att}' for att in att_list]
+    # # no risk
+    # if row[att_gt_rows].sum() == 0:
+    #     return False
+    # else:
+    #     return True
+
+def filter_txt(input_dir, output_dir, ref_dir, att_file, filter_func):
+    att_list = get_attributes(att_file)
     os.makedirs(output_dir, exist_ok=True)
-    for img_name in tqdm(img_list):
-        input_img_left_path = os.path.join(input_dir_left, img_name)
-        input_img_right_path = os.path.join(input_dir_right, img_name)
-        output_img_path = os.path.join(output_dir, img_name)
-        img_merge(input_img_left_path, input_img_right_path, output_img_path)
+    txt_list = os.listdir(ref_dir)
+    for txt_name in tqdm(txt_list):
+        input_path = os.path.join(input_dir, txt_name.replace('.csv', '.txt'))
+        output_path = os.path.join(output_dir, txt_name.replace('.csv', '.txt'))
+        ref_path = os.path.join(ref_dir, txt_name)
+        df_merge = pd.read_csv(ref_path, header=0, index_col=0)
+        with open(input_path, 'r', encoding='utf-8') as f1:
+            lines = f1.readlines()
+            new_lines = []
+            for idx, line in enumerate(lines):
+                keep = filter_func(df_merge, idx, att_list)
+                if keep:
+                    new_lines.append(line)
+            if len(new_lines) > 0:
+                with open(output_path, 'w', encoding='utf-8') as f2:
+                    f2.writelines(new_lines)
 
-def cat_imgs(pre_path_list):
-    pre_img_list = [cv2.imread(pre_path) for pre_path in pre_path_list]
-    cat_img = np.concatenate(pre_img_list, axis=1)
-    return cat_img
-
-def cat_compare(pre_dir_list, show_dir):
-    os.makedirs(show_dir, exist_ok=True)
-    img_list = os.listdir(pre_dir_list[0])
-    for img_name in tqdm(img_list):
-        pre_path_list = [os.path.join(pre_dir, img_name) for pre_dir in pre_dir_list]
-        cat_img = cat_imgs(pre_path_list)
-        cv2.imwrite(os.path.join(show_dir, img_name), cat_img)
 
 if __name__ == "__main__":
     pass
-    # gt_dir = r'/localnvme/data/billboard/bd_data/data626_seg_c6/labels'
-    # pred_dir = r'/localnvme/project/ultralytics/runs/segment/predict9/labels'
-    # model_pred_compare(gt_dir, pred_dir, with_att=False, seg=True, att_num=0)
+    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    analysis_dir = os.path.join(root_dir, 'result_analysis')
+    gt_dir = os.path.join(root_dir, 'labels')
+    pred_dir = os.path.join(root_dir, 'images_infer', 'labels')
+    att_file = os.path.join(root_dir, 'attribute_l2.yaml')
+    compare_dir = os.path.join(analysis_dir, f'labels_vs_{os.path.basename(os.path.dirname(pred_dir))}')
+    # model_pred_compare(gt_dir, pred_dir, att_file=att_file, save_dir=compare_dir)
 
-
-    # imgs_merge(r'/localnvme/data/billboard/ps_data/0516/images_split_pred/left',
-    #            r'/localnvme/data/billboard/ps_data/0516/images_split_pred/right',
-    #            r'/localnvme/data/billboard/ps_data/0516/images_split_pred/all')
-    #
-    # cat_compare([
-    #     r'/localnvme/data/billboard/ps_data/0516/images_split_pred/all',
-    #     r'/localnvme/data/billboard/ps_data/0516/images_pred',
-    # ],
-    # r'/localnvme/data/billboard/ps_data/0516/images_split_pred/compare',
-    # )
-
-    imgs_merge(r'/localnvme/data/billboard/ps_data/0516/images_split_pred/left2',
-               r'/localnvme/data/billboard/ps_data/0516/images_split_pred/right2',
-               r'/localnvme/data/billboard/ps_data/0516/images_split_pred/all2')
+    filter_pre_match_defect_dir = os.path.join(analysis_dir, 'filter_pre_match_defect')
+    filter_txt(pred_dir, filter_pre_match_defect_dir, compare_dir, att_file, filter_func=filter_pre_match_defect)
+    filter_gt_match_defect_dir = os.path.join(analysis_dir, 'filter_gt_match_defect')
+    filter_txt(gt_dir, filter_gt_match_defect_dir, compare_dir, att_file, filter_func=filter_gt_match_defect)

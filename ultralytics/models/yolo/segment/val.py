@@ -71,7 +71,7 @@ class SegmentationValidator(DetectionValidator):
             check_requirements("pycocotools>=2.0.6")
         # more accurate vs faster
         self.process = ops.process_mask_native if self.args.save_json or self.args.save_txt else ops.process_mask
-        self.stats = dict(tp_m=[], tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
+        self.stats = dict(tp_m=[], tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], filter_small_gt=[], filter_small_pred=[])
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
@@ -153,6 +153,8 @@ class SegmentationValidator(DetectionValidator):
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                filter_small_gt=torch.zeros(0, device=self.device),
+                filter_small_pred=torch.zeros(0, device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox = pbatch.pop("cls"), pbatch.pop("bbox")
@@ -178,10 +180,16 @@ class SegmentationValidator(DetectionValidator):
 
             # Evaluate
             if nl:
-                stat["tp"] = self._process_batch(predn, bbox, cls)
-                stat["tp_m"] = self._process_batch(
+                stat["tp"], stat["filter_small_gt"], stat["filter_small_pred"] = self._process_batch(predn, bbox, cls, pbatch=pbatch)
+                stat["tp_m"],_,_ = self._process_batch(
                     predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True
                 )
+                if stat["filter_small_gt"] is not None:
+                    stat["target_cls"] = stat["target_cls"][stat["filter_small_gt"]]
+                if stat["filter_small_pred"] is not None:
+                    stat["conf"] = stat["conf"][stat["filter_small_pred"]]
+                    stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
+                    stat["tp_m"] = stat["tp_m"][stat["filter_small_pred"]]
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, bbox, cls)
 
@@ -217,7 +225,7 @@ class SegmentationValidator(DetectionValidator):
         self.metrics.speed = self.speed
         self.metrics.confusion_matrix = self.confusion_matrix
 
-    def _process_batch(self, detections, gt_bboxes, gt_cls, pred_masks=None, gt_masks=None, overlap=False, masks=False):
+    def _process_batch(self, detections, gt_bboxes, gt_cls, pred_masks=None, gt_masks=None, overlap=False, masks=False, pbatch=None):
         """
         Compute correct prediction matrix for a batch based on bounding boxes and optional masks.
 
@@ -259,7 +267,7 @@ class SegmentationValidator(DetectionValidator):
         else:  # boxes
             iou = box_iou(gt_bboxes, detections[:, :4])
 
-        return self.match_predictions(detections[:, 5], gt_cls, iou)
+        return self.match_predictions(detections[:, :4], gt_bboxes, detections[:, 5], gt_cls, iou, pbatch=pbatch)
 
     def plot_val_samples(self, batch, ni):
         """

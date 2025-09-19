@@ -1152,7 +1152,7 @@ class DetMetrics(SimpleClass):
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls, on_plot=None):
+    def process(self, tp, conf, pred_cls, target_cls, on_plot=None, **kwargs):
         """
         Process predicted results for object detection and update metrics.
 
@@ -1380,7 +1380,7 @@ class SegmentMetrics(SimpleClass):
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "segment"
 
-    def process(self, tp, tp_m, conf, pred_cls, target_cls, on_plot=None):
+    def process(self, tp, tp_m, conf, pred_cls, target_cls, on_plot=None, **kwargs):
         """
         Process the detection and segmentation metrics over the given set of predictions.
 
