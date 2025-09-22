@@ -244,12 +244,6 @@ def filter_pre_match_defect(df, idx, att_list, ):
             return True
     return False
 
-    # att_gt_rows = [f'pred_{att}' for att in att_list]
-    # # no risk
-    # if row[att_gt_rows].sum() == 0:
-    #     return False
-    # else:
-    #     return True
 
 
 def filter_gt_match_defect(df, idx, att_list, ):
@@ -270,12 +264,7 @@ def filter_gt_match_defect(df, idx, att_list, ):
         if row[f'pred_{att}'] != row[f'gt_{att}'] and row[f'gt_{att}'] > 0:
             return True
     return False
-    # att_gt_rows = [f'gt_{att}' for att in att_list]
-    # # no risk
-    # if row[att_gt_rows].sum() == 0:
-    #     return False
-    # else:
-    #     return True
+
 
 def filter_txt(input_dir, output_dir, ref_dir, att_file, filter_func):
     att_list = get_attributes(att_file)
