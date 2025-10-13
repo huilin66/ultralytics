@@ -91,7 +91,7 @@ class MDetectionValidator(BaseValidator):
         self.metrics.nc = self.nc
         self.metrics.na = self.na
         self.metrics.nal = self.nal
-        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf)
+        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf, risk_enlarge=self.args.risk_enlarge)
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], ap=[], conf_mat=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[], filter_small_gt=[], filter_small_pred=[])
@@ -306,30 +306,52 @@ class MDetectionValidator(BaseValidator):
         correct_class = true_classes[:, None] == pred_classes
         iou = iou * correct_class  # zero out the wrong classes
 
+        iou_np = iou.cpu().numpy()
+        for i, threshold in enumerate(self.iouv.cpu().tolist()):
+            if use_scipy:
+                # WARNING: known issue that reduces mAP in https://github.com/ultralytics/ultralytics/pull/4708
+                import scipy  # scope import to avoid importing for all commands
+
+                cost_matrix = iou_np * (iou_np >= threshold)
+                if cost_matrix.any():
+                    labels_idx, detections_idx = scipy.optimize.linear_sum_assignment(cost_matrix)
+                    valid = cost_matrix[labels_idx, detections_idx] > 0
+                    if valid.any():
+                        correct[detections_idx[valid], i] = True
+            else:
+                matches = np.nonzero(iou_np >= threshold)  # IoU > threshold and classes match
+                matches = np.array(matches).T
+                if matches.shape[0]:
+                    if matches.shape[0] > 1:
+                        matches = matches[iou_np[matches[:, 0], matches[:, 1]].argsort()[::-1]]
+                        matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
+                        matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
+                    correct[matches[:, 1].astype(int), i] = True
+
+        correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
+
         # attribute result
-        pred_attributes_result = torch.floor(pred_attributes * (nal)).long()
+        pred_attributes_result = torch.floor(pred_attributes * self.args.risk_enlarge * (nal)).long()
         pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=nal-1)
-        
-        
-        iou50 = iou >= 0.5
-        candidate_box = correct_class & iou50 # n * 300
 
         matched_box = torch.zeros_like(iou, dtype=torch.bool, device=iou.device)
-        matches = iou50.nonzero(as_tuple=False)
-        if matches.numel() > 0:
-            matches_np = matches.cpu().numpy()
-            iou_np = iou.cpu().numpy()
-    
-            matches_sorted = matches_np[iou_np[matches_np[:, 0], matches_np[:, 1]].argsort()[::-1]]
-            used_gt = set()
-            used_pred = set()
-            for gt_idx, pred_idx in matches_sorted:
-                if gt_idx not in used_gt and pred_idx not in used_pred:
-                    matched_box[gt_idx, pred_idx] = True
-                    used_gt.add(gt_idx)
-                    used_pred.add(pred_idx)
+        matches50 = np.array(np.nonzero(iou_np >= 0.5)).T
+        if matches50.shape[0]:
+            matches50 = matches50[iou_np[matches50[:, 0], matches50[:, 1]].argsort()[::-1]]
+            matches50 = matches50[np.unique(matches50[:, 1], return_index=True)[1]]
+            matches50 = matches50[np.unique(matches50[:, 0], return_index=True)[1]]
+            matched_box[matches50[:, 0], matches50[:, 1]] = True
 
-        correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
+        if gt_attributes.numel() == 0 or pred_attributes.numel() == 0:
+            correct_attributes = torch.zeros(
+                (gt_attributes.shape[0], pred_attributes.shape[0], gt_attributes.shape[-1]),
+                dtype=torch.bool, device=self.device
+            )
+        else:
+            correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
+        batch_conf_mat = self.get_conf_mats(gt_attributes, pred_attributes_result, correct_attributes, matched_box,
+                                            self.nal, self.device)
+
         ap = []
         for i in range(correct_attributes.shape[0]):
             ca = correct_attributes[i][matched_box[i]]
@@ -339,35 +361,6 @@ class MDetectionValidator(BaseValidator):
             ap = torch.cat(ap, dim=0)
         else:
             ap = torch.zeros((0, gt_attributes.shape[-1]), device=self.device)
-
-        num_classes = self.nal
-        device = pred_classes.device
-        batch_conf_mat = self.get_conf_mats(gt_attributes, pred_attributes_result, correct_attributes, matched_box, num_classes, device)
-
-
-        iou = iou.cpu().numpy()
-        for i, threshold in enumerate(self.iouv.cpu().tolist()):
-            if use_scipy:
-                # WARNING: known issue that reduces mAP in https://github.com/ultralytics/ultralytics/pull/4708
-                import scipy  # scope import to avoid importing for all commands
-
-                cost_matrix = iou * (iou >= threshold)
-                if cost_matrix.any():
-                    labels_idx, detections_idx = scipy.optimize.linear_sum_assignment(cost_matrix, maximize=True)
-                    valid = cost_matrix[labels_idx, detections_idx] > 0
-                    if valid.any():
-                        correct[detections_idx[valid], i] = True
-            else:
-                matches = np.array(np.nonzero(iou >= threshold)).T  # IoU > threshold and classes match
-                if matches.shape[0]:
-                    matches = matches[iou[matches[:, 0], matches[:, 1]].argsort()[::-1]]
-                    used_gt, used_pred = set(), set()
-                    for gt_idx, pred_idx in matches:
-                        if gt_idx not in used_gt and pred_idx not in used_pred:
-                            correct[pred_idx, i] = True
-                            used_gt.add(gt_idx)
-                            used_pred.add(pred_idx)
-        correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
         return correct, ap, batch_conf_mat, keep_gt, keep_pred
 
     def build_dataset(self, img_path, mode="val", batch=None):

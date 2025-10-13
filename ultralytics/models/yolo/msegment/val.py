@@ -137,6 +137,8 @@ class MSegmentationValidator(MDetectionValidator):
                         pred_attributes=torch.zeros(0, device=self.device),
                         ap=torch.zeros((0, self.na), device=self.device),
                         conf_mat=torch.zeros((0, self.na, self.nal, self.nal), device=self.device),
+                        filter_small_gt=torch.zeros(0, device=self.device),
+                        filter_small_pred=torch.zeros(0, device=self.device),
                     )
 
                     pbatch = self._prepare_batch(si, batch)
@@ -166,14 +168,24 @@ class MSegmentationValidator(MDetectionValidator):
 
                     # Evaluate
                     if nl:
-                        stat["tp"], stat["ap"], stat["conf_mat"] = self._process_batch(predn, bbox, cls,
-                                                                                       gt_attributes=mdet_attributes)
-                        stat["tp_m"], _, _ = self._process_batch(
+                        stat["tp"], stat["ap"], stat["conf_mat"], stat["filter_small_gt"], stat["filter_small_pred"] = self._process_batch(predn, bbox, cls,
+                                                                                       gt_attributes=mdet_attributes, pbatch=pbatch)
+                        stat["tp_m"], _, _, _, _ = self._process_batch(
                             predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True,
                             gt_attributes=mdet_attributes
                         )
-                        if self.args.plots:
-                            self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+                        if stat["filter_small_gt"] is not None:
+                            stat["target_cls"] = stat["target_cls"][stat["filter_small_gt"]]
+                            stat["target_attributes"] = stat["target_attributes"][stat["filter_small_gt"]]
+                        if stat["filter_small_pred"] is not None:
+                            stat["conf"] = stat["conf"][stat["filter_small_pred"]]
+                            stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
+                            stat["pred_attributes"] = stat["pred_attributes"][stat["filter_small_pred"]]
+                            stat["tp_m"] = stat["tp_m"][stat["filter_small_pred"]]
+
+                    if self.args.plots:
+                        self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+
                     for k in self.stats.keys():
                         self.stats[k].append(stat[k])
 
@@ -256,10 +268,13 @@ class MSegmentationValidator(MDetectionValidator):
                         stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
                         stat["pred_attributes"] = stat["pred_attributes"][stat["filter_small_pred"]]
                         stat["tp_m"] = stat["tp_m"][stat["filter_small_pred"]]
-                    if self.args.plots:
-                        self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+
+                if self.args.plots:
+                    self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+
                 for k in self.stats.keys():
                     self.stats[k].append(stat[k])
+
                 pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
                 if self.args.plots and self.batch_i < 3:
                     self.plot_masks.append(pred_masks[:15].cpu())  # filter top 15 to plot

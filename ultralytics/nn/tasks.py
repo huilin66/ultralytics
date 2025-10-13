@@ -62,6 +62,7 @@ from ultralytics.nn.modules import (
     SCDown,
     Segment,
     MSegment,
+    v10Segment,
     TorchVision,
     WorldDetect,
     v10Detect,
@@ -78,6 +79,7 @@ from ultralytics.utils.loss import (
     v8SegmentationLoss,
     v8MDetectionLoss,
     v8MSegmentationLoss,
+    E2ESegmentLoss,
     E2EMDetectLoss,
 )
 from ultralytics.utils.ops import make_divisible
@@ -402,6 +404,11 @@ class BaseModel(torch.nn.Module):
                 for k, v in da.items():
                     if k in db and all(x not in k for x in exclude) and v.shape == db[k].shape:
                         data[k] = v
+                for k_b, v_b in db.items():
+                    if 'one2one_' in k_b and k_b not in da:
+                        k_a = k_b.replace('one2one_', '')
+                        # v_a = da[k_a]
+                        # data[k_b] = v_a
             return data
 
         model = weights["model"] if isinstance(weights, dict) else weights  # torchvision models are not dicts
@@ -480,8 +487,8 @@ class DetectionModel(BaseModel):
             def _forward(x):
                 """Perform a forward pass through the model, handling different Detect subclass types accordingly."""
                 if self.end2end:
-                    return self.forward(x)["one2many"]
-                return self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB)) else self.forward(x)
+                    return self.forward(x)["one2many"][0] if isinstance(m, (v10Segment)) else self.forward(x)["one2many"]
+                return self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB, v10Segment)) else self.forward(x)
             m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))])  # forward
             self.stride = m.stride
             m.bias_init()  # only run once
@@ -704,7 +711,7 @@ class SegmentationModel(DetectionModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the SegmentationModel."""
-        return v8SegmentationLoss(self)
+        return E2ESegmentLoss(self) if getattr(self, "end2end", False) else v8SegmentationLoss(self)
 
 class MSegmentationModel(MDetectionModel):
     """YOLOv8 segmentation model."""
@@ -726,11 +733,26 @@ class MSegmentationModel(MDetectionModel):
             )
             return self._predict_once(x)
         img_size = x.shape[-2:]  # height, width
-        s = [1, 0.83, 0.67]  # scales
-        f = [None, 3, None]  # flips (2-ud, 3-lr)
+        # s = [1, 0.83, 0.67]  # scales
+        # f = [None, 3, None]  # flips (2-ud, 3-lr)
+        # s = [1]  # scales
+        # f = [None]  # flips (2-ud, 3-lr)
+        s = [1, 1]  # scales
+        f = [None, None]  # flips (2-ud, 3-lr)
+        hsv_h = [None, 0.015]
+        hsv_s = [None, 0.7]
+        hsv_v = [None, 0.1]
         preds_list, raw_preds_list, mc_list, p_list = [], [], [], []
-        for si, fi in zip(s, f):
+        for i in range(len(s)):
+            si, fi = s[i], f[i]
+            h_i, s_i, v_i = hsv_h[i], hsv_s[i], hsv_v[i]
             xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
+
+            if h_i is not None and s_i is not None and v_i is not None:
+                from ultralytics.data.augment import RandomHSV_Infer
+                hsv_transform = RandomHSV_Infer(h_i, s_i, v_i)
+                xi = hsv_transform(xi)
+
             pred, (raw_preds, mc, p) = super().predict(xi)  # forward
             pred = self._descale_pred_with_att(self.na, pred, fi, si, img_size)
 
@@ -739,6 +761,8 @@ class MSegmentationModel(MDetectionModel):
                 p_tf = p_tf.flip(dims=[2])
             elif fi == 3:  # 左右翻转
                 p_tf = p_tf.flip(dims=[3])
+
+
 
             preds_list.append(pred)
             raw_preds_list.append(raw_preds)
@@ -1533,13 +1557,13 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in frozenset({Detect, MDetect, WorldDetect, Segment, MSegment, Pose, OBB, ImagePoolingAttn, v10Detect, v10MDetect}):
+        elif m in frozenset({Detect, MDetect, WorldDetect, Segment, MSegment, Pose, OBB, ImagePoolingAttn, v10Detect, v10MDetect, v10Segment}):
             args.append([ch[x] for x in f])
-            if m is Segment:
+            if m is Segment or m is v10Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             elif m is MSegment:
                 args[4] = make_divisible(min(args[4], max_channels) * width, 8)
-            if m in {Detect, Segment, Pose, OBB, MDetect, MSegment}:
+            if m in {Detect, Segment, Pose, OBB, MDetect, MSegment, v10Segment}:
                 m.legacy = legacy
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
@@ -1652,7 +1676,7 @@ def guess_model_task(model):
             with contextlib.suppress(Exception):
                 return cfg2task(eval(x))
         for m in model.modules():
-            if isinstance(m, Segment):
+            if isinstance(m, (Segment, v10Segment)):
                 return "segment"
             elif isinstance(m, Classify):
                 return "classify"

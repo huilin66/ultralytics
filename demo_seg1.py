@@ -11,8 +11,8 @@ demo_base.DATA = "fusedata7436_seg_c5_0922_80p_ref.yaml"
 if __name__ == '__main__':
     pass
 
-    demo_base.yolo10('yolov10x-seg-dlka3res.yaml', auto_optim=False)
-    demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
+    # demo_base.yolo10('yolov10xee-seg-dlka3res.yaml', auto_optim=False, name='debug')
+    # demo_base.yolo8('yolov8x-seg-dlka3res.yaml', auto_optim=False)
 
     # demo_base.model_val(
     #     r'runs/segment/fusedata3899_seg_c5_0818-[yolov8x-seg-dlka3res]/weights/best.pt',

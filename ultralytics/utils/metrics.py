@@ -471,7 +471,7 @@ class MConfusionMatrix:
         iou_thres (float): The Intersection over Union threshold.
     """
 
-    def __init__(self, nc, na, nal, conf=0.25, iou_thres=0.45, task="detect"):
+    def __init__(self, nc, na, nal, conf=0.25, iou_thres=0.45, task="detect", risk_enlarge=1.0):
         """Initialize attributes for the YOLO model."""
         self.task = task
         self.matrix = np.zeros((nc + 1, nc + 1)) if self.task == "detect" else np.zeros((nc, nc))
@@ -481,6 +481,7 @@ class MConfusionMatrix:
         self.conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
         self.iou_thres = iou_thres
         self.matrix_atts = [np.zeros((nal, nal)) for _ in range(na)]
+        self.risk_enlarge = risk_enlarge
 
     def process_cls_preds(self, preds, targets):
         """
@@ -519,7 +520,7 @@ class MConfusionMatrix:
             return
 
         pred_attributes = detections[:, 6:6+self.na]
-        pred_attributes = torch.floor(pred_attributes * (self.nal)).long()
+        pred_attributes = torch.floor(pred_attributes * self.risk_enlarge * (self.nal)).long()
         pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
 
         detections = detections[detections[:, 4] > self.conf]

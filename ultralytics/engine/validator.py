@@ -213,17 +213,22 @@ class BaseValidator:
         bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
         self.init_metrics(de_parallel(model))
         self.jdict = []  # empty before each val
+        import os
+        if 'ee' in self.args.model:
+            save_dir = r'/localnvme/project/ultralytics/my_tools/seg1'
+        else:
+            save_dir = r'/localnvme/project/ultralytics/my_tools/seg2'
         for batch_i, batch in enumerate(bar):
             self.run_callbacks("on_val_batch_start")
             self.batch_i = batch_i
             # Preprocess
             with dt[0]:
                 batch = self.preprocess(batch)
-
+            torch.save(batch['img'], os.path.join(save_dir, 'img.pt'))
             # Inference
             with dt[1]:
                 preds = model(batch["img"], augment=augment)
-
+            torch.save(preds, os.path.join(save_dir, 'preds.pt'))
             # Loss
             with dt[2]:
                 if self.training:
@@ -234,7 +239,7 @@ class BaseValidator:
                 preds = self.postprocess(preds)
 
             self.update_metrics(preds, batch)
-            if self.args.plots and batch_i < 3:
+            if self.args.plots and batch_i < 3 and not self.args.augment:
                 self.plot_val_samples(batch, batch_i)
                 self.plot_predictions(batch, preds, batch_i)
 
@@ -302,6 +307,7 @@ class BaseValidator:
         # LxD matrix where L - labels (rows), D - detections (columns)
         correct_class = true_classes[:, None] == pred_classes
         iou = iou * correct_class  # zero out the wrong classes
+
         iou = iou.cpu().numpy()
         for i, threshold in enumerate(self.iouv.cpu().tolist()):
             if use_scipy:
@@ -321,7 +327,6 @@ class BaseValidator:
                     if matches.shape[0] > 1:
                         matches = matches[iou[matches[:, 0], matches[:, 1]].argsort()[::-1]]
                         matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
-                        # matches = matches[matches[:, 2].argsort()[::-1]]
                         matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
                     correct[matches[:, 1].astype(int), i] = True
         return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device), keep_gt, keep_pred

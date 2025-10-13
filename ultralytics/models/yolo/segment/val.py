@@ -100,6 +100,8 @@ class SegmentationValidator(DetectionValidator):
             p (torch.Tensor): Processed detection predictions.
             proto (torch.Tensor): Prototype masks for segmentation.
         """
+        if isinstance(preds, dict):
+            preds = preds['one2one']
         p = super().postprocess(preds[0])
         proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]  # second output is len 3 if pt, but only 1 if exported
         return p, proto
@@ -190,6 +192,7 @@ class SegmentationValidator(DetectionValidator):
                     stat["conf"] = stat["conf"][stat["filter_small_pred"]]
                     stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
                     stat["tp_m"] = stat["tp_m"][stat["filter_small_pred"]]
+
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, bbox, cls)
 

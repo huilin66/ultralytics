@@ -15,7 +15,7 @@ from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer, SwinTransformerBlock, MLP
 from .utils import bias_init_with_prob, linear_init
 
-__all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect"
+__all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect", 'v10Segment'
 
 # region added gat
 
@@ -181,14 +181,18 @@ class Detect(nn.Module):
         if self.end2end:
             return self.forward_end2end(x)
 
+        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg2/input_x.pt')
+        torch.save(self.cv2, r'/localnvme/project/ultralytics/my_tools/seg2/cv2.pt')
+        torch.save(self.cv3, r'/localnvme/project/ultralytics/my_tools/seg2/cv3.pt')
         for i in range(self.nl):
             x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
+        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg2/output_x.pt')
         if self.training:  # Training path
             return x
         y = self._inference(x)
         return y if self.export else (y, x)
 
-    def forward_end2end(self, x):
+    def forward_end2end(self, x, seg=False):
         """
         Performs forward pass of the v10Detect module.
 
@@ -199,18 +203,27 @@ class Detect(nn.Module):
             (dict, tensor): If not in training mode, returns a dictionary containing the outputs of both one2many and one2one detections.
                            If in training mode, returns a dictionary containing the outputs of one2many and one2one detections separately.
         """
+        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg1/input_x.pt')
+        torch.save(self.cv2, r'/localnvme/project/ultralytics/my_tools/seg1/cv2.pt')
+        torch.save(self.cv3, r'/localnvme/project/ultralytics/my_tools/seg1/cv3.pt')
         x_detach = [xi.detach() for xi in x]
         one2one = [
             torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])), 1) for i in range(self.nl)
         ]
         for i in range(self.nl):
             x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
+        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg1/output_x.pt')
         if self.training:  # Training path
             return {"one2many": x, "one2one": one2one}
 
-        y = self._inference(one2one)
-        y = self.postprocess(y.permute(0, 2, 1), self.max_det, self.nc)
-        return y if self.export else (y, {"one2many": x, "one2one": one2one})
+        if not seg:
+            y = self._inference(one2one)
+            y = self.postprocess(y.permute(0, 2, 1), self.max_det, self.nc)
+            return y if self.export else (y, {"one2many": x, "one2one": one2one})
+        else:
+            y = self._inference(x)
+            y_one2one = self._inference(one2one)
+            return y if self.export else {"one2many": [y, x], "one2one": [y_one2one, one2one]}
 
     def _inference(self, x):
         """Decode predicted bounding boxes and class probabilities based on multiple-level feature maps."""
@@ -522,9 +535,39 @@ class Segment(Detect):
 
         c4 = max(ch[0] // 4, self.nm)
         self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.nm, 1)) for x in ch)
+        if self.end2end:
+            self.one2one_proto = copy.deepcopy(self.proto)
+            self.one2one_cv4 = copy.deepcopy(self.cv4)
+
+
+    def forward_end2end(self, x):
+        x_detach = [xi.detach() for xi in x]
+        p_one2one = self.one2one_proto(x_detach[0])
+
+        p = self.proto(x[0])  # mask protos
+        bs = p.shape[0]  # batch size
+
+
+        one2one_mc = torch.cat([self.one2one_cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
+        mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
+
+        out = Detect.forward_end2end(self, x, seg=True)
+
+        x, x_one2one = out['one2many'], out['one2one']
+
+        if self.training:
+            return {"one2many": [x, mc, p], "one2one": [x_one2one, one2one_mc, p_one2one]}
+
+        one2many_output = (torch.cat([x[0], mc], 1), (x[1], mc, p))
+        one2one_output = (torch.cat([x_one2one[0], one2one_mc], 1), (x_one2one[1], one2one_mc, p_one2one))
+        return (torch.cat([x, mc], 1), p) if self.export else {"one2many": one2many_output, "one2one": one2one_output}
+
 
     def forward(self, x):
         """Return model outputs and mask coefficients if training, otherwise return outputs and mask coefficients."""
+        if self.end2end:
+            return self.forward_end2end(x)
+
         p = self.proto(x[0])  # mask protos
         bs = p.shape[0]  # batch size
 
@@ -548,8 +591,30 @@ class MSegment(MDetect):
         c4 = max(ch[0] // 4, self.nm)
         self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.nm, 1)) for x in ch)
 
+        if self.end2end:
+            self.one2one_cv4 = copy.deepcopy(self.cv4)
+
+    def use_one2many_head(self):
+        self.super.use_one2many_head()
+        self.one2one_cv4 = None
+
+    def forward_end2end(self, x):
+        p = self.proto(x[0])  # mask protos
+        bs = p.shape[0]  # batch size
+
+        mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
+        # TODO: change the bbox based attribute into mask based attribute
+        x = MDetect.forward(self, x)
+        if self.training:
+            return x, mc, p
+        return (torch.cat([x, mc], 1), p) if self.export else (torch.cat([x[0], mc], 1), (x[1], mc, p))
+
+
     def forward(self, x):
         """Return model outputs and mask coefficients if training, otherwise return outputs and mask coefficients."""
+        if self.end2end:
+            return self.forward_end2end(x)
+
         p = self.proto(x[0])  # mask protos
         bs = p.shape[0]  # batch size
 
@@ -1022,3 +1087,17 @@ class v10MDetect(MDetect):
             for x in ch
         )
         self.one2one_cv3 = copy.deepcopy(self.cv3)
+
+
+class v10Segment(Segment):
+    end2end = True
+    def __init__(self, nc=80, nm=32, npr=256, ch=()):
+        """Initializes the v10Detect object with the specified number of classes and input channels."""
+        super().__init__(nc, nm, npr, ch)
+
+
+class v10MSegment(MSegment):
+    end2end = True
+    def __init__(self, nc=80, na=14, nal=2, nm=32, npr=256, params=(),  ch=()):
+        """Initializes the v10Detect object with the specified number of classes and input channels."""
+        super().__init__(nc=80, na=14, nal=2, nm=32, npr=256, params=(),  ch=())

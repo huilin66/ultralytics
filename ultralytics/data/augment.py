@@ -1390,6 +1390,127 @@ class RandomHSV:
         return labels
 
 
+class RandomHSV_Infer:
+    """
+    Randomly adjusts the Hue, Saturation, and Value (HSV) channels of an image.
+
+    This class applies random HSV augmentation to images within predefined limits set by hgain, sgain, and vgain.
+
+    Attributes:
+        hgain (float): Maximum variation for hue. Range is typically [0, 1].
+        sgain (float): Maximum variation for saturation. Range is typically [0, 1].
+        vgain (float): Maximum variation for value. Range is typically [0, 1].
+
+    Methods:
+        __call__: Applies random HSV augmentation to an image.
+
+    Examples:
+        >>> import numpy as np
+        >>> from ultralytics.data.augment import RandomHSV
+        >>> augmenter = RandomHSV(hgain=0.5, sgain=0.5, vgain=0.5)
+        >>> image = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+        >>> labels = {"img": image}
+        >>> augmenter(labels)
+        >>> augmented_image = augmented_labels["img"]
+    """
+
+    def __init__(self, hgain=0.5, sgain=0.5, vgain=0.5) -> None:
+        """
+        Initializes the RandomHSV object for random HSV (Hue, Saturation, Value) augmentation.
+
+        This class applies random adjustments to the HSV channels of an image within specified limits.
+
+        Args:
+            hgain (float): Maximum variation for hue. Should be in the range [0, 1].
+            sgain (float): Maximum variation for saturation. Should be in the range [0, 1].
+            vgain (float): Maximum variation for value. Should be in the range [0, 1].
+
+        Examples:
+            >>> hsv_aug = RandomHSV(hgain=0.5, sgain=0.5, vgain=0.5)
+            >>> hsv_aug(image)
+        """
+        self.hgain = hgain
+        self.sgain = sgain
+        self.vgain = vgain
+
+    def __call__(self, img):
+        """
+        Applies random HSV augmentation to an image within predefined limits.
+
+        This method modifies the input image by randomly adjusting its Hue, Saturation, and Value (HSV) channels.
+        The adjustments are made within the limits set by hgain, sgain, and vgain during initialization.
+
+        Args:
+            labels (Dict): A dictionary containing image data and metadata. Must include an 'img' key with
+                the image as a numpy array.
+
+        Returns:
+            (None): The function modifies the input 'labels' dictionary in-place, updating the 'img' key
+                with the HSV-augmented image.
+
+        Examples:
+            >>> hsv_augmenter = RandomHSV(hgain=0.5, sgain=0.5, vgain=0.5)
+            >>> labels = {"img": np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)}
+            >>> hsv_augmenter(labels)
+            >>> augmented_img = labels["img"]
+        """
+        assert img.ndim == 4 and img.shape[1] == 3, "需要输入 [B,3,H,W]"
+        device = img.device
+
+        # 随机生成一个 (h,s,v) 增益，整个 batch 共用
+        hgain = (torch.rand(1, device=device) * 2 - 1) * self.hgain
+        sgain = (torch.rand(1, device=device) * 2 - 1) * self.sgain
+        vgain = (torch.rand(1, device=device) * 2 - 1) * self.vgain
+
+        r, g, b = img[:, 0], img[:, 1], img[:, 2]  # [B,H,W]
+
+        # 转 HSV
+        maxc, _ = img.max(dim=1)
+        minc, _ = img.min(dim=1)
+        v = maxc
+        s = (maxc - minc) / (maxc + 1e-6)
+        deltac = maxc - minc
+
+        # Hue 计算
+        h = torch.zeros_like(v)
+        mask = deltac > 1e-6
+        rc = (maxc - r) / (deltac + 1e-6)
+        gc = (maxc - g) / (deltac + 1e-6)
+        bc = (maxc - b) / (deltac + 1e-6)
+
+        h[(mask) & (r == maxc)] = (bc - gc)[(mask) & (r == maxc)]
+        h[(mask) & (g == maxc)] = 2.0 + (rc - bc)[(mask) & (g == maxc)]
+        h[(mask) & (b == maxc)] = 4.0 + (gc - rc)[(mask) & (b == maxc)]
+        h = (h / 6.0) % 1.0  # 归一化到 [0,1]
+
+        # 应用 HSV 增益
+        h = (h + hgain) % 1.0
+        s = torch.clamp(s * (1 + sgain), 0, 1)
+        v = torch.clamp(v * (1 + vgain), 0, 1)
+
+        # HSV -> RGB
+        i = torch.floor(h * 6).long()
+        f = h * 6 - i
+        p = v * (1 - s)
+        q = v * (1 - f * s)
+        t = v * (1 - (1 - f) * s)
+
+        i = i % 6
+        conds = [
+            (v, t, p),
+            (q, v, p),
+            (p, v, t),
+            (p, q, v),
+            (t, p, v),
+            (v, p, q),
+        ]
+        out = torch.zeros_like(img)
+        for j in range(6):
+            mask = (i == j).unsqueeze(1)  # [B,1,H,W]
+            out = out + torch.stack([conds[j][0], conds[j][1], conds[j][2]], dim=1) * mask.float()
+
+        return out
+
 class RandomFlip:
     """
     Applies a random horizontal or vertical flip to an image with a given probability.
