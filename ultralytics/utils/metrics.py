@@ -520,7 +520,8 @@ class MConfusionMatrix:
             return
 
         pred_attributes = detections[:, 6:6+self.na]
-        pred_attributes = torch.floor(pred_attributes * self.risk_enlarge * (self.nal)).long()
+        risk_enlarge_tensor = torch.tensor(self.risk_enlarge, device=pred_attributes.device).view(1, -1)
+        pred_attributes = torch.floor(pred_attributes * risk_enlarge_tensor * (self.nal)).long()
         pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
 
         detections = detections[detections[:, 4] > self.conf]

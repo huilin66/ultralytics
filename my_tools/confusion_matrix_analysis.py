@@ -348,7 +348,7 @@ def main(folder_path, output_f1='f1_results.csv', output_precision='precision_re
         print(f"合并召回率结果已保存到: {merged_recall_path}")
 
 if __name__ == '__main__':
-    main('/localnvme/project/ultralytics/runs/msegment/val117')
-    main('/localnvme/project/ultralytics/runs/msegment/val109')
+    # main('/localnvme/project/ultralytics/runs/msegment/val117')
+    main('/localnvme/project/ultralytics/runs/msegment/val193')
     # main('/localnvme/project/ultralytics/runs/msegment/val83')
     # main('/localnvme/project/ultralytics/runs/msegment/val84')

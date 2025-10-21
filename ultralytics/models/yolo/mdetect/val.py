@@ -331,7 +331,8 @@ class MDetectionValidator(BaseValidator):
         correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
 
         # attribute result
-        pred_attributes_result = torch.floor(pred_attributes * self.args.risk_enlarge * (nal)).long()
+        risk_enlarge_tensor = torch.tensor(self.args.risk_enlarge, device=pred_attributes.device).view(1, -1)
+        pred_attributes_result = torch.floor(pred_attributes * risk_enlarge_tensor * (nal)).long()
         pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=nal-1)
 
         matched_box = torch.zeros_like(iou, dtype=torch.bool, device=iou.device)
