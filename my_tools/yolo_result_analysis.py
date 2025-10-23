@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix
+from confusion_matrix_analysis import risk_analysis
 import warnings
 from pathlib import Path
 warnings.filterwarnings('ignore')
@@ -224,7 +225,6 @@ def model_pred_compare(label_dir, pred_dir, save_dir=None, att_file=None, thresh
         df_match.to_csv(save_path.replace('.txt', '.csv'))
     df.to_csv(save_dir+'.csv')
 
-
 def filter_pre_match_defect(df, idx, att_list, ):
     row = df[df['pred_id'] == idx]
 
@@ -244,8 +244,6 @@ def filter_pre_match_defect(df, idx, att_list, ):
             return True
     return False
 
-
-
 def filter_gt_match_defect(df, idx, att_list, ):
     row = df[df['gt_id'] == idx]
 
@@ -264,7 +262,6 @@ def filter_gt_match_defect(df, idx, att_list, ):
         if row[f'pred_{att}'] != row[f'gt_{att}'] and row[f'gt_{att}'] > 0:
             return True
     return False
-
 
 def filter_txt(input_dir, output_dir, ref_dir, att_file, filter_func):
     att_list = get_attributes(att_file)
@@ -289,15 +286,16 @@ def filter_txt(input_dir, output_dir, ref_dir, att_file, filter_func):
 
 if __name__ == "__main__":
     pass
-    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
-    analysis_dir = os.path.join(root_dir, 'result_analysis')
-    gt_dir = os.path.join(root_dir, 'labels')
-    pred_dir = os.path.join(root_dir, 'images_infer', 'labels')
-    att_file = os.path.join(root_dir, 'attribute_l2.yaml')
-    compare_dir = os.path.join(analysis_dir, f'labels_vs_{os.path.basename(os.path.dirname(pred_dir))}')
-    # model_pred_compare(gt_dir, pred_dir, att_file=att_file, save_dir=compare_dir)
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # analysis_dir = os.path.join(root_dir, 'result_analysis')
+    # gt_dir = os.path.join(root_dir, 'labels')
+    # pred_dir = os.path.join(root_dir, 'images_infer', 'labels')
+    # att_file = os.path.join(root_dir, 'attribute_l2.yaml')
+    # compare_dir = os.path.join(analysis_dir, f'labels_vs_{os.path.basename(os.path.dirname(pred_dir))}')
+    # # model_pred_compare(gt_dir, pred_dir, att_file=att_file, save_dir=compare_dir)
+    #
+    # filter_pre_match_defect_dir = os.path.join(analysis_dir, 'filter_pre_match_defect')
+    # filter_txt(pred_dir, filter_pre_match_defect_dir, compare_dir, att_file, filter_func=filter_pre_match_defect)
+    # filter_gt_match_defect_dir = os.path.join(analysis_dir, 'filter_gt_match_defect')
+    # filter_txt(gt_dir, filter_gt_match_defect_dir, compare_dir, att_file, filter_func=filter_gt_match_defect)
 
-    filter_pre_match_defect_dir = os.path.join(analysis_dir, 'filter_pre_match_defect')
-    filter_txt(pred_dir, filter_pre_match_defect_dir, compare_dir, att_file, filter_func=filter_pre_match_defect)
-    filter_gt_match_defect_dir = os.path.join(analysis_dir, 'filter_gt_match_defect')
-    filter_txt(gt_dir, filter_gt_match_defect_dir, compare_dir, att_file, filter_func=filter_gt_match_defect)

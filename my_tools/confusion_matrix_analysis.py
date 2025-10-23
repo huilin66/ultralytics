@@ -271,7 +271,7 @@ def process_folder_merged(folder_path):
 
     return merged_results, merged_precision, merged_recall
 
-def main(folder_path, output_f1='f1_results.csv', output_precision='precision_results.csv', output_recall='recall_results.csv'):
+def risk_analysis(folder_path, output_f1='f1_results.csv', output_precision='precision_results.csv', output_recall='recall_results.csv'):
 
     # 检查文件夹是否存在
     if not os.path.isdir(folder_path):

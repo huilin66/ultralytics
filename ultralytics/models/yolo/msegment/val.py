@@ -45,11 +45,7 @@ class MSegmentationValidator(MDetectionValidator):
         """Initialize metrics and select mask processing function based on save_json flag."""
         super().init_metrics(model)
         self.plot_masks = []
-        if self.args.save_json:
-            check_requirements("pycocotools>=2.0.6")
-            self.process = ops.process_mask_upsample  # more accurate
-        else:
-            self.process = ops.process_mask  # faster
+        self.process = ops.process_mask_native if self.args.save_json or self.args.save_txt else ops.process_mask
         self.stats['tp_m'] = []
 
     def get_desc(self):

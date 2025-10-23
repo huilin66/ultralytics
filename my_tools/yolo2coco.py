@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 
+import yaml
 from PIL import Image
 import pandas as pd
 from tqdm import tqdm
@@ -99,10 +100,11 @@ class COCOeval_diy(COCOeval):
 
 def select_val(input_dir, val_txt='val.txt'):
     pass
+    print(f'select {input_dir} by {val_txt}')
     val_txt_path = os.path.join(input_dir, val_txt)
     image_dir = os.path.join(input_dir, 'images')
     label_dir = os.path.join(input_dir, 'labels')
-    val_dir = os.path.join(input_dir, 'val')
+    val_dir = os.path.join(input_dir, val_txt_path.replace('.txt', ''))
     val_image_dir = os.path.join(val_dir, 'images')
     val_label_dir = os.path.join(val_dir, 'labels')
     if os.path.exists(val_label_dir):
@@ -124,6 +126,8 @@ def select_val(input_dir, val_txt='val.txt'):
         shutil.copy(input_image_path, ouput_image_path)
         shutil.copy(input_label_path, output_label_path)
 
+    print('select finish!\n')
+
 def poly2xywh(mask):
     mask = np.array([mask[::2], mask[1::2]])
     x_min,y_min = np.min(mask, axis=1)
@@ -134,7 +138,7 @@ def poly2xywh(mask):
     height = y_max - y_min
     return [x_center, y_center, width, height]
 
-def yolo_to_coco(yolo_dir, img_dir, output_file, categories):
+def yolo_to_coco(yolo_dir, img_dir, output_file, categories, mseg=False):
     """
     将YOLO格式的标注转换为COCO格式。
 
@@ -143,6 +147,7 @@ def yolo_to_coco(yolo_dir, img_dir, output_file, categories):
     :param output_file: 输出的COCO格式JSON文件路径。
     :param categories: 类别列表，如[{"id": 0, "name": "cat"}, {"id": 1, "name": "dog"}]
     """
+    print('convert yolo predictions to COCO format')
     images = []
     annotations = []
     image_id = 0
@@ -185,7 +190,11 @@ def yolo_to_coco(yolo_dir, img_dir, output_file, categories):
         for line in lines:
             parts = line.strip().split()
             category_id = int(parts[0])+1
-            polygons = list(map(float, parts[1:]))
+            if mseg:
+                att_len = int(parts[1])
+                polygons = list(map(float, parts[2+att_len:]))
+            else:
+                polygons = list(map(float, parts[1:]))
             xywh = poly2xywh(polygons)
             x_center, y_center, bbox_width, bbox_height = xywh
 
@@ -213,6 +222,7 @@ def yolo_to_coco(yolo_dir, img_dir, output_file, categories):
         "categories": categories
     }
 
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(coco_format_json, f)
     print(f'save to {output_file}')
@@ -227,31 +237,53 @@ def coco_val(annFile, resFile):
     cocoEval.accumulate()
     cocoEval.summarize()
 
+def find_first_file(file_name, root_dir):
+    path = Path(root_dir)
+    if not path.exists():
+        return None
+    for file_path in path.rglob(file_name):
+        if file_path.is_file():
+            return str(file_path)
+    return None
+    # return next((str(f) for f in path.iterdir() if f.is_file() and f.name == file_name), None)
+
+def names2categories(names):
+    categories = []
+    for k, v in names.items():
+        category = {'id': k, 'name': v}
+        categories.append(category)
+    return categories
+
+def seg_analysis(data_cfg, val_path, cfg_dir='../ultralytics/cfg'):
+    if 'msegment' in val_path:
+        mseg = True
+    else:
+        mseg = False
+    data_cfg_path = find_first_file(data_cfg, cfg_dir)
+    print(data_cfg_path)
+    with open(data_cfg_path, 'r') as f:
+        data = yaml.safe_load(f)
+
+    data_dir = data['path']
+    val_name = data['val']
+    names = data['names']
+
+    data_val_dir = os.path.join(data_dir, val_name.replace('.txt', ''))
+    data_val_image_dir = os.path.join(data_val_dir, 'images')
+    data_val_label_dir = os.path.join(data_val_dir, 'labels')
+    data_val_coco_anno_path = os.path.join(data_val_dir, "coco_annotations.json")
+    categories = names2categories(names)
+
+    select_val(data_dir, val_txt=val_name)
+    yolo_to_coco(data_val_label_dir, data_val_image_dir, data_val_coco_anno_path, categories, mseg=mseg)
+    coco_val(data_val_coco_anno_path, val_path)
+
+
 if __name__ == '__main__':
-    # 示例调用
-    categories = [
-        {"id": 1, "name": "wall frame"},
-        {"id": 2, "name": "wall display"},
-        {"id": 3, "name": "projecting frame"},
-        {"id": 4, "name": "projecting display"},
-        {"id": 5, "name": "hanging frame"},
-        {"id": 6, "name": "hanging display"},
-        {"id": 7, "name": "other"},
-    ]  # 根据实际情况修改
-
-    data_dir = r'/localnvme/data/billboard/fused_data/data7436_seg_c5_0922'
-
-    # select_val(data_dir, val_txt='val.txt')
-    select_val(data_dir, val_txt='val_80p_ref.txt')
-    yolo_to_coco(
-        os.path.join(data_dir, 'val', 'labels'),
-        os.path.join(data_dir, 'val', 'images'),
-        os.path.join(data_dir, 'val', "coco_annotations.json"),
-        categories)
-
-    coco_val(
-        os.path.join(data_dir, 'val', 'coco_annotations.json'),
-        r'/localnvme/project/ultralytics/runs/segment/val235/predictions.json',
-    )
+    pass
+    # seg_analysis('fusedata7961_mseg_c5_l2_1022_80p_ref.yaml',
+    #              r'/localnvme/project/ultralytics/runs/msegment/val269/predictions.json')
+    seg_analysis('fusedata7961_seg_c5_l2_1022_re_80p_ref.yaml',
+                 r'/localnvme/project/ultralytics/runs/segment/val2/predictions.json')
 
 

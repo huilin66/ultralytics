@@ -31,7 +31,7 @@ if __name__ == '__main__':
     #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
     # )
 
-    # demo_base.model_val(r'fusedata7720_mseg_c5_l2_1002_80p_ref-[yolov10x-mseg-dlka3res-7]2')
+    demo_base.model_val(r'fusedata7961_mseg_c5_l2_1022_80p_ref-[yolov10x-mseg-dlka3res-7]4', save_json=False)
 
     # demo_base.model_export(r'runs/msegment/fusedata5894_mseg_c5_0822_80p-[yolov8x-mseg-dlka3res-7]/weights/best.pt',
     #                         imgsz=(608,960),
