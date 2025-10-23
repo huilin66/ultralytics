@@ -181,12 +181,8 @@ class Detect(nn.Module):
         if self.end2end:
             return self.forward_end2end(x)
 
-        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg2/input_x.pt')
-        torch.save(self.cv2, r'/localnvme/project/ultralytics/my_tools/seg2/cv2.pt')
-        torch.save(self.cv3, r'/localnvme/project/ultralytics/my_tools/seg2/cv3.pt')
         for i in range(self.nl):
             x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
-        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg2/output_x.pt')
         if self.training:  # Training path
             return x
         y = self._inference(x)
@@ -203,16 +199,12 @@ class Detect(nn.Module):
             (dict, tensor): If not in training mode, returns a dictionary containing the outputs of both one2many and one2one detections.
                            If in training mode, returns a dictionary containing the outputs of one2many and one2one detections separately.
         """
-        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg1/input_x.pt')
-        torch.save(self.cv2, r'/localnvme/project/ultralytics/my_tools/seg1/cv2.pt')
-        torch.save(self.cv3, r'/localnvme/project/ultralytics/my_tools/seg1/cv3.pt')
         x_detach = [xi.detach() for xi in x]
         one2one = [
             torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])), 1) for i in range(self.nl)
         ]
         for i in range(self.nl):
             x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
-        torch.save(x, r'/localnvme/project/ultralytics/my_tools/seg1/output_x.pt')
         if self.training:  # Training path
             return {"one2many": x, "one2one": one2one}
 

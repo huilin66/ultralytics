@@ -334,11 +334,7 @@ class BaseTrainer:
         """Train the model with the specified world size."""
         if world_size > 1:
             self._setup_ddp(world_size)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg5.pth'
-        # torch.save(self.model.model.state_dict(), save_ckpt_path)
         self._setup_train(world_size)
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg6.pth'
-        # torch.save(self.model.model.state_dict(), save_ckpt_path)
         nb = len(self.train_loader)  # number of batches
         nw = max(round(self.args.warmup_epochs * nb), 100) if self.args.warmup_epochs > 0 else -1  # warmup iterations
         last_opt_step = -1
@@ -357,22 +353,14 @@ class BaseTrainer:
             self.plot_idx.extend([base_idx, base_idx + 1, base_idx + 2])
         epoch = self.start_epoch
         self.optimizer.zero_grad()  # zero any resumed gradients to ensure stability on train start
-        # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg7.pth'
-        # torch.save(self.model.model.state_dict(), save_ckpt_path)
         while True:
             self.epoch = epoch
             self.run_callbacks("on_train_epoch_start")
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")  # suppress 'Detected lr_scheduler.step() before optimizer.step()'
                 self.scheduler.step()
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg8.pth'
-            # torch.save(self.model.model.state_dict(), save_ckpt_path)
             self.model.train()
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg9.pth'
-            # torch.save(self.model.model.state_dict(), save_ckpt_path)
             self._model_train()
-            # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg10.pth'
-            # torch.save(self.model.model.state_dict(), save_ckpt_path)
             if RANK != -1:
                 self.train_loader.sampler.set_epoch(epoch)
             pbar = enumerate(self.train_loader)
@@ -399,8 +387,6 @@ class BaseTrainer:
                         )
                         if "momentum" in x:
                             x["momentum"] = np.interp(ni, xi, [self.args.warmup_momentum, self.args.momentum])
-                # save_ckpt_path = '/nfsv4/23039356r/repository/ultralytics/my_tools/ckpt_seg11.pth'
-                # torch.save(self.model.model.state_dict(), save_ckpt_path)
                 # Forward
                 with autocast(self.amp):
                     batch = self.preprocess_batch(batch)

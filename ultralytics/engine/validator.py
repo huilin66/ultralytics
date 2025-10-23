@@ -213,22 +213,15 @@ class BaseValidator:
         bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
         self.init_metrics(de_parallel(model))
         self.jdict = []  # empty before each val
-        import os
-        if 'ee' in self.args.model:
-            save_dir = r'/localnvme/project/ultralytics/my_tools/seg1'
-        else:
-            save_dir = r'/localnvme/project/ultralytics/my_tools/seg2'
         for batch_i, batch in enumerate(bar):
             self.run_callbacks("on_val_batch_start")
             self.batch_i = batch_i
             # Preprocess
             with dt[0]:
                 batch = self.preprocess(batch)
-            torch.save(batch['img'], os.path.join(save_dir, 'img.pt'))
             # Inference
             with dt[1]:
                 preds = model(batch["img"], augment=augment)
-            torch.save(preds, os.path.join(save_dir, 'preds.pt'))
             # Loss
             with dt[2]:
                 if self.training:
