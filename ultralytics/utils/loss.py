@@ -281,7 +281,7 @@ class v8SegmentationLoss(v8DetectionLoss):
         super().__init__(model, tal_topk=tal_topk)
         self.overlap = model.args.overlap_mask
         self.use_fl_seg = model.args.use_fl_seg
-        self.varifocal_loss = FocalLoss()
+        self.varifocal_loss = VarifocalLoss()
 
     def __call__(self, preds, batch):
         """Calculate and return the combined loss for detection and segmentation."""
