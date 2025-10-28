@@ -69,4 +69,4 @@ class MDetectionPredictor(BasePredictor):
         pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
         attributes = pred[:, 6:]
         attribute_names = self.model.model.attribute_names
-        return MdetResults(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], attributes=attributes, attribute_names=attribute_names)
+        return MdetResults(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], attributes=attributes, attribute_names=attribute_names, risk_enlarge = self.args.risk_enlarge)

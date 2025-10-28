@@ -1003,8 +1003,8 @@ class v8MSegmentationLoss(v8MDetectionLoss):
 
             if self.mloss_weight:
                 loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3,
-                                            # alpha=torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype),
-                                            alpha=torch.tensor([0.175, 3.5, 7.0], device=pred_attributes.device, dtype=pred_attributes.dtype),
+                                            alpha=torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype),
+                                            # alpha=torch.tensor([0.175, 3.5, 7.0], device=pred_attributes.device, dtype=pred_attributes.dtype),
                                             )
             else:
                 loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3)

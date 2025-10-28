@@ -366,7 +366,8 @@ class MSegmentationValidator(MDetectionValidator):
             masks=pred_masks,
             nc=self.nc,
             na=self.na,
-            nal=self.nal
+            nal=self.nal,
+            risk_enlarge = self.args.risk_enlarge,
         ).save_txt(file, save_conf=save_conf, save_risk_score=save_risk_score)
 
     def save_one_npy(self, predn, pred_masks, save_conf, shape, file, label=True, gt_cls=None, overlap=False):
@@ -392,7 +393,8 @@ class MSegmentationValidator(MDetectionValidator):
             masks=pred_masks,
             nc=self.nc,
             na=self.na,
-            nal=self.nal
+            nal=self.nal,
+            risk_enlarge=self.args.risk_enlarge,
         ).save_npy(file)
 
     def pred_to_json(self, predn, filename, pred_masks):

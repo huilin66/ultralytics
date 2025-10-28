@@ -189,11 +189,12 @@ def yolo_to_coco(yolo_dir, img_dir, output_file, categories, mseg=False):
 
         for line in lines:
             parts = line.strip().split()
-            category_id = int(parts[0])+1
             if mseg:
+                category_id = int(parts[0])
                 att_len = int(parts[1])
                 polygons = list(map(float, parts[2+att_len:]))
             else:
+                category_id = int(parts[0])+1
                 polygons = list(map(float, parts[1:]))
             xywh = poly2xywh(polygons)
             x_center, y_center, bbox_width, bbox_height = xywh
@@ -284,6 +285,6 @@ if __name__ == '__main__':
     # seg_analysis('fusedata7961_mseg_c5_l2_1022_80p_ref.yaml',
     #              r'/localnvme/project/ultralytics/runs/msegment/val269/predictions.json')
     seg_analysis('fusedata7961_seg_c5_l2_1022_re_80p_ref.yaml',
-                 r'/localnvme/project/ultralytics/runs/segment/val2/predictions.json')
+                 r'/localnvme/project/ultralytics/runs/segment/val5/predictions.json')
 
 

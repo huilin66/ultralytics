@@ -22,7 +22,7 @@ def metric_plot(df, col_name='metrics/mAP50(B)', topk=5):
 
 if __name__ == '__main__':
     pass
-    train_name = 'fusedata3899_seg_c5_0818_80p-[yolov12x-seg-dlka3res]'
+    train_name = 'fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8'
     task = 'segment'
     train_path = os.path.join('../runs', task, train_name, 'results.csv')
     df = get_df(train_path)

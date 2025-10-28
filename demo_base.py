@@ -61,7 +61,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
     result = model.train(**train_params)
     return result
 
-def model_val(weight_path, weight_name=True, network=YOLO, **kwargs):
+def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwargs):
     if weight_name:
         weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
     print(f'val with {weight_path}')
@@ -70,7 +70,8 @@ def model_val(weight_path, weight_name=True, network=YOLO, **kwargs):
     val_params = {
         'device': DEVICE,
         'batch': BATCH_SIZE,
-        'conf': CONF_VAL
+        'conf': CONF_VAL,
+        'save_txt':save_txt,
     }
     val_params.update(kwargs)
     result = model.val(**val_params)

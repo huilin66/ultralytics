@@ -672,7 +672,7 @@ class Results(SimpleClass):
                 log_string += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "
         return log_string
 
-    def save_txt(self, txt_file, save_conf=False):
+    def save_txt(self, txt_file, save_conf=False, **kwargs):
         """
         Save detection results to a text file.
 
@@ -1069,7 +1069,7 @@ class MdetResults(SimpleClass):
 
     def __init__(
         self, orig_img, path, names, boxes=None, attributes=None, masks=None, probs=None, keypoints=None, obb=None,
-            speed=None, attribute_names=None, nc=None, na=None, nal=None) -> None:
+            speed=None, attribute_names=None, nc=None, na=None, nal=None, risk_enlarge=1) -> None:
         """
         Initialize the Results class.
 
@@ -1086,7 +1086,7 @@ class MdetResults(SimpleClass):
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
         self.boxes = Boxes(boxes, self.orig_shape) if boxes is not None else None  # native size boxes
-        self.attributes = Attributes(attributes, attribute_names, self.orig_shape) if attributes is not None else None
+        self.attributes = Attributes(attributes, attribute_names, self.orig_shape, risk_enlarge=risk_enlarge) if attributes is not None else None
         self.masks = Masks(masks, self.orig_shape) if masks is not None else None  # native size or imgsz masks
         self.probs = Probs(probs) if probs is not None else None
         self.keypoints = Keypoints(keypoints, self.orig_shape) if keypoints is not None else None
@@ -1358,7 +1358,7 @@ class MdetResults(SimpleClass):
             for j, d in enumerate(boxes):
                 att = attributes.data[j].cpu().numpy()
                 if not save_risk_score:
-                    att = np.floor(att * self.nal).astype(np.int32)
+                    att = np.floor(att * self.attributes.risk_enlarge * self.nal).astype(np.int32)
                     att = np.clip(att, 0, self.nal-1)
                 c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
                 line = (c, len(att), *att, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
@@ -1457,15 +1457,16 @@ class MdetResults(SimpleClass):
         return json.dumps(self.summary(normalize=normalize, decimals=decimals), indent=2)
 
 class Attributes(BaseTensor):
-    def __init__(self, attributes, attribute_names, orig_shape) -> None:
+    def __init__(self, attributes, attribute_names, orig_shape, risk_enlarge=1) -> None:
         super().__init__(attributes, orig_shape)
         self.orig_shape = orig_shape
         self.attribute_names = attribute_names
         self.attribute_len, self.attribute_level = get_attribute_num(attribute_names)
+        self.risk_enlarge = np.array(risk_enlarge)
 
     @property
     def result(self):
-        data = torch.floor(self.data * (self.attribute_level)).long()
+        data = torch.floor(self.data * torch.tensor(self.risk_enlarge, device=self.data.device) * self.attribute_level).long()
         data = torch.clip(data, min=0, max=self.attribute_level-1)
         data = data.cpu().numpy()
         value = self.get_attribute(self.attribute_names, data)
