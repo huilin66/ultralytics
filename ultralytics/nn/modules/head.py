@@ -353,6 +353,10 @@ class MDetect(nn.Module):
             self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
         elif self.sep == 'unet':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+        elif self.sep == 'c3str-unet1':
+            self.cva = nn.ModuleList(nn.Sequential(C3STR(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+        elif self.sep == 'c3str-unet2':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), C3STR(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
         else:
             self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
 
@@ -372,7 +376,7 @@ class MDetect(nn.Module):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         if self.end2end:
             return self.forward_end2end(x)
-        if self.sep=='unet':
+        if self.sep and 'unet' in self.sep:
             self.nl=3
             x_a = [
                 torch.cat([x[0], x[3]], dim=1),
@@ -383,7 +387,7 @@ class MDetect(nn.Module):
         for i in range(self.nl):
             if not self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
-            elif self.sep=='unet':
+            elif 'unet' in self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
             else:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)

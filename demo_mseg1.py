@@ -21,7 +21,7 @@ DATA3 = "fusedata7720_mseg_c5_l2_1002_70p.yaml"
 DATA4 = "fusedata7720_mseg_c5_l2_1002_60p.yaml"
 DATA0 = 'fusedata7436_mseg_c5_l2_0922_80p_ref.yaml'
 
-
+MODEL07 = 'yolov10x-mseg-dlka3res-7-dlka.yaml'
 DATA5 = "testdata80_mseg_c5_l2_1021.yaml"
 DATA6 = "testdata80_mseg_c5_l2_1021_broke_refine.yaml"
 
@@ -32,7 +32,10 @@ if __name__ == '__main__':
     #     MODEL3, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
     #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
     # )
-
+    demo_base.yolo10(
+        MODEL07, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+        mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    )
     # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1015_80p_ref-[yolov10x-mseg-dlka3res-7]')
     # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1015_80p_ref-[yolov10x-mseg-dlka3res-7]2')
     # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1015_80p_ref-[yolov10x-mseg-dlka3res-7]3')
@@ -281,6 +284,9 @@ if __name__ == '__main__':
     # val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # data = 'defect_test_1023.yaml'
     # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
+    # val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
+    # data = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref.yaml'
+    # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
     # val_name = 'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # data = 'defect_test_1023.yaml'
     # demo_base.model_val(val_name, filter_small=0.05, data=data)
@@ -309,6 +315,10 @@ if __name__ == '__main__':
     # img_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref/images'
     # save_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref/images_infer'
     # demo_base.model_predict(val_name, img_dir = img_dir, conf=0.001, name=save_dir,)
+
+
+    # demo_base.model_val('fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]', save_txt=True, save_conf=True)
+    # demo_base.model_val('fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]', save_txt=True, save_conf=True, eval_att_by_class=False)
 
     # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3',
     #                         imgsz=(608,960),batch=6)

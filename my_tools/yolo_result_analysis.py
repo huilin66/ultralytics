@@ -324,7 +324,8 @@ def prediction_compare_show(input_path_list, save_path, nums=[2, 3], size=[12, 8
     plt.close()
 
 
-def pred2cfm_risk(label_dir, pred_dir, save_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all'):
+
+def pred2cfm_risk(label_dir, pred_dir, save_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all', filter_small=None):
     os.makedirs(save_dir, exist_ok=True)
     attributes = get_attributes(attributes)
     txt_list = os.listdir(label_dir)
@@ -342,6 +343,9 @@ def pred2cfm_risk(label_dir, pred_dir, save_dir, mdet=True, attributes=None, wit
         else:
             df_pred = get_yolo_label_df(pred_path, mdet=mdet, attributes=attributes, with_object_id=True, with_conf=with_conf, conf_threshold=conf_threshold)
 
+        if filter_small is not None:
+            df_label = df_label.loc[(df_label['w']>filter_small) | (df_label['h']>filter_small)]
+            df_pred = df_pred.loc[(df_pred['w']>filter_small) | (df_pred['h']>filter_small)]
 
         df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
         
@@ -502,52 +506,40 @@ def pred2cfm_risk(label_dir, pred_dir, save_dir, mdet=True, attributes=None, wit
             
 if __name__ == "__main__":
     pass
-    # data_cfg = 'fusedata7961_mseg_c5_l2_1023_80p_ref.yaml'
-    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val274'
-    # pred_path = os.path.join(pred_dir, 'predictions.json')
-    # seg_analysis(data_cfg, pred_path)
-    # risk_analysis(pred_dir)
-
-    # predictions_compare_show(
-    #     input_dir_list=[
-    #         r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer',
-    #         r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer2',
-    #         r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer3',
-    #         r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer4',
-    #         r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer5',
-    #         r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer6',
-    #     ],
-    #     save_dir=r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/predicts/infer_merge_1_6',
-    #     nums=[2, 3], size=[12, 8])
-
-
     # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val607/labels'
     # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
     # save_dir = os.path.join(data_dir, 'result_analysis', 'val607')
     # label_dir = os.path.join(data_dir, 'val_80p_ref', 'labels')
 
-    pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val611/labels'
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val614/labels'
+    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+    # save_dir = os.path.join(data_dir, 'result_analysis', 'val614')
+    # label_dir = os.path.join(data_dir, 'labels')
+    # att_file = os.path.join(data_dir, 'attribute.yaml')
+
+
+    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
+    # risk_analysis(save_dir)
+    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='correct')
+    # risk_analysis(save_dir)
+
+
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val615/labels'
+    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+    # save_dir = os.path.join(data_dir, 'result_analysis', 'val615')
+    # label_dir = os.path.join(data_dir, 'labels')
+    # att_file = os.path.join(data_dir, 'attribute.yaml')
+
+    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
+    # risk_analysis(save_dir)
+
+    pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val610/labels'
     data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
-    save_dir = os.path.join(data_dir, 'result_analysis', 'val611')
+    save_dir = os.path.join(data_dir, 'result_analysis', 'val610')
     label_dir = os.path.join(data_dir, 'labels')
     att_file = os.path.join(data_dir, 'attribute.yaml')
 
     # select_val(data_dir, val_txt='val_80p_ref.txt')
     pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
     risk_analysis(save_dir)
-    pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='correct')
-    risk_analysis(save_dir)
-
-
-    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val610/labels'
-    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
-    # save_dir = os.path.join(data_dir, 'result_analysis', 'val610')
-    # label_dir = os.path.join(data_dir, 'labels')
-    # att_file = os.path.join(data_dir, 'attribute.yaml')
-    #
-    # # select_val(data_dir, val_txt='val_80p_ref.txt')
-    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
-    # risk_analysis(save_dir)
-    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='correct')
-    # risk_analysis(save_dir)
 

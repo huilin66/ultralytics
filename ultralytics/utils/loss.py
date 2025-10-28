@@ -1036,19 +1036,23 @@ class v8MSegmentationLoss(v8MDetectionLoss):
                                                              pos_weight=pos_weight,
                                                              )
 
-                mask_active = gt_attributes_pos > 0
-                pred_attribute_active = pred_attributes_exist[mask_active]
-                gt_attributes_active = gt_attributes_pos[mask_active]-1
-                if gt_attributes_active.shape[0]>0:
-                    loss_active = F.binary_cross_entropy_with_logits(
-                                                                 input=pred_attribute_active,
-                                                                 target=gt_attributes_active,
-                                                                 pos_weight=pos_weight,
-                                                                 )
-                else:
-                    loss_active = 0
+                has_high_label = (gt_attributes_pos == 2).any()
+                if has_high_label:
+                    mask_active = gt_attributes_pos > 0
+                    pred_attribute_active = pred_attributes_exist[mask_active]
+                    gt_attributes_active = gt_attributes_pos[mask_active]-1
+                    if gt_attributes_active.shape[0]>0:
+                        loss_active = F.binary_cross_entropy_with_logits(
+                                                                     input=pred_attribute_active,
+                                                                     target=gt_attributes_active,
+                                                                     pos_weight=pos_weight,
+                                                                     )
+                    else:
+                        loss_active = 0
 
-                loss[4] = (1-self.mloss_weight) * loss_exists + self.mloss_weight * loss_active
+                    loss[4] = (1-self.mloss_weight) * loss_exists + self.mloss_weight * loss_active
+                else:
+                    loss[4] = loss_exists
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.seg  # seg gain

@@ -11,14 +11,28 @@ demo_base.DATA = "fusedata7961_seg_c5_l2_1022_re_80p_ref.yaml"
 if __name__ == '__main__':
     pass
     # demo_base.yolo10('yolov10x-seg-dlka3res.yaml', auto_optim=False, use_fl_seg=True)
-
     # demo_base.model_val(
     #     r'fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8',
-    #     save_json=True
+    #     data='fusedata7961_seg_c5_1021_80p_ref.yaml',
+    #     filter_small=0.05,
     # )
-    demo_base.model_predict(
-        r'fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8',
-        r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/images',
-        name=r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/result_analysis/infer',
-        conf=0.3,
-    )
+    # demo_base.model_val(
+    #     r'fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8',
+    #     filter_small=0.05,
+    # )
+    # demo_base.model_val(
+    #     r'fusedata7436_seg_c5_0922_80p_ref-[yolov10x-seg-dlka3res]_a100',
+    #     data='fusedata7961_seg_c5_1021_80p_ref.yaml',
+    #     filter_small=0.05,
+    # )
+    # demo_base.model_val(
+    #     r'fusedata7436_seg_c5_0922_80p_ref-[yolov10x-seg-dlka3res]_a100',
+    #     data='fusedata7961_seg_c5_l2_1022_re_80p_ref.yaml',
+    #     filter_small=0.05,
+    # )
+    # demo_base.model_predict(
+    #     r'fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8',
+    #     r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/images',
+    #     name=r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/result_analysis/infer',
+    #     conf=0.3,
+    # )
