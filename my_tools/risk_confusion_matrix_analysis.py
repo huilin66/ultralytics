@@ -52,7 +52,7 @@ def display_confusion_matrix(cm_df, risk_name, title_suffix="(merged: medium->ri
     print(display_df.to_string(index=True, header=True, justify='center', col_space=12))
     print('')
 
-def calculate_f1_scores(cm_df):
+def calculate_f1_scores(cm_df, rm_bg=False):
     """计算每个类别的精确率、召回率和F1分数
     
     参数:
@@ -95,11 +95,15 @@ def calculate_f1_scores(cm_df):
         recall_scores[cls] = recall
     
     # 计算宏平均F1分数
+    if rm_bg:
+        f1_scores.pop('background')
+        precision_scores.pop('background')
+        recall_scores.pop('background')
     macro_f1 = sum(f1_scores.values()) / len(f1_scores) if len(f1_scores) > 0 else 0
     
     return f1_scores, precision_scores, recall_scores, macro_f1
 
-def _detect_columns_by_first_file(folder_path, file_patterns):
+def _detect_columns_by_first_file(folder_path, file_patterns, rm_bg=False):
     """
     复用原有的“检测是否存在medium列”的逻辑 返回columns定义。
     """
@@ -123,6 +127,8 @@ def _detect_columns_by_first_file(folder_path, file_patterns):
         # 如果没有文件，默认使用包含medium的列定义
         columns = ["no", "medium", "high", "overall"]
     print(f'set columns with {columns}')
+    if rm_bg:
+        columns = ['background'] + columns
     return columns
 
 def merge_medium_high_cm(cm_df):
@@ -148,7 +154,7 @@ def merge_medium_high_cm(cm_df):
     return merged
 
 
-def process_folder(folder_path):
+def process_folder(folder_path, rm_bg=False):
     """处理文件夹中的所有混淆矩阵文件并生成结果DataFrame"""
     # 定义要查找的文件名模式
     file_patterns = [
@@ -180,9 +186,9 @@ def process_folder(folder_path):
         try:
             # 加载混淆矩阵 + 打印（原有打印）
             cm_df = load_confusion_matrix(file_path, risk_name)
-            
+
             # 计算指标
-            f1_scores, precision_scores, recall_scores, macro_f1 = calculate_f1_scores(cm_df)
+            f1_scores, precision_scores, recall_scores, macro_f1 = calculate_f1_scores(cm_df, rm_bg=rm_bg)
             
             # 填充结果DataFrame（原有映射：False -> 'no'）
             results_df.loc[risk_name, "no"] = f1_scores.get("False", 0)
@@ -209,7 +215,7 @@ def process_folder(folder_path):
             results_df.loc[risk_name] = [np.nan] * len(columns)
             results_df_precision.loc[risk_name] = [np.nan] * len(columns)
             results_df_recall.loc[risk_name] = [np.nan] * len(columns)
-    
+
     return results_df, results_df_precision, results_df_recall
 
 
@@ -271,14 +277,14 @@ def process_folder_merged(folder_path):
 
     return merged_results, merged_precision, merged_recall
 
-def risk_analysis(folder_path, output_f1='f1_results.csv', output_precision='precision_results.csv', output_recall='recall_results.csv'):
+def risk_analysis(folder_path, output_f1='f1_results.csv', output_precision='precision_results.csv', output_recall='recall_results.csv', rm_bg=False):
 
     # 检查文件夹是否存在
     if not os.path.isdir(folder_path):
         raise NotADirectoryError(f"路径不是一个文件夹: {folder_path}")
 
     # 处理文件夹
-    results_df, results_df_precision, results_df_recall = process_folder(folder_path)
+    results_df, results_df_precision, results_df_recall = process_folder(folder_path, rm_bg=rm_bg)
 
     # 计算4个risk的overall指标平均值
     f1_overall_avg = results_df['overall'].mean()

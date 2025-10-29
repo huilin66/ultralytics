@@ -91,7 +91,7 @@ class MDetectionValidator(BaseValidator):
         self.metrics.nc = self.nc
         self.metrics.na = self.na
         self.metrics.nal = self.nal
-        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf, risk_enlarge=self.args.risk_enlarge)
+        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf, risk_enlarge=self.args.risk_enlarge, eval_att_by_class = self.args.eval_att_by_class)
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], ap=[], conf_mat=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[], filter_small_gt=[], filter_small_pred=[])

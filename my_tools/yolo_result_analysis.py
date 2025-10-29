@@ -1,5 +1,8 @@
 import os
+
+import cv2
 import yaml
+import shutil
 import warnings
 import numpy as np
 import pandas as pd
@@ -39,8 +42,22 @@ def df_xywh_to_xyxy(df):
     df["y2"] = df["y"] + df["h"] / 2
     return df
 
-def box_iou(box1, box2):
-    # box1, box2: [x1,y1,x2,y2]
+def box_iou(box1, box2, eps=1e-7):
+    # box1, box2: [x1,y1,x2,y2]box2
+    # a1,a2 = np.asarray(box1, dtype=np.float32), np.asarray(box2, dtype=np.float32)
+    # a1 = a1.reshape(-1,4)
+    # a2 = a2.reshape(-1,4)
+    # area1 = np.clip(a1[:, 2] - a1[:, 0], 0, None) * np.clip(a1[:, 3] - a1[:, 1], 0, None)
+    # area2 = np.clip(a2[:, 2] - a2[:, 0], 0, None) * np.clip(a2[:, 3] - a2[:, 1], 0, None)
+    #
+    # lt = np.maximum(a1[:, None, :2], a2[None, :, :2])
+    # rb = np.maximum(a1[:, None, 2:], a2[None, :, 2:])
+    # wh = np.clip(rb-lt, 0, None)
+    # inter = (wh[..., 0]*wh[..., 1]).astype(np.float32)
+    # union = (area1[:, None] + area2[None, :] - inter).astype(np.float32)
+    #
+    # iou = inter/(union+eps)
+    # return float(iou[0,0])
     inter_x1 = max(box1[0], box2[0])
     inter_y1 = max(box1[1], box2[1])
     inter_x2 = min(box1[2], box2[2])
@@ -54,13 +71,13 @@ def box_iou(box1, box2):
     area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
     union = area1 + area2 - inter_area
 
-    return inter_area / union if union > 0 else 0
+    return inter_area / (union + eps)
 
 def match_and_merge(df_pred, df_gt, iou_thr=0.5, att_list=None):
     matched_gt_idx = set()
     merged_rows = []
 
-    show_columns = ['id', "category", "x", "y", "w", "h"]
+    show_columns = ['id', "category", "x", "y", "w", "h", "x1", "y1", "x2", "y2"]
     if att_list is not None:
        show_columns += att_list
     for i, pred_row in df_pred.iterrows():
@@ -302,7 +319,9 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False,
                 info += [conf]
             df.loc[len(df)] = info
     if with_conf:
-        df = df[df['conf'] >= conf_threshold]
+        df = df[(df['conf'] >= conf_threshold)]
+        # con_delete = (df['conf'] > conf_threshold) & ((df['abandonment'] > 0) | (df['broken'] > 0) | (df['corrosion'] > 0) | (df['deformation'] > 0))
+        # df = df[con_delete]
     df = df_xywh_to_xyxy(df)
     return df
 
@@ -323,223 +342,765 @@ def prediction_compare_show(input_path_list, save_path, nums=[2, 3], size=[12, 8
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
+def cfm_match_2(keep, df_a, df_b, df_c, df_d, row):
+    if keep == 'all':
+        if pd.isna(row['gt_category']):
+            if int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+        elif pd.isna(row['pred_category']):
+            if int(row['gt_abandonment']) > 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'ignore_other':
+        if pd.isna(row['gt_category']):
+            if not int(row['pred_category']) == 6:
+                if int(row['pred_abandonment']) > 0:
+                    df_a.loc['pred_high', 'background'] += 1
+                else:
+                    df_a.loc['pred_no', 'background'] += 1
+                if int(row['pred_broken']) > 0:
+                    df_b.loc['pred_high', 'background'] += 1
+                else:
+                    df_b.loc['pred_no', 'background'] += 1
+                if int(row['pred_corrosion']) > 0:
+                    df_c.loc['pred_high', 'background'] += 1
+                else:
+                    df_c.loc['pred_no', 'background'] += 1
+                if int(row['pred_deformation']) > 0:
+                    df_d.loc['pred_high', 'background'] += 1
+                else:
+                    df_d.loc['pred_no', 'background'] += 1
+        elif pd.isna(row['pred_category']):
+            if not int(row['gt_category']) == 6:
+                if int(row['gt_abandonment']) > 0:
+                    df_a.loc['background', 'label_high'] += 1
+                else:
+                    df_a.loc['background', 'label_no'] += 1
+                if int(row['gt_broken']) > 0:
+                    df_b.loc['background', 'label_high'] += 1
+                else:
+                    df_b.loc['background', 'label_no'] += 1
+                if int(row['gt_corrosion']) > 0:
+                    df_c.loc['background', 'label_high'] += 1
+                else:
+                    df_c.loc['background', 'label_no'] += 1
+                if int(row['gt_deformation']) > 0:
+                    df_d.loc['background', 'label_high'] += 1
+                else:
+                    df_d.loc['background', 'label_no'] += 1
+        else:
+            if not int(row['gt_category']) == 6:
+                if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                    df_a.loc['pred_high', 'label_high'] += 1
+                elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                    df_a.loc['pred_no', 'label_high'] += 1
+                elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                    df_a.loc['pred_high', 'label_no'] += 1
+                else:
+                    df_a.loc['pred_no', 'label_no'] += 1
+                if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                    df_b.loc['pred_high', 'label_high'] += 1
+                elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                    df_b.loc['pred_no', 'label_high'] += 1
+                elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                    df_b.loc['pred_high', 'label_no'] += 1
+                else:
+                    df_b.loc['pred_no', 'label_no'] += 1
+                if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                    df_c.loc['pred_high', 'label_high'] += 1
+                elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                    df_c.loc['pred_no', 'label_high'] += 1
+                elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                    df_c.loc['pred_high', 'label_no'] += 1
+                else:
+                    df_c.loc['pred_no', 'label_no'] += 1
+                if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                    df_d.loc['pred_high', 'label_high'] += 1
+                elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                    df_d.loc['pred_no', 'label_high'] += 1
+                elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                    df_d.loc['pred_high', 'label_no'] += 1
+                else:
+                    df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'iou':
+        if pd.isna(row['gt_category']) or pd.isna(row['pred_category']):
+            pass
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'correct':
+        if pd.isna(row['gt_category']) or pd.isna(row['pred_category']) and row['gt_category'] != row['pred_category']:
+            pass
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
 
+def cfm_match_3(keep, df_a, df_b, df_c, df_d, row):
+    pass
+    if keep == 'all':
+        if pd.isna(row['gt_category']):
+            if int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'background'] += 1
+            else:
+                df_a.loc['pred_no', 'background'] += 1
+            if int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'background'] += 1
+            else:
+                df_b.loc['pred_no', 'background'] += 1
+            if int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'background'] += 1
+            else:
+                df_c.loc['pred_no', 'background'] += 1
+            if int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'background'] += 1
+            else:
+                df_d.loc['pred_no', 'background'] += 1
+        elif pd.isna(row['pred_category']):
+            if int(row['gt_abandonment']) > 0:
+                df_a.loc['background', 'label_high'] += 1
+            else:
+                df_a.loc['background', 'label_no'] += 1
+            if int(row['gt_broken']) > 0:
+                df_b.loc['background', 'label_high'] += 1
+            else:
+                df_b.loc['background', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0:
+                df_c.loc['background', 'label_high'] += 1
+            else:
+                df_c.loc['background', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0:
+                df_d.loc['background', 'label_high'] += 1
+            else:
+                df_d.loc['background', 'label_no'] += 1
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'ignore_other':
+        if pd.isna(row['gt_category']):
+            if int(row['pred_category']) not in [6]:
+                if int(row['pred_abandonment']) > 0:
+                    df_a.loc['pred_high', 'background'] += 1
+                else:
+                    df_a.loc['pred_no', 'background'] += 1
+                if int(row['pred_broken']) > 0:
+                    df_b.loc['pred_high', 'background'] += 1
+                else:
+                    df_b.loc['pred_no', 'background'] += 1
+                if int(row['pred_corrosion']) > 0:
+                    df_c.loc['pred_high', 'background'] += 1
+                else:
+                    df_c.loc['pred_no', 'background'] += 1
+                if int(row['pred_deformation']) > 0:
+                    df_d.loc['pred_high', 'background'] += 1
+                else:
+                    df_d.loc['pred_no', 'background'] += 1
+        elif pd.isna(row['pred_category']):
+            if int(row['gt_category']) not in [6]:
+                if int(row['gt_abandonment']) > 0:
+                    df_a.loc['background', 'label_high'] += 1
+                else:
+                    df_a.loc['background', 'label_no'] += 1
+                if int(row['gt_broken']) > 0:
+                    df_b.loc['background', 'label_high'] += 1
+                else:
+                    df_b.loc['background', 'label_no'] += 1
+                if int(row['gt_corrosion']) > 0:
+                    df_c.loc['background', 'label_high'] += 1
+                else:
+                    df_c.loc['background', 'label_no'] += 1
+                if int(row['gt_deformation']) > 0:
+                    df_d.loc['background', 'label_high'] += 1
+                else:
+                    df_d.loc['background', 'label_no'] += 1
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'ignore_other_pred_frame':
+        if pd.isna(row['gt_category']):
+            if int(row['pred_category']) not in [6]:
+                if int(row['pred_abandonment']) > 0:
+                    df_a.loc['pred_high', 'background'] += 1
+                else:
+                    df_a.loc['pred_no', 'background'] += 1
+                if int(row['pred_broken']) > 0:
+                    df_b.loc['pred_high', 'background'] += 1
+                else:
+                    df_b.loc['pred_no', 'background'] += 1
+                if int(row['pred_corrosion']) > 0:
+                    df_c.loc['pred_high', 'background'] += 1
+                else:
+                    df_c.loc['pred_no', 'background'] += 1
+                if int(row['pred_deformation']) > 0:
+                    df_d.loc['pred_high', 'background'] += 1
+                else:
+                    df_d.loc['pred_no', 'background'] += 1
+        elif pd.isna(row['pred_category']):
+            if int(row['gt_category'])  not in [2, 6]:
+                if int(row['gt_abandonment']) > 0:
+                    df_a.loc['background', 'label_high'] += 1
+                else:
+                    df_a.loc['background', 'label_no'] += 1
+                if int(row['gt_broken']) > 0:
+                    df_b.loc['background', 'label_high'] += 1
+                else:
+                    df_b.loc['background', 'label_no'] += 1
+                if int(row['gt_corrosion']) > 0:
+                    df_c.loc['background', 'label_high'] += 1
+                else:
+                    df_c.loc['background', 'label_no'] += 1
+                if int(row['gt_deformation']) > 0:
+                    df_d.loc['background', 'label_high'] += 1
+                else:
+                    df_d.loc['background', 'label_no'] += 1
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'iou':
+        if pd.isna(row['gt_category']) or pd.isna(row['pred_category']):
+            pass
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
+    elif keep == 'correct':
+        if pd.isna(row['gt_category']) or pd.isna(row['pred_category']) and row['gt_category'] != row['pred_category']:
+            pass
+        else:
+            if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
+                df_a.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
+                df_a.loc['pred_high', 'label_no'] += 1
+            else:
+                df_a.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
+                df_b.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
+                df_b.loc['pred_high', 'label_no'] += 1
+            else:
+                df_b.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
+                df_c.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
+                df_c.loc['pred_high', 'label_no'] += 1
+            else:
+                df_c.loc['pred_no', 'label_no'] += 1
+            if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_high'] += 1
+            elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
+                df_d.loc['pred_no', 'label_high'] += 1
+            elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
+                df_d.loc['pred_high', 'label_no'] += 1
+            else:
+                df_d.loc['pred_no', 'label_no'] += 1
 
-def pred2cfm_risk(label_dir, pred_dir, save_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all', filter_small=None):
+def pred2cfm_risk(label_dir, pred_dir, save_dir, cfm_num=2, attributes=None, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all', filter_small=None):
     os.makedirs(save_dir, exist_ok=True)
     attributes = get_attributes(attributes)
     txt_list = os.listdir(label_dir)
-    df_a = pd.DataFrame([[0, 0], [0, 0]], columns=['label_no', 'label_high'], index=['pred_no', 'pred_high'])
-    df_b = pd.DataFrame([[0, 0], [0, 0]], columns=['label_no', 'label_high'], index=['pred_no', 'pred_high'])
-    df_c = pd.DataFrame([[0, 0], [0, 0]], columns=['label_no', 'label_high'], index=['pred_no', 'pred_high'])
-    df_d = pd.DataFrame([[0, 0], [0, 0]], columns=['label_no', 'label_high'], index=['pred_no', 'pred_high'])
+
+    df_risk_3 = pd.DataFrame([
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ],
+        columns=['background', 'label_no', 'label_high'],
+        index=['background', 'pred_no', 'pred_high']
+    )
+    df_risk_2 = pd.DataFrame([
+        [0, 0],
+        [0, 0],
+    ],
+        columns=['label_no', 'label_high'],
+        index=['pred_no', 'pred_high']
+    )
+    final_columns_2 = ['False', 'high']
+    final_columns_3 = ['background', 'False', 'high']
+    if cfm_num==2:
+        df_risk = df_risk_2
+        cfm_match = cfm_match_2
+        final_columns = final_columns_2
+    elif cfm_num==3:
+        df_risk = df_risk_3
+        cfm_match = cfm_match_3
+        final_columns = final_columns_3
+    else:
+        raise ValueError('cfm_num must be 2 or 3')
+
+    df_a = df_risk.copy(deep=True)
+    df_b = df_risk.copy(deep=True)
+    df_c = df_risk.copy(deep=True)
+    df_d = df_risk.copy(deep=True)
     for txt_name in tqdm(txt_list):
         label_path = os.path.join(label_dir, txt_name)
         pred_path = os.path.join(pred_dir, txt_name)
 
-        df_label = get_yolo_label_df(label_path, mdet=mdet, attributes=attributes, with_object_id=True)
+        df_label = get_yolo_label_df(label_path, mdet=True, attributes=attributes, with_object_id=True)
         if not os.path.exists(pred_path):
             df_pred = pd.DataFrame(columns=df_label.columns)
         else:
-            df_pred = get_yolo_label_df(pred_path, mdet=mdet, attributes=attributes, with_object_id=True, with_conf=with_conf, conf_threshold=conf_threshold)
+            df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True, with_conf=with_conf, conf_threshold=conf_threshold)
 
         if filter_small is not None:
-            df_label = df_label.loc[(df_label['w']>filter_small) | (df_label['h']>filter_small)]
-            df_pred = df_pred.loc[(df_pred['w']>filter_small) | (df_pred['h']>filter_small)]
+            df_label = df_label.loc[(df_label['w']>filter_small) & (df_label['h']>filter_small)]
+            df_pred = df_pred.loc[(df_pred['w']>filter_small) & (df_pred['h']>filter_small)]
 
         df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
         
         for idx, row in df_match.iterrows():
-            pass
-            if keep=='all':
-                if pd.isna(row['gt_category']):
-                    if int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_a.loc['pred_no', 'label_no'] += 1
-                    if int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_b.loc['pred_no', 'label_no'] += 1
-                    if int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_c.loc['pred_no', 'label_no'] += 1
-                    if int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_d.loc['pred_no', 'label_no'] += 1
-                elif pd.isna(row['pred_category']):
-                    if int(row['gt_abandonment']) > 0:
-                        df_a.loc['pred_no', 'label_high'] += 1
-                    else:
-                        df_a.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_broken']) > 0:
-                        df_b.loc['pred_no', 'label_high'] += 1
-                    else:
-                        df_b.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_corrosion']) > 0:
-                        df_c.loc['pred_no', 'label_high'] += 1
-                    else:
-                        df_c.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_deformation']) > 0:
-                        df_d.loc['pred_no', 'label_high'] += 1
-                    else:
-                        df_d.loc['pred_no', 'label_no'] += 1
-                else:
-                    if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
-                        df_a.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_a.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
-                        df_b.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_b.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
-                        df_c.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_c.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
-                        df_d.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_d.loc['pred_no', 'label_no'] += 1
-            elif keep=='iou':
-                if pd.isna(row['gt_category']) or pd.isna(row['pred_category']):
-                    continue
-                else:
-                    if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
-                        df_a.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_a.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
-                        df_b.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_b.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
-                        df_c.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_c.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
-                        df_d.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_d.loc['pred_no', 'label_no'] += 1
-            elif keep=='correct':
-                if pd.isna(row['gt_category']) or pd.isna(row['pred_category']) and row['gt_category']!=row['pred_category']:
-                    continue
-                else:
-                    if int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_abandonment']) > 0 and int(row['pred_abandonment']) == 0:
-                        df_a.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_abandonment']) == 0 and int(row['pred_abandonment']) > 0:
-                        df_a.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_a.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_broken']) > 0 and int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_broken']) > 0 and int(row['pred_broken']) == 0:
-                        df_b.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_broken']) == 0 and int(row['pred_broken']) > 0:
-                        df_b.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_b.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_corrosion']) > 0 and int(row['pred_corrosion']) == 0:
-                        df_c.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_corrosion']) == 0 and int(row['pred_corrosion']) > 0:
-                        df_c.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_c.loc['pred_no', 'label_no'] += 1
-                    if int(row['gt_deformation']) > 0 and int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_high'] += 1
-                    elif int(row['gt_deformation']) > 0 and int(row['pred_deformation']) == 0:
-                        df_d.loc['pred_no', 'label_high'] += 1
-                    elif int(row['gt_deformation']) == 0 and int(row['pred_deformation']) > 0:
-                        df_d.loc['pred_high', 'label_no'] += 1
-                    else:
-                        df_d.loc['pred_no', 'label_no'] += 1
-    df_a.columns = ['False', 'high']
-    df_a.index = ['False', 'high']
-    df_b.columns = ['False', 'high']
-    df_b.index = ['False', 'high']
-    df_c.columns = ['False', 'high']
-    df_c.index = ['False', 'high']
-    df_d.columns = ['False', 'high']
-    df_d.index = ['False', 'high']
+            cfm_match(keep, df_a, df_b, df_c, df_d, row)
+
+    df_a.columns = final_columns
+    df_a.index = final_columns
+    df_b.columns = final_columns
+    df_b.index = final_columns
+    df_c.columns = final_columns
+    df_c.index = final_columns
+    df_d.columns = final_columns
+    df_d.index = final_columns
     df_a.to_csv(os.path.join(save_dir, "confusion_matrix_for_attribute_abandonment.csv"), header=True, index=True)
     df_b.to_csv(os.path.join(save_dir, "confusion_matrix_for_attribute_broken.csv"), header=True, index=True)
     df_c.to_csv(os.path.join(save_dir, "confusion_matrix_for_attribute_corrosion.csv"), header=True, index=True)
     df_d.to_csv(os.path.join(save_dir, "confusion_matrix_for_attribute_deformation.csv"), header=True, index=True)
-            
+
+def get_stem2img_dict(img_dir):
+    img_list = [img_name for img_name in os.listdir(img_dir)]
+    stem_list = [Path(img).stem for img in img_list]
+    stem2img_dict = dict(zip(stem_list, img_list))
+    return stem2img_dict
+
+def row_save(row, all_dir, image_path, save_dir, key):
+    # x1, y1, x2, y2 = row[f'{key}_x1'], row[f'{key}_y1'], row[f'{key}_x2'], row[f'{key}_y2']
+    pred_id = row[f'{key}_id']
+    save_name = Path(image_path).stem + f'_{int(pred_id)}' + Path(image_path).suffix
+    save_path = os.path.join(save_dir, save_name)
+    if not os.path.exists(save_path):
+        input_all_path = os.path.join(all_dir, image_path)
+        if os.path.exists(input_all_path):
+            shutil.copy(input_all_path, save_path)
+        # patch = image[int(y1*image.shape[0]):int(y2*image.shape[0]), int(x1*image.shape[1]):int(x2*image.shape[1])]
+        # cv2.imwrite(save_path, patch)
+
+def find_files(pred_conf, label_conf, risk, image_dir, label_dir, predict_dir, root_dir, attributes, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=0.05):
+    save_name = f'risk_{risk}_pred_{pred_conf}_label_{label_conf}'
+    save_dir = os.path.join(root_dir, save_name)
+    all_dir = os.path.join(root_dir, 'all')
+    os.makedirs(save_dir, exist_ok=True)
+    attributes = get_attributes(attributes)
+    stem2image_list = get_stem2img_dict(image_dir)
+    label_list = os.listdir(label_dir)
+
+    for label_name in tqdm(label_list, desc=save_name):
+        label_path = os.path.join(label_dir, label_name)
+        pred_path = os.path.join(predict_dir, label_name)
+        image_path = os.path.join(image_dir, stem2image_list[Path(label_name).stem])
+        df_label = get_yolo_label_df(label_path, mdet=True, attributes=attributes, with_object_id=True)
+        if not os.path.exists(pred_path):
+            df_pred = pd.DataFrame(columns=df_label.columns)
+        else:
+            df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True,
+                                        with_conf=with_conf, conf_threshold=conf_threshold)
+        if filter_small is not None:
+            df_label = df_label.loc[(df_label['w']>filter_small) & (df_label['h']>filter_small)]
+            df_pred = df_pred.loc[(df_pred['w']>filter_small) & (df_pred['h']>filter_small)]
+        df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
+        # image = cv2.imread(image_path)
+        for idx, row in df_match.iterrows():
+            if pred_conf == 'background' and label_conf == 'no':
+                if pd.isna(row[f'pred_{risk}']) and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']==0:
+                    row_save(row, all_dir, image_path, save_dir, key='gt')
+            elif pred_conf == 'background' and label_conf == 'high':
+                if pd.isna(row[f'pred_{risk}']) and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']>0:
+                    row_save(row, all_dir, image_path, save_dir, key='gt')
+            elif pred_conf == 'no' and label_conf == 'background':
+                if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']==0 and pd.isna(row[f'gt_{risk}']):
+                    row_save(row, all_dir, image_path, save_dir, key='pred')
+            elif pred_conf == 'high' and label_conf == 'background':
+                if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']>0 and pd.isna(row[f'gt_{risk}']):
+                    row_save(row, all_dir, image_path, save_dir, key='pred')
+            elif pred_conf == 'no' and label_conf == 'high':
+                if not pd.isna(row[f'gt_{risk}']) and row[f'pred_{risk}']==0 and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']>0:
+                    row_save(row, all_dir, image_path, save_dir, key='gt')
+            elif pred_conf == 'high' and label_conf == 'no':
+                if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']>0 and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']==0:
+                    row_save(row, all_dir, image_path, save_dir, key='gt')
+
+def eval_for_emsd(label_dir, predict_dir, attributes, output_path, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=0.05):
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    attributes = get_attributes(attributes)
+    label_list = os.listdir(label_dir)
+    df_all = pd.DataFrame(None, columns=['file_name', 'object_order', 'T/F', 'small object',  'seg error', 'abandonment error', 'broken error', 'corrosion error', 'deformation error'])
+    for label_name in tqdm(label_list):
+        label_path = os.path.join(label_dir, label_name)
+        pred_path = os.path.join(predict_dir, label_name)
+        df_label = get_yolo_label_df(label_path, mdet=True, attributes=attributes, with_object_id=True)
+        if not os.path.exists(pred_path):
+            df_pred = pd.DataFrame(columns=df_label.columns)
+        else:
+            df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True,
+                                        with_conf=with_conf, conf_threshold=conf_threshold)
+
+        df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
+
+        for idx, row in df_match.iterrows():
+            if pd.isna(row['gt_id']):
+                continue
+            file_name = Path(label_name).stem
+
+            if row['gt_w']>filter_small or row['gt_h']>filter_small:
+                small_object = False
+            else:
+                small_object = True
+
+            object_order = row['gt_id']
+
+            seg_error = not pd.isna(row['pred_category'])
+            a_error = row['gt_abandonment'] == row['pred_abandonment']
+            b_error = row['gt_broken'] == row['pred_broken']
+            c_error = row['gt_corrosion'] == row['pred_corrosion']
+            d_error = row['gt_deformation'] == row['pred_deformation']
+
+            TF = seg_error & a_error& b_error & c_error & d_error
+
+            info = [file_name, object_order, TF, small_object, seg_error, a_error, b_error, c_error, d_error]
+
+            df_all.loc[len(df_all)] = info
+    df_all.to_csv(output_path, index=True, header=True, encoding='utf-8')
+    print(output_path)
+
+
+def get_all_high(input_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.4, filter_small=None):
+    attributes = get_attributes(attributes)
+    file_list = os.listdir(input_dir)
+    count = 0
+    for file_name in tqdm(file_list):
+        file_path = os.path.join(input_dir, file_name)
+        df = get_yolo_label_df(file_path, mdet=mdet, attributes=att_file, with_conf=with_conf, conf_threshold=conf_threshold)
+        if filter_small is not None:
+            df = df.loc[(df['w']>filter_small) & (df['h']>filter_small)]
+        for idx, row in df.iterrows():
+            if int(row['deformation']) >0:
+                count += 1
+                print(count)
+                print(row)
 if __name__ == "__main__":
     pass
-    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val607/labels'
-    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
-    # save_dir = os.path.join(data_dir, 'result_analysis', 'val607')
-    # label_dir = os.path.join(data_dir, 'val_80p_ref', 'labels')
+    # select_val(data_dir, val_txt='val_80p_ref.txt')
 
-    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val614/labels'
-    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
-    # save_dir = os.path.join(data_dir, 'result_analysis', 'val614')
+    # risk_analysis(r'/localnvme/project/ultralytics/runs/msegment/val628')
+    # risk_analysis(r'/localnvme/project/ultralytics/runs/msegment/val629')
+    #
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val629/labels'
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref'
+    # # # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val628/labels'
+    # # # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
     # label_dir = os.path.join(data_dir, 'labels')
+    # save_dir = os.path.join(data_dir, 'result_analysis', os.path.dirname(os.path.dirname(pred_dir)))
     # att_file = os.path.join(data_dir, 'attribute.yaml')
 
 
-    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
-    # risk_analysis(save_dir)
-    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='correct')
-    # risk_analysis(save_dir)
 
-
-    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val615/labels'
-    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
-    # save_dir = os.path.join(data_dir, 'result_analysis', 'val615')
-    # label_dir = os.path.join(data_dir, 'labels')
-    # att_file = os.path.join(data_dir, 'attribute.yaml')
-
-    # pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
-    # risk_analysis(save_dir)
-
-    pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val610/labels'
+    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val640'
+    pred_dir = os.path.join(val_dir, 'labels')
     data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
-    save_dir = os.path.join(data_dir, 'result_analysis', 'val610')
     label_dir = os.path.join(data_dir, 'labels')
+    save_dir = os.path.join(data_dir, 'result_analysis', os.path.dirname(os.path.dirname(pred_dir)))
     att_file = os.path.join(data_dir, 'attribute.yaml')
 
-    # select_val(data_dir, val_txt='val_80p_ref.txt')
-    pred2cfm_risk(label_dir, pred_dir, save_dir=save_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, keep='all')
-    risk_analysis(save_dir)
+    # get_all_high(pred_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.4, filter_small=None)
 
+    risk_analysis(val_dir)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.5, filter_small=0.05, keep='iou', )
+    # risk_analysis(save_dir, rm_bg=True)
+    pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=None, keep='iou', )
+    risk_analysis(save_dir, rm_bg=True)
+
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.5, filter_small=0.05, keep='ignore_other', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.5, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    #
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+
+
+
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val629/labels'
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref'
+    # # # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val628/labels'
+    # # # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+    #
+    # label_dir = os.path.join(data_dir, 'labels')
+    # save_dir = os.path.join(data_dir, 'result_analysis', os.path.basename(os.path.dirname(pred_dir)))
+    # save_path = save_dir + '.csv'
+    # att_file = os.path.join(data_dir, 'attribute.yaml')
+    # eval_for_emsd(label_dir, pred_dir, att_file, save_path, with_conf=True, conf_threshold=0.001, iou_thr=0.5,
+    #               filter_small=0.05)
+
+
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val627/labels'
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
+    # # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val629/labels'
+    # # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref'
+    # image_dir= os.path.join(data_dir, 'images')
+    # label_dir= os.path.join(data_dir, 'labels')
+    # save_dir = os.path.join(data_dir, 'result_analysis', os.path.basename(os.path.dirname(pred_dir)))
+    # att_file = os.path.join(data_dir, 'attribute.yaml')
+    # risks = ['abandonment', 'broken', 'corrosion', 'deformation']
+    # confs = [
+    #     ['background', 'no'],
+    #     ['background', 'high'],
+    #     ['no', 'background'],
+    #     ['high', 'background'],
+    #     ['no', 'high'],
+    #     ['high', 'no'],
+    # ]
+    # print(save_dir)
+    # for risk in risks:
+    #     for pred_conf, label_conf in confs:
+    #         find_files(pred_conf, label_conf, risk, image_dir, label_dir, pred_dir, save_dir, att_file, with_conf=True,
+    #                    conf_threshold=0.3, iou_thr=0.5, filter_small=0.05)

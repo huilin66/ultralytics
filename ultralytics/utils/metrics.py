@@ -471,7 +471,7 @@ class MConfusionMatrix:
         iou_thres (float): The Intersection over Union threshold.
     """
 
-    def __init__(self, nc, na, nal, conf=0.25, iou_thres=0.45, task="detect", risk_enlarge=1.0):
+    def __init__(self, nc, na, nal, conf=0.25, iou_thres=0.45, task="detect", risk_enlarge=1.0, eval_att_by_class=True):
         """Initialize attributes for the YOLO model."""
         self.task = task
         self.matrix = np.zeros((nc + 1, nc + 1)) if self.task == "detect" else np.zeros((nc, nc))
@@ -482,6 +482,7 @@ class MConfusionMatrix:
         self.iou_thres = iou_thres
         self.matrix_atts = [np.zeros((nal, nal)) for _ in range(na)]
         self.risk_enlarge = risk_enlarge
+        self.eval_att_by_class = eval_att_by_class
 
     def process_cls_preds(self, preds, targets):
         """
@@ -550,14 +551,17 @@ class MConfusionMatrix:
         for i, gc in enumerate(gt_classes):
             j = m0 == i
             if n and sum(j) == 1:
-                x1,y1 = detection_classes[m1[j]], gc
                 self.matrix[detection_classes[m1[j]], gc] += 1  # correct
 
-                if detection_classes[m1[j]] == gc:
+                if self.eval_att_by_class and detection_classes[m1[j]] == gc:
                     pred_att = pred_attributes[m1[j]].squeeze(0)
                     gt_att = gt_attributes[i]
                     for k in range(self.na):
-                        x2, y2 = pred_att[k], gt_att[k]
+                        self.matrix_atts[k][int(pred_att[k]), int(gt_att[k])] += 1
+                elif not self.eval_att_by_class:
+                    pred_att = pred_attributes[m1[j]].squeeze(0)
+                    gt_att = gt_attributes[i]
+                    for k in range(self.na):
                         self.matrix_atts[k][int(pred_att[k]), int(gt_att[k])] += 1
             else:
                 self.matrix[self.nc, gc] += 1  # true background

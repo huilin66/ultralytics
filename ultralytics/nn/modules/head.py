@@ -353,6 +353,8 @@ class MDetect(nn.Module):
             self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
         elif self.sep == 'unet':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+        elif self.sep == 'unet-sep':
+            self.cva = nn.ModuleList([nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, 1, 1)) for x in ch[:3]) for _ in range(self.na)])
         elif self.sep == 'c3str-unet1':
             self.cva = nn.ModuleList(nn.Sequential(C3STR(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
         elif self.sep == 'c3str-unet2':
@@ -384,11 +386,17 @@ class MDetect(nn.Module):
                 torch.cat([x[2], x[5]], dim=1),
             ]
             x = x[:3]
+
         for i in range(self.nl):
             if not self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
             elif 'unet' in self.sep:
-                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
+                if self.sep == 'unet-sep':
+                    f_a = [cva[i](x_a[i]) for cva in self.cva]
+                    f_a_cat = torch.cat(f_a, dim=1)
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_a_cat), 1)
+                else:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
             else:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
 
