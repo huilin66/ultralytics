@@ -74,6 +74,7 @@ def box_iou(box1, box2, eps=1e-7):
     return inter_area / (union + eps)
 
 def match_and_merge(df_pred, df_gt, iou_thr=0.5, att_list=None):
+    df_gt = df_gt.reset_index(drop=True)
     matched_gt_idx = set()
     merged_rows = []
 
@@ -697,7 +698,7 @@ def cfm_match_3(keep, df_a, df_b, df_c, df_d, row):
                 df_d.loc['pred_no', 'label_no'] += 1
     elif keep == 'ignore_other_pred_frame':
         if pd.isna(row['gt_category']):
-            if int(row['pred_category']) not in [6]:
+            if int(row['pred_category']) not in [2, 6]:
                 if int(row['pred_abandonment']) > 0:
                     df_a.loc['pred_high', 'background'] += 1
                 else:
@@ -715,7 +716,7 @@ def cfm_match_3(keep, df_a, df_b, df_c, df_d, row):
                 else:
                     df_d.loc['pred_no', 'background'] += 1
         elif pd.isna(row['pred_category']):
-            if int(row['gt_category'])  not in [2, 6]:
+            if int(row['gt_category']) not in [6]:
                 if int(row['gt_abandonment']) > 0:
                     df_a.loc['background', 'label_high'] += 1
                 else:
@@ -895,15 +896,15 @@ def pred2cfm_risk(label_dir, pred_dir, save_dir, cfm_num=2, attributes=None, wit
             df_pred = df_pred.loc[(df_pred['w']>filter_small) | (df_pred['h']>filter_small)]
         c_count2 = len(df_label[df_label['corrosion'] > 0])
         c_count2_sum += c_count2
-        # if c_count2 != c_count1:
-        #     print()
+        if c_count2 != c_count1:
+            print('1 != 2')
         df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
         
         for idx, row in df_match.iterrows():
             cfm_match(keep, df_a, df_b, df_c, df_d, row)
         c_count3_sum = df_c['label_high'].sum()
         if c_count2_sum != c_count3_sum:
-            print()
+            print('2 != 3')
     print(c_count1_sum, c_count2_sum)
     df_a.columns = final_columns
     df_a.index = final_columns
@@ -1113,25 +1114,37 @@ def eval_for_emsd_v2(label_dir, predict_dir, attributes, output_path, with_conf=
     print(output_path)
 
 
-def get_all_high(input_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.4, filter_small=None):
-    attributes = get_attributes(attributes)
-    file_list = os.listdir(input_dir)
-    counts = [0,0,0,0]
-    for file_name in tqdm(file_list):
-        file_path = os.path.join(input_dir, file_name)
-        df = get_yolo_label_df(file_path, mdet=mdet, attributes=att_file, with_conf=with_conf, conf_threshold=conf_threshold)
-        if filter_small is not None:
-            df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
-        for idx, row in df.iterrows():
-            if int(row['abandonment']) >0:
-                counts[0] += 1
-            if int(row['broken']) >0:
-                counts[1] += 1
-            if int(row['corrosion']) >0:
-                counts[2] += 1
-            if int(row['deformation']) >0:
-                counts[3] += 1
-    print(counts)
+# def get_all_high(input_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.4, filter_small=None):
+#     attributes = get_attributes(attributes)
+#     file_list = os.listdir(input_dir)
+#     counts = [0,0,0,0]
+#     cat_counts = [0, 0, 0, 0]
+#     for file_name in tqdm(file_list):
+#         file_path = os.path.join(input_dir, file_name)
+#         df = get_yolo_label_df(file_path, mdet=mdet, attributes=att_file, with_conf=with_conf, conf_threshold=conf_threshold)
+#         if filter_small is not None:
+#             df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
+#         for idx, row in df.iterrows():
+#             if int(row['abandonment']) > 0:
+#                 counts[0] += 1
+#             if int(row['broken']) > 0:
+#                 counts[1] += 1
+#             if int(row['corrosion']) > 0:
+#                 counts[2] += 1
+#             if int(row['deformation']) > 0:
+#                 counts[3] += 1
+#             if int(row['category']) not in [6]:
+#                 if int(row['abandonment']) >0:
+#                     cat_counts[0] += 1
+#                 if int(row['broken']) >0:
+#                     cat_counts[1] += 1
+#                 if int(row['corrosion']) >0:
+#                     cat_counts[2] += 1
+#                 if int(row['deformation']) >0:
+#                     cat_counts[3] += 1
+#
+#     print(counts)
+#     print(cat_counts)
 if __name__ == "__main__":
     pass
     # select_val(data_dir, val_txt='val_80p_ref.txt')
@@ -1187,10 +1200,10 @@ if __name__ == "__main__":
     # get_all_high(label_dir, with_conf=False, filter_small=0.05)
     # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=None, keep='all', )
     # risk_analysis(save_dir, rm_bg=True)
-    pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='all', )
-    risk_analysis(save_dir, rm_bg=True)
-    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='all', )
     # risk_analysis(save_dir, rm_bg=True)
+    pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    risk_analysis(save_dir, rm_bg=True)
 
 
     # select_val(data_dir, val_txt='val_test.txt')
