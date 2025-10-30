@@ -62,8 +62,10 @@ if __name__ == '__main__':
     # demo_base.model_val(val_name, filter_small=0.05, conf=conf, risk_enlarge=2.0)
     # demo_base.model_val(val_name, filter_small=0.05, conf=conf, risk_enlarge=[1.0, 1.0, 2.0, 2.0], save_conf=True, save_txt=True)
     #
-    val_name = 'fusedata7961_mseg_c5_l2_1029_abandonment_refine_test-[yolov10x-mseg-dlka3res-7-unet]4'
-    # demo_base.model_val(val_name, save_txt=True, save_conf=True)
+    # val_name = 'fusedata7961_mseg_c5_l2_1029_abandonment_refine_test-[yolov10x-mseg-dlka3res-7-unet]4'
+
+    val_name = 'fusedata7961_mseg_c5_l2_1030_abandonment_refine_test-[yolov10x-mseg-dlka3res-7-unet]'
+    demo_base.model_val(val_name, save_txt=True, save_conf=True)
     conf=0.3
     # demo_base.model_val(val_name, filter_small=0.05, conf=conf)                                                                    # data = 'defect_test_1023.yaml'
     # demo_base.model_val(val_name, filter_small=0.05, conf=conf, risk_enlarge=1.1)                                                  # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
@@ -84,9 +86,9 @@ if __name__ == '__main__':
     # demo_base.model_val(val_name, filter_small=0.05, conf=conf, risk_enlarge=[10, 1.0, 2.0, 1.0], save_conf=True, save_txt=True)  # data = 'defect_test_1023.yaml'
     # #                                                                                                                                # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True, eval_att_by_class=False)
 
-    demo_base.model_val(val_name, filter_small=0.05, conf=conf, risk_enlarge=[10, 1.0, 2.0, 1.0], save_conf=True,
-                        # data = 'fusedata7961_mseg_c5_l2_1029_abandonment_refine_all.yaml',
-                        save_txt=True)  # data = 'defect_test_1023.yaml'
+    # demo_base.model_val(val_name, filter_small=0.05, conf=conf, risk_enlarge=[10, 1.0, 2.0, 1.0], save_conf=True,
+    #                     # data = 'fusedata7961_mseg_c5_l2_1029_abandonment_refine_all.yaml',
+    #                     save_txt=True)  # data = 'defect_test_1023.yaml'
 
     # val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # data = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref.yaml'

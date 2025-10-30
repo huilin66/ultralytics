@@ -2,9 +2,19 @@ import os
 import sys
 sys.path.append(r'/localnvme/project/ultralytics/my_tools')
 from my_tools.yolo_result_analysis import pred2cfm_risk, risk_analysis, find_files
+import pandas as pd
 
 if __name__ == '__main__':
     pass
+    for i in range(628, 699):
+        input_dir = r'/localnvme/project/ultralytics/runs/msegment/val'+str(i)
+        labels_dir = os.path.join(input_dir, 'labels')
+        a_path = os.path.join(input_dir, 'confusion_matrix_for_attribute_abandonment.csv')
+        if os.path.exists(labels_dir) and os.path.exists(a_path) and len(os.listdir(labels_dir)) > 80:
+            df = pd.read_csv(a_path)
+            if 60<df.loc[1, 'high'] <100:
+                print(i, df.loc[1, 'high'])
+
     # # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val624/labels'
     # # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
     # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val623/labels'

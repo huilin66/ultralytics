@@ -296,11 +296,11 @@ def risk_analysis(folder_path, output_f1='f1_results.csv', output_precision='pre
     print(results_df)
     print(f"Average: {f1_overall_avg:.4f}\n")
 
-    print(f"{' ':15}precision result:")
+    print(f"{' ':15}recall result:")
     print(results_df_precision)
     print(f"Average: {precision_overall_avg:.4f}\n")
 
-    print(f"{' ':15}recall result:")
+    print(f"{' ':15}precision result:")
     print(results_df_recall)
     print(f"Average: {recall_overall_avg:.4f}\n")
 
