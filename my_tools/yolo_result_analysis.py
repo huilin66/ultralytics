@@ -875,6 +875,8 @@ def pred2cfm_risk(label_dir, pred_dir, save_dir, cfm_num=2, attributes=None, wit
     df_b = df_risk.copy(deep=True)
     df_c = df_risk.copy(deep=True)
     df_d = df_risk.copy(deep=True)
+    c_count1_sum = 0
+    c_count2_sum = 0
     for txt_name in tqdm(txt_list):
         label_path = os.path.join(label_dir, txt_name)
         pred_path = os.path.join(pred_dir, txt_name)
@@ -885,15 +887,24 @@ def pred2cfm_risk(label_dir, pred_dir, save_dir, cfm_num=2, attributes=None, wit
         else:
             df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True, with_conf=with_conf, conf_threshold=conf_threshold)
 
-        if filter_small is not None:
-            df_label = df_label.loc[(df_label['w']>filter_small) & (df_label['h']>filter_small)]
-            df_pred = df_pred.loc[(df_pred['w']>filter_small) & (df_pred['h']>filter_small)]
 
+        c_count1 = len(df_label[df_label['corrosion'] > 0])
+        c_count1_sum += c_count1
+        if filter_small is not None:
+            df_label = df_label.loc[(df_label['w']>filter_small) | (df_label['h']>filter_small)]
+            df_pred = df_pred.loc[(df_pred['w']>filter_small) | (df_pred['h']>filter_small)]
+        c_count2 = len(df_label[df_label['corrosion'] > 0])
+        c_count2_sum += c_count2
+        # if c_count2 != c_count1:
+        #     print()
         df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
         
         for idx, row in df_match.iterrows():
             cfm_match(keep, df_a, df_b, df_c, df_d, row)
-
+        c_count3_sum = df_c['label_high'].sum()
+        if c_count2_sum != c_count3_sum:
+            print()
+    print(c_count1_sum, c_count2_sum)
     df_a.columns = final_columns
     df_a.index = final_columns
     df_b.columns = final_columns
@@ -919,16 +930,17 @@ def row_save(row, all_dir, image_path, save_dir, key):
     save_name = Path(image_path).stem + f'_{int(pred_id)}' + Path(image_path).suffix
     save_path = os.path.join(save_dir, save_name)
     if not os.path.exists(save_path):
-        input_all_path = os.path.join(all_dir, image_path)
+        input_all_path = os.path.join(all_dir, save_name)
         if os.path.exists(input_all_path):
             shutil.copy(input_all_path, save_path)
-        # patch = image[int(y1*image.shape[0]):int(y2*image.shape[0]), int(x1*image.shape[1]):int(x2*image.shape[1])]
-        # cv2.imwrite(save_path, patch)
+        else:
+            print(f'{input_all_path} miss')
 
 def find_files(pred_conf, label_conf, risk, image_dir, label_dir, predict_dir, root_dir, attributes, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=0.05):
     save_name = f'risk_{risk}_pred_{pred_conf}_label_{label_conf}'
     save_dir = os.path.join(root_dir, save_name)
-    all_dir = os.path.join(root_dir, 'all')
+    all_gt_dir = os.path.join(os.path.dirname(root_dir), 'all_gt')
+    all_pred_dir = os.path.join(root_dir, 'all_pred')
     os.makedirs(save_dir, exist_ok=True)
     attributes = get_attributes(attributes)
     stem2image_list = get_stem2img_dict(image_dir)
@@ -945,29 +957,60 @@ def find_files(pred_conf, label_conf, risk, image_dir, label_dir, predict_dir, r
             df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True,
                                         with_conf=with_conf, conf_threshold=conf_threshold)
         if filter_small is not None:
-            df_label = df_label.loc[(df_label['w']>filter_small) & (df_label['h']>filter_small)]
-            df_pred = df_pred.loc[(df_pred['w']>filter_small) & (df_pred['h']>filter_small)]
+            df_label = df_label.loc[(df_label['w']>filter_small) | (df_label['h']>filter_small)]
+            df_pred = df_pred.loc[(df_pred['w']>filter_small) | (df_pred['h']>filter_small)]
         df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
+        if df_match.empty:
+            continue
+        if pred_conf == 'background' and label_conf == 'no':
+            df = df_match[(df_match[f'pred_{risk}'].isna()) & (df_match[f'gt_{risk}'] == 0)]
+            all_dir = all_gt_dir
+            key = 'gt'
+        elif pred_conf == 'background' and label_conf == 'high':
+            df = df_match[(df_match[f'pred_{risk}'].isna()) & (df_match[f'gt_{risk}'] > 0)]
+            all_dir = all_gt_dir
+            key = 'gt'
+        elif pred_conf == 'no' and label_conf == 'background':
+            df = df_match[(df_match[f'pred_{risk}'] == 0) & (df_match[f'gt_{risk}'].isna())]
+            all_dir = all_pred_dir
+            key = 'pred'
+        elif pred_conf == 'high' and label_conf == 'background':
+            df = df_match[(df_match[f'pred_{risk}'] > 0) & (df_match[f'gt_{risk}'].isna())]
+            all_dir = all_pred_dir
+            key = 'pred'
+        elif pred_conf == 'no' and label_conf == 'high':
+            df = df_match[(df_match[f'pred_{risk}'] == 0) & (df_match[f'gt_{risk}'] > 0)]
+            all_dir = all_gt_dir
+            key = 'gt'
+        elif pred_conf == 'high' and label_conf == 'no':
+            df = df_match[(df_match[f'pred_{risk}'] > 0) & (df_match[f'gt_{risk}'] == 0)]
+            all_dir = all_gt_dir
+            key = 'gt'
+        else:
+            raise ValueError
+        for idx, row in df.iterrows():
+            row_save(row, all_dir, image_path, save_dir, key=key)
+
         # image = cv2.imread(image_path)
-        for idx, row in df_match.iterrows():
-            if pred_conf == 'background' and label_conf == 'no':
-                if pd.isna(row[f'pred_{risk}']) and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']==0:
-                    row_save(row, all_dir, image_path, save_dir, key='gt')
-            elif pred_conf == 'background' and label_conf == 'high':
-                if pd.isna(row[f'pred_{risk}']) and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']>0:
-                    row_save(row, all_dir, image_path, save_dir, key='gt')
-            elif pred_conf == 'no' and label_conf == 'background':
-                if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']==0 and pd.isna(row[f'gt_{risk}']):
-                    row_save(row, all_dir, image_path, save_dir, key='pred')
-            elif pred_conf == 'high' and label_conf == 'background':
-                if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']>0 and pd.isna(row[f'gt_{risk}']):
-                    row_save(row, all_dir, image_path, save_dir, key='pred')
-            elif pred_conf == 'no' and label_conf == 'high':
-                if not pd.isna(row[f'gt_{risk}']) and row[f'pred_{risk}']==0 and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']>0:
-                    row_save(row, all_dir, image_path, save_dir, key='gt')
-            elif pred_conf == 'high' and label_conf == 'no':
-                if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']>0 and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']==0:
-                    row_save(row, all_dir, image_path, save_dir, key='gt')
+        # for idx, row in df_match.iterrows():
+        #     if pred_conf == 'background' and label_conf == 'no':
+        #         if pd.isna(row[f'pred_{risk}']) and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']==0:
+        #             row_save(row, all_dir, image_path, save_dir, key='gt')
+        #     elif pred_conf == 'background' and label_conf == 'high':
+        #         if pd.isna(row[f'pred_{risk}']) and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']>0:
+        #             row_save(row, all_dir, image_path, save_dir, key='gt')
+        #     elif pred_conf == 'no' and label_conf == 'background':
+        #         if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']==0 and pd.isna(row[f'gt_{risk}']):
+        #             row_save(row, all_dir, image_path, save_dir, key='pred')
+        #     elif pred_conf == 'high' and label_conf == 'background':
+        #         if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']>0 and pd.isna(row[f'gt_{risk}']):
+        #             row_save(row, all_dir, image_path, save_dir, key='pred')
+        #     elif pred_conf == 'no' and label_conf == 'high':
+        #         if not pd.isna(row[f'gt_{risk}']) and row[f'pred_{risk}']==0 and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']>0:
+        #             row_save(row, all_dir, image_path, save_dir, key='gt')
+        #     elif pred_conf == 'high' and label_conf == 'no':
+        #         if not pd.isna(row[f'pred_{risk}']) and row[f'pred_{risk}']>0 and not pd.isna(row[f'gt_{risk}']) and row[f'gt_{risk}']==0:
+        #             row_save(row, all_dir, image_path, save_dir, key='gt')
 
 def eval_for_emsd(label_dir, predict_dir, attributes, output_path, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=0.05):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -1013,20 +1056,82 @@ def eval_for_emsd(label_dir, predict_dir, attributes, output_path, with_conf=Tru
     print(output_path)
 
 
+def eval_for_emsd_v2(label_dir, predict_dir, attributes, output_path, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=0.05):
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    attributes = get_attributes(attributes)
+    label_list = os.listdir(label_dir)
+    risk_list = ['abandonment', 'broken', 'corrosion', 'deformation']
+    df_all = pd.DataFrame(None, columns=['object_name_anno', 'seg_pred', 'risk_pred',  'object_name_pred', 'annotated risk', 'pred risk', 'small_object'])
+    for label_name in tqdm(label_list):
+        label_path = os.path.join(label_dir, label_name)
+        pred_path = os.path.join(predict_dir, label_name)
+        df_label = get_yolo_label_df(label_path, mdet=True, attributes=attributes, with_object_id=True)
+        if not os.path.exists(pred_path):
+            df_pred = pd.DataFrame(columns=df_label.columns)
+        else:
+            df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True,
+                                        with_conf=with_conf, conf_threshold=conf_threshold)
+
+        df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
+        df_match['gt_with_defect'] = ((df_match['gt_abandonment']>0) |  (df_match['gt_broken']>0) |
+                                               (df_match['gt_corrosion']>0) |  (df_match['gt_deformation']>0))
+        # df_match['pred_with_defect'] = df_match[(df_match['pred_abandonment']>0) |  (df_match['pred_broken']>0) |
+        #                                        (df_match['pred_corrosion']>0) |  (df_match['pred_deformation']>0)]
+        # df_filter = df_match[(df_match['gt_with_defect']) | (df_match['pred_with_defect'])]
+        # df_filter = df_match
+        df_filter = df_match[(df_match['gt_with_defect'])]
+        for idx, row in df_filter.iterrows():
+            pred_id = row['pred_id']
+            gt_id = row['gt_id']
+            anno_name = Path(label_name).stem + f'_{gt_id}'
+            pred_name = Path(label_name).stem + f'_{pred_id}'
+            seg_pred_value = row['pred_category'] == row['gt_category']
+            if seg_pred_value:
+                seg_pred = 'TP'
+            else:
+                seg_pred = 'FN'
+            if row['gt_w']>filter_small or row['gt_h']>filter_small:
+                small_object = False
+            else:
+                small_object = True
+
+            for risk in risk_list:
+                if row[f'gt_{risk}']>0:
+                    risk_pred_value = row[f'gt_{risk}']==row[f'pred_{risk}']
+                    if risk_pred_value:
+                        risk_pred = 'TP'
+                    else:
+                        risk_pred = 'FN'
+                    annotated_risk = risk
+                    if risk_pred_value:
+                        pred_risk = risk
+                    else:
+                        pred_risk = None
+                    df_all.loc[len(df_all)] = [anno_name, seg_pred, risk_pred, pred_name, annotated_risk, pred_risk, small_object]
+
+    df_all.to_csv(output_path, index=True, header=True, encoding='utf-8')
+    print(output_path)
+
+
 def get_all_high(input_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.4, filter_small=None):
     attributes = get_attributes(attributes)
     file_list = os.listdir(input_dir)
-    count = 0
+    counts = [0,0,0,0]
     for file_name in tqdm(file_list):
         file_path = os.path.join(input_dir, file_name)
         df = get_yolo_label_df(file_path, mdet=mdet, attributes=att_file, with_conf=with_conf, conf_threshold=conf_threshold)
         if filter_small is not None:
-            df = df.loc[(df['w']>filter_small) & (df['h']>filter_small)]
+            df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
         for idx, row in df.iterrows():
+            if int(row['abandonment']) >0:
+                counts[0] += 1
+            if int(row['broken']) >0:
+                counts[1] += 1
+            if int(row['corrosion']) >0:
+                counts[2] += 1
             if int(row['deformation']) >0:
-                count += 1
-                print(count)
-                print(row)
+                counts[3] += 1
+    print(counts)
 if __name__ == "__main__":
     pass
     # select_val(data_dir, val_txt='val_80p_ref.txt')
@@ -1044,20 +1149,87 @@ if __name__ == "__main__":
 
 
 
-    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val640'
-    pred_dir = os.path.join(val_dir, 'labels')
-    data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
-    label_dir = os.path.join(data_dir, 'labels')
-    save_dir = os.path.join(data_dir, 'result_analysis', os.path.dirname(os.path.dirname(pred_dir)))
-    att_file = os.path.join(data_dir, 'attribute.yaml')
+    # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val640'
+    # pred_dir = os.path.join(val_dir, 'labels')
+    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+    # label_dir = os.path.join(data_dir, 'labels')
+    # save_dir = os.path.join(data_dir, 'result_analysis', os.path.dirname(os.path.dirname(pred_dir)))
+    # att_file = os.path.join(data_dir, 'attribute.yaml')
 
     # get_all_high(pred_dir, mdet=True, attributes=att_file, with_conf=True, conf_threshold=0.4, filter_small=None)
 
-    risk_analysis(val_dir)
+    # risk_analysis(val_dir)
     # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.5, filter_small=0.05, keep='iou', )
     # risk_analysis(save_dir, rm_bg=True)
-    pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=None, keep='iou', )
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=None, keep='iou', )
+    # risk_analysis(save_dir, rm_bg=True)
+
+    #
+    # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val691'
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
+    # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val666'
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine'
+    # pred_dir = os.path.join(val_dir, 'labels')
+    # label_dir = os.path.join(data_dir, 'val_80p_ref', 'labels')
+    # save_dir = os.path.join(data_dir, 'val_80p_ref','result_analysis', os.path.basename(val_dir))
+    # att_file = os.path.join(data_dir, 'attribute.yaml')
+    #
+    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val699'
+    pred_dir = os.path.join(val_dir, 'labels')
+    data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine'
+    label_dir = os.path.join(data_dir, 'val_test', 'labels')
+    save_dir = os.path.join(data_dir, 'val_test','result_analysis', os.path.basename(val_dir))
+    att_file = os.path.join(data_dir, 'attribute.yaml')
+    #
+    # # label_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine/labels'
+    # # label_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine/labels'
+    # # x=[11,6,22],[14,6,21]
+    # get_all_high(label_dir, with_conf=False, filter_small=0.05)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=None, keep='all', )
+    # risk_analysis(save_dir, rm_bg=True)
+    pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='all', )
     risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+
+
+    # select_val(data_dir, val_txt='val_test.txt')
+    # select_val(data_dir, val_txt='val_80p_ref.txt')
+
+    # risk_analysis(val_dir)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=None, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.5, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.001, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.01, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.1, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.2, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.3, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.5, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.6, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.7, iou_thr=0.5, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.3, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.2, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.1, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
+    # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.05, filter_small=0.05, keep='ignore_other_pred_frame', )
+    # risk_analysis(save_dir, rm_bg=True)
 
     # pred2cfm_risk(label_dir, pred_dir, cfm_num=3, save_dir=save_dir, attributes=att_file, with_conf=True, conf_threshold=0.4, iou_thr=0.5, filter_small=0.05, keep='ignore_other', )
     # risk_analysis(save_dir, rm_bg=True)
@@ -1071,36 +1243,38 @@ if __name__ == "__main__":
 
     # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val629/labels'
     # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref'
-    # # # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val628/labels'
-    # # # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val628/labels'
+    # data_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+
+    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val629/labels'
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref'
     #
     # label_dir = os.path.join(data_dir, 'labels')
     # save_dir = os.path.join(data_dir, 'result_analysis', os.path.basename(os.path.dirname(pred_dir)))
     # save_path = save_dir + '.csv'
     # att_file = os.path.join(data_dir, 'attribute.yaml')
-    # eval_for_emsd(label_dir, pred_dir, att_file, save_path, with_conf=True, conf_threshold=0.001, iou_thr=0.5,
+    # eval_for_emsd_v2(label_dir, pred_dir, att_file, save_path, with_conf=True, conf_threshold=0.001, iou_thr=0.5,
     #               filter_small=0.05)
 
 
-    # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val627/labels'
-    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
-    # # pred_dir = r'/localnvme/project/ultralytics/runs/msegment/val629/labels'
-    # # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref'
+    # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val694'
+    # pred_dir = os.path.join(val_dir, 'labels')
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine'
     # image_dir= os.path.join(data_dir, 'images')
     # label_dir= os.path.join(data_dir, 'labels')
     # save_dir = os.path.join(data_dir, 'result_analysis', os.path.basename(os.path.dirname(pred_dir)))
     # att_file = os.path.join(data_dir, 'attribute.yaml')
     # risks = ['abandonment', 'broken', 'corrosion', 'deformation']
     # confs = [
-    #     ['background', 'no'],
-    #     ['background', 'high'],
+    #     # ['background', 'no'],
+    #     # ['background', 'high'],
     #     ['no', 'background'],
     #     ['high', 'background'],
-    #     ['no', 'high'],
-    #     ['high', 'no'],
+    #     # ['no', 'high'],
+    #     # ['high', 'no'],
     # ]
     # print(save_dir)
     # for risk in risks:
     #     for pred_conf, label_conf in confs:
     #         find_files(pred_conf, label_conf, risk, image_dir, label_dir, pred_dir, save_dir, att_file, with_conf=True,
-    #                    conf_threshold=0.3, iou_thr=0.5, filter_small=0.05)
+    #                    conf_threshold=0.4, iou_thr=0.3, filter_small=0.05)

@@ -31,19 +31,22 @@ DATA1 = "fusedata7961_mseg_c5_1015_80p_ref.yaml"
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo10(
-        MODEL4, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
-    )
-    demo_base.yolo10(
-        MODEL4, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=10,
-    )
+    # demo_base.yolo10(
+    #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+    # demo_base.yolo10(
+    #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10,
+    # )
     # demo_base.yolo10(
     #     MODEL3, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
     #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
     # )
 
+    # val_name = 'runs/msegment/fusedata7961_mseg_c5_l2_1029_abandonment_refine_test-[yolov10x-mseg-dlka3res-7-unet]4/weights/last.pt'
+    # data = 'fusedata7961_mseg_c5_l2_1029_abandonment_refine_80p_ref_src.yaml'
+    # demo_base.model_val(val_name, save_txt=True, save_conf=True, data=data, weight_name=False)
     # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1015_80p_ref-[yolov10x-mseg-dlka3res-7]')
     # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1015_80p_ref-[yolov10x-mseg-dlka3res-7]2')
     # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1015_80p_ref-[yolov10x-mseg-dlka3res-7]3')
@@ -297,9 +300,9 @@ if __name__ == '__main__':
     # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
 
 
-    val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
-    data = 'defect_test_1023.yaml'
-    demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
+    # val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
+    # data = 'defect_test_1023.yaml'
+    # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
     # val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # data = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref.yaml'
     # demo_base.model_val(val_name, filter_small=0.05, conf=0.4, risk_enlarge=[1.0, 1.3, 2.0, 1.0], data=data, save_conf=True, save_txt=True)
@@ -307,9 +310,9 @@ if __name__ == '__main__':
     # val_name = 'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # data = 'defect_test_1023.yaml'
     # demo_base.model_val(val_name, filter_small=0.05, data=data)
-    # val_name = 'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]'
-    # data = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref.yaml'
-    # demo_base.model_val(val_name, data=data, save_conf=True, save_txt=True)
+    val_name = 'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]'
+    data = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref.yaml'
+    demo_base.model_val(val_name, data=data, save_conf=True, save_txt=True)
     # val_name = 'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]'
     # data = 'defect_test_1023.yaml'
     # demo_base.model_val(val_name, data=data, save_conf=True, save_txt=True)
