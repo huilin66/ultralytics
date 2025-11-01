@@ -316,13 +316,15 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False,
 
     if mdet:
         df['defect'] = (df[attribute_keys] > 0).any(axis=1)
+        attribute_keys_noc = [a for a in attribute_keys if a != 'corrosion']
+        df['defect_no_c'] = (df[attribute_keys_noc] > 0).any(axis=1)
     if with_conf:
         if defect_conf_threshold is None:
             df = df[(df['conf'] >= conf_threshold)]
         else:
             df = df[~(
-                ((df['defect'] == True) & (df['conf'] < defect_conf_threshold)) |
-                ((df['defect'] == False) & (df['conf'] < conf_threshold))
+                ((df['defect_no_c'] == True) & (df['conf'] < defect_conf_threshold)) |
+                ((df['defect_no_c'] == False) & (df['conf'] < conf_threshold))
             )]
     df = df_xywh_to_xyxy(df)
     return df
@@ -883,7 +885,7 @@ def seg2bi(df):
     return df_new
 
 def pred2cfm_risk(label_dir, pred_dir, save_dir, attributes=None, classes=None, with_conf=True, conf_threshold=0.001,
-                  defect_conf_threshold=None, iou_thr=0.5, keep='all', filter_small=None, show=True, cfm_num=3):
+                  defect_conf_threshold=None, iou_thr=0.5, keep='all', filter_small=None, show_list=[], cfm_num=3):
     save_dir_risk3 = os.path.join(save_dir, 'risk3')
     save_dir_risk2 = os.path.join(save_dir, 'risk2')
     save_dir_seg = os.path.join(save_dir, 'seg')
@@ -963,10 +965,13 @@ def pred2cfm_risk(label_dir, pred_dir, save_dir, attributes=None, classes=None, 
     df_seg2_with_defect.to_csv(os.path.join(save_dir_seg2, "confusion_matrix_for_seg_with_defect.csv"), header=True, index=True)
     df_seg2_without_defect.to_csv(os.path.join(save_dir_seg2, "confusion_matrix_for_seg_without_defect.csv"), header=True, index=True)
 
-    if show:
+    if 'risk3' in show_list:
         risk_analysis(save_dir_risk3, rm_bg=True)
+    if 'risk2' in show_list:
         risk_analysis(save_dir_risk2)
+    if 'seg' in show_list:
         seg_cfm_analysis(save_dir_seg)
+    if 'seg2' in show_list:
         seg_cfm_analysis(save_dir_seg2)
 
 def get_stem2img_dict(img_dir):
@@ -1147,14 +1152,18 @@ def eval_for_emsd_v2(label_dir, predict_dir, attributes, output_path, with_conf=
     print(output_path)
 
 
-def get_all_high(input_dir, mdet=True, attributes=None, with_conf=True, conf_threshold=0.4, filter_small=None):
+def get_all_high(input_dir, ref_txt=None, attributes=None, with_conf=False, conf_threshold=0.4, filter_small=None):
     attributes = get_attributes(attributes)
     file_list = os.listdir(input_dir)
-    counts = [0,0,0,0]
+    if ref_txt is not None:
+        ref_df = pd.read_csv(ref_txt, header=None, index_col=None, names=['file_name'])
+        ref_list = [Path(file_name).stem for file_name in ref_df['file_name'].to_list()]
+        file_list = [file_name for file_name in file_list if Path(file_name).stem in ref_list]
+    counts = [0, 0, 0, 0]
     cat_counts = [0, 0, 0, 0]
     for file_name in tqdm(file_list):
         file_path = os.path.join(input_dir, file_name)
-        df = get_yolo_label_df(file_path, mdet=mdet, attributes=att_file, with_conf=with_conf, conf_threshold=conf_threshold)
+        df = get_yolo_label_df(file_path, mdet=True, attributes=attributes, with_conf=with_conf, conf_threshold=conf_threshold)
         if filter_small is not None:
             df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
         for idx, row in df.iterrows():

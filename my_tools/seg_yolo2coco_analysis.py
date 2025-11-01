@@ -310,7 +310,7 @@ def load_confusion_matrix(file_path):
 
     display_df = display_df.astype(int)
     # 打印混淆矩阵（含总数，带网格）
-    print(f"{' ':20} {Path(file_path).stem} confusion matrix:")
+    print(f"{' ':20} {Path(file_path).stem}:")
     print(display_df.to_string(index=True, header=True, justify='center', col_space=8))
     print('')
     return cm_df
@@ -392,9 +392,14 @@ def seg_cfm_analysis(input_dir):
             df_precision_scores.loc['Average(remove "other")'] = df_precision_scores.drop(index=['other', 'Average']).mean()
             df_recall_scores.loc['Average(remove "other")'] = df_recall_scores.drop(index=['other', 'Average']).mean()
 
-        print(df_f1_scores.to_string())
-        print(df_precision_scores.to_string())
-        print(df_recall_scores.to_string())
+            print(df_f1_scores.to_string())
+            print(df_precision_scores.to_string())
+            print(df_recall_scores.to_string())
+        else:
+            print(f"f1 score: {df_f1_scores.loc['segmented', 'F1 score']:.4f}, "
+                  f"recall: {df_precision_scores.loc['segmented', 'recall']:.4f}, "
+                  f"precision: {df_recall_scores.loc['segmented', 'precision']:.4f}")
+
 
 if __name__ == '__main__':
     pass
