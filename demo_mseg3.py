@@ -34,10 +34,10 @@ DATA_test = "defect_test_1023.yaml"
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo10(
-        MODEL6, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
-    )
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
 
     # demo_base.yolo10(
     #     MODEL3, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
@@ -56,9 +56,9 @@ if __name__ == '__main__':
     #     mloss_mask=True, mloss_weight=False, mloss_enlarge=0,
     # )
 
-    # demo_base.model_val(r'fusedata4197_mseg_c5_0914_80p-[yolov8x-mseg-dlka3res-7]',
-    #                     filter_small=0.05,
-    #                     )
+    # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1030_v4_src-[yolov10x-mseg-dlka3res-7-unet]', save_txt=True, save_conf=True)
+    # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1030_v4_src-[yolov10x-mseg-dlka3res-7-unet-sep]', save_txt=True, save_conf=True)
+    # demo_base.model_val(r'fusedata7961_mseg_c5_l2_1030_v4_test-[yolov10x-mseg-dlka3res-7-unet-sep]', save_txt=True, save_conf=True)
 
     # demo_base.model_predict(
     #     MSEG_WEIGHT,

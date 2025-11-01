@@ -280,6 +280,122 @@ def seg_analysis(data_cfg, val_path, cfg_dir='../ultralytics/cfg'):
     coco_val(data_val_coco_anno_path, val_path)
 
 
+
+def load_confusion_matrix(file_path):
+    """加载混淆矩阵CSV文件"""
+    # 检查文件是否存在
+    if not Path(file_path).exists():
+        raise FileNotFoundError(f"文件不存在: {file_path}")
+
+    # 读取CSV文件，第一列作为索引
+    cm_df = pd.read_csv(file_path, index_col=0)
+    for column in cm_df.columns:
+        if 'none' in column:
+            cm_df = cm_df.drop(index=column, columns=column)
+    # 创建用于显示的DataFrame副本
+    display_df = cm_df.copy()
+
+    # 修改索引和列名，添加标识
+    display_df.index = [f"pred: {cls}" for cls in display_df.index]
+    xx = str(display_df.columns[0])
+    display_df.columns = ['label:'+str(display_df.columns[0])] + list(display_df.columns[1:])
+    # display_df.columns = [f"label: {cls}" for cls in display_df.columns]
+    # display_df.columns = pd.MultiIndex.from_tuples([("label:", cls) for cls in display_df.columns])
+
+    # 计算各level的总标签数
+    label_totals = cm_df.sum(axis=0)
+    display_df.loc['label:total'] = label_totals.values
+    pred_totals = display_df.sum(axis=1)
+    display_df['pred:total'] = pred_totals.values
+
+    display_df = display_df.astype(int)
+    # 打印混淆矩阵（含总数，带网格）
+    print(f"{' ':20} {Path(file_path).stem} confusion matrix:")
+    print(display_df.to_string(index=True, header=True, justify='center', col_space=8))
+    print('')
+    return cm_df
+
+def calculate_f1_scores(cm_df):
+    """计算每个类别的精确率、召回率和F1分数
+
+    参数:
+        cm_df: 混淆矩阵DataFrame，行是实际类别，列是预测类别
+
+    返回:
+        dict: 包含每个类别F1分数的字典
+        dict: 包含每个类别精确率的字典
+        dict: 包含每个类别召回率的字典
+        float: 宏平均F1分数
+    """
+    # 获取类别列表
+    classes = cm_df.index.tolist()
+
+    # 初始化结果字典
+    f1_scores = {}
+    precision_scores = {}
+    recall_scores = {}
+
+    # 计算每个类别的指标
+    for cls in classes:
+        # 真正例(TP): 对角线元素
+        tp = cm_df.loc[cls, cls]
+
+        # 假正例(FP): 该列其他行的和
+        fp = cm_df[cls].sum() - tp
+
+        # 假负例(FN): 该行其他列的和
+        fn = cm_df.loc[cls].sum() - tp
+
+        # 计算精确率和召回率
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+
+        # 计算F1分数
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+        f1_scores[cls] = f1
+        precision_scores[cls] = precision
+        recall_scores[cls] = recall
+
+
+    macro_f1 = sum(f1_scores.values()) / len(f1_scores) if len(f1_scores) > 0 else 0
+
+    return f1_scores, precision_scores, recall_scores, macro_f1
+
+def seg_cfm_analysis(input_dir):
+    file_patterns = [
+        'confusion_matrix_for_seg_all.csv',
+        'confusion_matrix_for_seg_with_defect.csv',
+        'confusion_matrix_for_seg_without_defect.csv',
+    ]
+    for pattern in file_patterns:
+        file_path = os.path.join(input_dir, pattern)
+        cfm = load_confusion_matrix(file_path)
+
+        f1_scores, precision_scores, recall_scores, macro_f1 = calculate_f1_scores(cfm)
+
+        df_f1_scores = pd.DataFrame.from_dict({'F1 score':f1_scores}, orient='index').T
+        df_precision_scores = pd.DataFrame.from_dict({'recall':precision_scores}, orient='index').T
+        df_recall_scores = pd.DataFrame.from_dict({'precision':recall_scores}, orient='index').T
+
+        df_f1_scores.drop(index='background', inplace=True)
+        df_precision_scores.drop(index='background', inplace=True)
+        df_recall_scores.drop(index='background', inplace=True)
+
+
+
+        if 'other' in df_f1_scores.index:
+            df_f1_scores.loc['Average'] = df_f1_scores.mean(numeric_only=True)
+            df_precision_scores.loc['Average'] = df_precision_scores.mean(numeric_only=True)
+            df_recall_scores.loc['Average'] = df_recall_scores.mean(numeric_only=True)
+            df_f1_scores.loc['Average(remove "other")'] = df_f1_scores.drop(index=['other', 'Average']).mean()
+            df_precision_scores.loc['Average(remove "other")'] = df_precision_scores.drop(index=['other', 'Average']).mean()
+            df_recall_scores.loc['Average(remove "other")'] = df_recall_scores.drop(index=['other', 'Average']).mean()
+
+        print(df_f1_scores.to_string())
+        print(df_precision_scores.to_string())
+        print(df_recall_scores.to_string())
+
 if __name__ == '__main__':
     pass
     # seg_analysis('fusedata7961_mseg_c5_l2_1022_80p_ref.yaml',

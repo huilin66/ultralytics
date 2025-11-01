@@ -4,7 +4,7 @@ import torch
 demo_base.TASK = 'msegment'
 demo_base.EPOCHS = 100
 demo_base.IMGSZ = 960
-demo_base.BATCH_SIZE = 64
+demo_base.BATCH_SIZE = 32
 demo_base.DEVICE = torch.device('cuda:0')
 demo_base.DATA = "fusedata2419_mseg_c5_0730.yaml"
 # demo_base.CONF_VAL = 0.5
@@ -18,19 +18,25 @@ MODEL6 = 'yolov10x-mseg-dlka3res-7-unet-sep.yaml'
 SEG_WEIGHT8 = "runs/segment/fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2/weights/best.pt"
 SEG_WEIGHT10 = "/localnvme/project/ultralytics/runs/segment/fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8/weights/best.pt"
 
-DATA0 = "fusedata7961_mseg_c5_l2_1030_v4_src.yaml"
-DATA1 = "fusedata7961_mseg_c5_l2_1030_v4_test.yaml"
+DATA0 = "fusedata7961_mseg_c5_l2_1031_v4_src.yaml"
+DATA1 = "fusedata7961_mseg_c5_l2_1031_v4_test.yaml"
 
 if __name__ == '__main__':
     pass
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA1, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+
     demo_base.yolo10(
-        MODEL6, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+        MODEL3, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
         mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
     )
-    demo_base.yolo10(
-        MODEL6, weight_path=SEG_WEIGHT10, data=DATA1, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
-    )
+
     # demo_base.yolo10(
     #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
