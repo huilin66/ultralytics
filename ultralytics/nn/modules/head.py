@@ -310,6 +310,7 @@ class MDetect(nn.Module):
         self.nc = nc  # number of classes
         self.na = na  # number of attributes
         self.nal = nal
+        self.ch = ch
         self.nl = len(ch)  # number of detection layers
         self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
         self.no = nc + na + self.reg_max * 4  # number of outputs per anchor
@@ -353,12 +354,12 @@ class MDetect(nn.Module):
             self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
         elif self.sep == 'unet':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-        elif self.sep == 'unet-sep':
-            self.cva = nn.ModuleList([nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, 1, 1)) for x in ch[:3]) for _ in range(self.na)])
         elif self.sep == 'c3str-unet1':
             self.cva = nn.ModuleList(nn.Sequential(C3STR(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
         elif self.sep == 'c3str-unet2':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), C3STR(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+        elif 'unet-sep' in self.sep:
+            self.cva = nn.ModuleList([nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, 1, 1)) for x in ch[:3]) for _ in range(self.na)])
         else:
             self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
 
@@ -391,8 +392,29 @@ class MDetect(nn.Module):
             if not self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
             elif 'unet' in self.sep:
-                if self.sep == 'unet-sep':
-                    f_a = [cva[i](x_a[i]) for cva in self.cva]
+                if 'unet-sep' in self.sep:
+                    if self.sep == 'unet-sep':
+                        f_a = [cva[i](x_a[i]) for cva in self.cva]
+                    elif self.sep == 'unet-sep0':
+                        f_a = [cva[i](x_a[i]) if a_i==0 else
+                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[3], x_a[i].shape[4]),
+                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
+                               for a_i, cva in enumerate(self.cva)]
+                    elif self.sep == 'unet-sep1':
+                        f_a = [cva[i](x_a[i]) if a_i==1 else
+                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[2], x_a[i].shape[3]),
+                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
+                               for a_i, cva in enumerate(self.cva)]
+                    elif self.sep == 'unet-sep2':
+                        f_a = [cva[i](x_a[i]) if a_i==2 else
+                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[2], x_a[i].shape[3]),
+                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
+                               for a_i, cva in enumerate(self.cva)]
+                    elif self.sep == 'unet-sep3':
+                        f_a = [cva[i](x_a[i]) if a_i==3 else
+                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[2], x_a[i].shape[3]),
+                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
+                               for a_i, cva in enumerate(self.cva)]
                     f_a_cat = torch.cat(f_a, dim=1)
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_a_cat), 1)
                 else:

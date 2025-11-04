@@ -15,27 +15,55 @@ MODEL2 = 'yolov8x-mseg-dlka3res-7.yaml'
 MODEL3 = 'yolov10x-mseg-dlka3res-7.yaml'
 MODEL4 = 'yolov10x-mseg-dlka3res-7-unet.yaml'
 MODEL6 = 'yolov10x-mseg-dlka3res-7-unet-sep.yaml'
+MODEL6A = 'yolov10x-mseg-dlka3res-7-unet-sep-sa.yaml'
 SEG_WEIGHT8 = "runs/segment/fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2/weights/best.pt"
 SEG_WEIGHT10 = "/localnvme/project/ultralytics/runs/segment/fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8/weights/best.pt"
 
 DATA0 = "fusedata7961_mseg_c5_l2_1031_v4_src.yaml"
 DATA1 = "fusedata7961_mseg_c5_l2_1031_v4_test.yaml"
+DATA_SA = "fusedata7961_mseg_c5_l2_1031_v4_sa_src.yaml"
+DATA_SB = "fusedata7961_mseg_c5_l2_1031_v4_sb_src.yaml"
+DATA_SC = "fusedata7961_mseg_c5_l2_1031_v4_sc_src.yaml"
+DATA_SD = "fusedata7961_mseg_c5_l2_1031_v4_sd_src.yaml"
 
 if __name__ == '__main__':
     pass
     # demo_base.yolo10(
-    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+    #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA_SA, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
     # )
     # demo_base.yolo10(
-    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA1, auto_optim=False, retrain=True,
+    #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA_SB, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
     # )
-
+    # demo_base.yolo10(
+    #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA_SC, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+    # demo_base.yolo10(
+    #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA_SD, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
     demo_base.yolo10(
-        MODEL3, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+        MODEL6A, weight_path=SEG_WEIGHT10, data=DATA_SA, auto_optim=False, retrain=True,
+        mloss_mask=False, mloss_weight=0, mloss_enlarge=5, name='debug', freeze_att_nums=[0, 1, 3]
     )
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA_SB, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA_SC, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA_SD, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
+    # demo_base.yolo10(
+    #     MODEL3, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=5,
+    # )
 
     # demo_base.yolo10(
     #     MODEL4, weight_path=SEG_WEIGHT10, data=DATA0, auto_optim=False, retrain=True,

@@ -41,6 +41,8 @@ freeze_bn: False
 multi_scale: False # (bool) Whether to use multiscale during training
 # Attribute
 eval_att_by_class: True
+freeze_att_head: None
+freeze_att_nums: None
 # Segmentation
 overlap_mask: True # (bool) merge object masks into a single image mask during training (segment train only)
 mask_ratio: 4 # (int) mask downsample ratio (segment train only)

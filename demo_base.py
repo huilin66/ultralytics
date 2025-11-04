@@ -45,6 +45,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
             {
                 'freeze':freeze_num,
                 'freeze_head':[f'{freeze_num}.cv2', f'{freeze_num}.cv3', f'{freeze_num}.cv4', f'{freeze_num}.proto'],
+                'freeze_att_head': [f'{freeze_num}.cva.{[freeze_att_num]}' for freeze_att_num in kwargs['freeze_att_nums']] if 'freeze_att_nums' in kwargs else None,
                 'freeze_bn':True,
                 'box': 0,
                 'seg': 0,
