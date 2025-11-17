@@ -322,9 +322,13 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False,
         if defect_conf_threshold is None:
             df = df[(df['conf'] >= conf_threshold)]
         else:
+            # df = df[~(
+            #     ((df['defect_no_c'] == True) & (df['conf'] < defect_conf_threshold)) |
+            #     ((df['defect_no_c'] == False) & (df['conf'] < conf_threshold))
+            # )]
             df = df[~(
-                ((df['defect_no_c'] == True) & (df['conf'] < defect_conf_threshold)) |
-                ((df['defect_no_c'] == False) & (df['conf'] < conf_threshold))
+                ((df['defect'] == True) & (df['conf'] < defect_conf_threshold)) |
+                ((df['defect'] == False) & (df['conf'] < conf_threshold))
             )]
     df = df_xywh_to_xyxy(df)
     return df
@@ -883,6 +887,37 @@ def seg2bi(df):
     df_new.loc['segmented', 'background'] = df.drop('background').loc[:, 'background'].sum()
     df_new.loc['segmented', 'segmented'] = df.drop(index='background',columns='background').values.sum()
     return df_new
+
+
+def pred2cfm_risk_single(label_dir, pred_dir_a, pred_dir_b, pred_dir_c, pred_dir_d, pred_dir_all, save_dir,
+                         attributes=None, classes=None, with_conf=True, conf_threshold=0.001, defect_conf_threshold=None,
+                         iou_thr=0.5, keep='all', filter_small=None, show_list=[], cfm_num=3, only_save=False):
+    label_list = os.listdir(label_dir)
+    os.makedirs(pred_dir_all, exist_ok=True)
+    for label_name in tqdm(label_list, desc='label merge'):
+        pred_a_path = os.path.join(pred_dir_a, label_name)
+        pred_b_path = os.path.join(pred_dir_b, label_name)
+        pred_c_path = os.path.join(pred_dir_c, label_name)
+        pred_d_path = os.path.join(pred_dir_d, label_name)
+        pred_all_path = os.path.join(pred_dir_all, label_name)
+        with open(pred_a_path, 'r') as fa, open(pred_b_path, 'r') as fb, open(pred_c_path, 'r') as fc, open(pred_d_path, 'r') as fd:
+            lines_a, lines_b, lines_c, lines_d = fa.readlines(), fb.readlines(), fc.readlines(), fd.readlines()
+            assert len(lines_a) == len(lines_b) == len(lines_c) == len(lines_d), f"{label_name} error"
+            lines_all = []
+            for idx in range(len(lines_a)):
+                line_a, line_b, line_c, line_d = lines_a[idx], lines_b[idx], lines_c[idx], lines_d[idx]
+                parts_a, parts_b, parts_c, parts_d = line_a.strip().split(' '), line_b.strip().split(' '), line_c.strip().split(' '), line_d.strip().split(' ')
+                assert (len(parts_a) == len(parts_b) == len(parts_c) == len(parts_d)) and (parts_a[-1] == parts_b[-1] == parts_c[-1] == parts_d[-1]), f"{label_name} error"
+                parts_all = [parts_a[0], '4', parts_d[2], parts_b[2], parts_a[2], parts_c[2]] + parts_a[3:]
+                line_all = ' '.join(parts_all)+'\n'
+                lines_all.append(line_all)
+            with open(pred_all_path, 'w') as fw:
+                fw.writelines(lines_all)
+
+    if not only_save:
+        pred2cfm_risk(label_dir, pred_dir_all, save_dir, attributes=attributes, classes=classes, with_conf=with_conf, conf_threshold=conf_threshold,
+                      defect_conf_threshold=defect_conf_threshold, iou_thr=iou_thr, keep=keep, filter_small=filter_small, show_list=show_list, cfm_num=cfm_num)
+
 
 def pred2cfm_risk(label_dir, pred_dir, save_dir, attributes=None, classes=None, with_conf=True, conf_threshold=0.001,
                   defect_conf_threshold=None, iou_thr=0.5, keep='all', filter_small=None, show_list=[], cfm_num=3):

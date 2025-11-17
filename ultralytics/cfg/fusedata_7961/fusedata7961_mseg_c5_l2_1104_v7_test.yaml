@@ -1,0 +1,31 @@
+path: /localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1104_v7 # dataset root dir
+train: train_test.txt # train images (relative to 'path') 118287 images
+val: val_test.txt # val images (relative to 'path') 5000 images
+test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+
+# Classes
+names:
+  0: background
+  1: wall display
+  2: frame
+  3: projecting display
+  4: none
+  5: hanging display
+  6: other
+
+
+
+attributes:
+  deformation:
+    - no
+    - high
+  broken:
+    - no
+    - high
+  abandonment:
+    - no
+    - high
+  corrosion:
+    - no
+    - high

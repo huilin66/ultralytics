@@ -15,18 +15,21 @@ if __name__ == '__main__':
     save_dir = os.path.join(data_dir, 'result_analysis', os.path.basename(os.path.dirname(pred_dir)))
     att_file = os.path.join(data_dir, 'attribute.yaml')
     risks = [
-        # 'abandonment',
-        'broken', 'corrosion', 'deformation']
+        'abandonment',
+        'broken',
+        'corrosion',
+        'deformation'
+    ]
     confs = [
         # ['background', 'no'],
         # ['background', 'high'],
-        # ['no', 'background'],
+        ['no', 'background'],
         # ['high', 'background'],
         # ['no', 'high'],
-        ['high', 'no'],
+        # ['high', 'no'],
     ]
     print(save_dir)
     for risk in risks:
         for pred_conf, label_conf in confs:
             find_files(pred_conf, label_conf, risk, image_dir, label_dir, pred_dir, save_dir, att_file, with_conf=True,
-                       conf_threshold=0.4, iou_thr=0.3, filter_small=0.05)
+                       conf_threshold=0.3, iou_thr=0.3, filter_small=0.05)

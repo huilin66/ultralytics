@@ -1727,6 +1727,7 @@ class LetterBox:
             labels = self._update_labels(labels, ratio, left, top)
             labels["img"] = img
             labels["resized_shape"] = new_shape
+            # np.save(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_letterbox.npy', img)
             return labels
         else:
             return img

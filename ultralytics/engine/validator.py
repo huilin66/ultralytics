@@ -221,7 +221,9 @@ class BaseValidator:
                 batch = self.preprocess(batch)
             # Inference
             with dt[1]:
+                # torch.save(batch["img"], r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_input.pt')
                 preds = model(batch["img"], augment=augment)
+                # torch.save(preds, r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_output.pt')
             # Loss
             with dt[2]:
                 if self.training:

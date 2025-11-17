@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 device1 = torch.device("cuda:0")
 device2 = torch.device("cuda:0")
 
@@ -159,6 +160,14 @@ def compare_mseg_seg_preds(path_a, path_b):
     result = torch.equal(f_a, f_b)
     print(result)
 
+
+def compare_data(pt_path, npy_path):
+    pass
+    pt_data = torch.load(pt_path)
+    npy_data = np.load(npy_path)
+
+    print()
+
 if __name__ == '__main__':
     pass
     # compare_mseg_seg_ckpt('seg/model.pt', 'mseg/model.pt', False)
@@ -173,5 +182,65 @@ if __name__ == '__main__':
     # compare_mseg_seg_data('seg1/img.pt', 'seg2/img.pt')
     # compare_mseg_seg_preds('seg1/preds.pt', 'seg2/preds.pt')
 
-    load_demo('seg1/input_x.pt', 'seg2/input_x.pt')
+    # load_demo('seg1/input_x.pt', 'seg2/input_x.pt')
 
+    # compare_data(r'/my_tools/data_onnx/20250812150605700.pt',
+    #              r'/my_tools/data_onnx/20250812150605700.npy')
+
+
+    # data11 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_src.npy')
+    # data12 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_rs.npy')
+    data1_letterbox = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_letterbox.npy')
+    data1_input_int = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_input_int.npy')
+    data1_input_float = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_input_float.npy')
+    data1_input = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_input.npy')[0:1]
+    data1_output0 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_output0.npy')[0:1]
+    data1_output1 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_output1.npy')
+    data1_output2 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_output2.npy')
+    data1_output3 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_output3.npy')
+    data1_output4 = np.load(r'/localnvme/project/ultralytics/my_tools/data_onnx/20250812150605700_output4.npy')
+
+    # data21 = np.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_src.npy')
+    # data22 = np.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_rs.npy')
+    # data221 = np.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_rs1.npy')
+    data2_letterbox = np.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_letterbox.npy')
+    # data232 = torch.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_letterbox.pt')
+    data2_input_int = torch.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_input_int.pt').permute(0, 2,3,1)[0].cpu().numpy()
+    data2_input_float = torch.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_input_float.pt').cpu().numpy()
+    data2_input = torch.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_input.pt')
+    data2_output = torch.load(r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_output.pt')
+    data2_output0 = data2_output[0].cpu().numpy()
+
+
+    # result1 = (data11==data21).all()
+    # print(result1)
+    # result2 = (data12==data22).all()
+    # print(result2)
+    # result21 = (data12==data221).all()
+    # print(result21)
+    result_letterbox = (data1_letterbox==data2_letterbox).all()
+    print(result_letterbox)
+    result_input_int = (data1_input_int==data2_input_int).all()
+    print(result_input_int)
+    result_input_float = np.allclose(data1_input_float,data2_input_float, atol=1e-10)
+    print(result_input_float)
+
+    max_diff = (data1_output0-data2_output0).max()
+    mean_diff = (data1_output0-data2_output0).mean()
+    result_output_0 = np.allclose(data1_output0, data2_output0, atol=1e-3)
+    print(result_output_0)
+    print()
+    # result3 = (data13==data23).all()
+    # print(result3)
+    # data32_tp = data232.permute(0, 2,3,1)[0].cpu().numpy()
+    # result32 = np.allclose(data13, data32_tp, atol=1e-6)
+    # print(result32)
+    # data32_tp = data233.permute(0, 2,3,1)[0].cpu().numpy()
+    # result32 = np.allclose(data13, data32_tp, atol=1e-6)
+    # print(result32)
+    # result242 = (data24==data242).all()
+    # print(result242)
+    # result4 = np.allclose(data14, data24.cpu().numpy(), atol=1e-6)
+    # print(result4)
+    # result50 = np.allclose(data150, data250, atol=1e-1)
+    # print(result50)

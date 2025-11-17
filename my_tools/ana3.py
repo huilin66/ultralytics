@@ -16,8 +16,8 @@ if __name__ == '__main__':
     # data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1030_v4'
 
 
-    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val699'
-    data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine'
+    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val767'
+    data_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17'
     val_name = 'val_test'
 
     # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val653'
@@ -33,6 +33,24 @@ if __name__ == '__main__':
     if not os.path.exists(label_dir) or len(os.listdir(label_dir)) == 0:
         select_val(data_dir, val_txt=f'{val_name}.txt')
     # pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4,
-    #               filter_small=None, keep='all', )
+    #               filter_small=None, keep='all', show_list=['risk3', 'risk2', 'seg2'])
+
+
+    # pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4,
+    #               filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk2'])
+    # pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.3,
+    #               filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk2'])
     pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4,
-                  defect_conf_threshold=0.001, filter_small=0.05, keep='ignore_other_pred_frame', )
+                  defect_conf_threshold = 0.1,
+                  filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk3'])
+    pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.3,
+                  defect_conf_threshold = 0.1,
+                  filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk3'])
+    # pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4,
+    #               defect_conf_threshold = 0.01,
+    #               filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk2'])
+    # pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4,
+    #               defect_conf_threshold = 0.001,
+    #               filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk2'])
+    # pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4,
+    #               filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk3', 'risk2', 'seg2'])

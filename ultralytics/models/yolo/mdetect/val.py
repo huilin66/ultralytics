@@ -46,7 +46,9 @@ class MDetectionValidator(BaseValidator):
     def preprocess(self, batch):
         """Preprocesses batch of images for YOLO training."""
         batch["img"] = batch["img"].to(self.device, non_blocking=True)
+        # torch.save(batch["img"], r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_input_int.pt')
         batch["img"] = (batch["img"].half() if self.args.half else batch["img"].float()) / 255
+        # torch.save(batch["img"], r'/localnvme/project/ultralytics/my_tools/data_torch/20250812150605700_input_float.pt')
         if isinstance(batch['mdet_attributes'], list):
             batch['mdet_attributes'] = torch.tensor(np.concatenate(batch['mdet_attributes'], axis=0))
         for k in ["batch_idx", "cls", "bboxes", "mdet_attributes"]:
