@@ -39,6 +39,7 @@ freeze: None # (int | list, optional) freeze first n layers, or freeze list of l
 freeze_head: None
 freeze_bn: False
 multi_scale: False # (bool) Whether to use multiscale during training
+contrastive_loss: False
 # Attribute
 eval_att_by_class: True
 freeze_att_head: None

@@ -129,6 +129,50 @@ class GAT(nn.Module):
             outputs = outputs + inputs
         return outputs
 
+class TextureAttention(nn.Module):
+    """
+
+    """
+    def __init__(self, channels, reduction=4, kernel_size=7):
+        super().__init__()
+        self.channels = channels
+
+
+        self.dw_conv = nn.Conv2d(channels, channels, kernel_size=3,
+                                 padding=1, groups=channels, bias=False)
+
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.mlp = nn.Sequential(
+            nn.Linear(channels, channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channels // reduction, channels, bias=False)
+        )
+
+
+        self.spatial_conv = nn.Conv2d(1, 1, kernel_size,
+                                      padding=kernel_size // 2, bias=False)
+
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        b, c, h, w = x.size()
+
+
+        edge = self.dw_conv(x)                    # B,C,H,W
+
+
+        y = self.avg_pool(edge).view(b, c)        # B,C
+        y = self.mlp(y).view(b, c, 1, 1)          # B,C,1,1
+        ca = self.sigmoid(y)                      # B,C,1,1
+
+
+        edge_map = edge.abs().mean(1, keepdim=True)  # B,1,H,W
+        sa = self.sigmoid(self.spatial_conv(edge_map))  # B,1,H,W
+
+
+        out = x * (1 + ca) * (1 + sa)
+        return out
+
 # endregion
 
 class Detect(nn.Module):
@@ -354,6 +398,8 @@ class MDetect(nn.Module):
             self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
         elif self.sep == 'unet':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+        elif self.sep == 'unet-texture':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
         elif self.sep == 'c3str-unet1':
             self.cva = nn.ModuleList(nn.Sequential(C3STR(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
         elif self.sep == 'c3str-unet2':
@@ -362,7 +408,10 @@ class MDetect(nn.Module):
             self.cva = nn.ModuleList([nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, 1, 1)) for x in ch[:3]) for _ in range(self.na)])
         else:
             self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
-
+        if 'texture' in self.sep:
+            self.cvt = nn.ModuleList(TextureAttention(x*2) for x in ch[:3])
+        else:
+            self.cvt = None
         if self.end2end:
             self.one2one_cv2 = copy.deepcopy(self.cv2)
             self.one2one_cv3 = copy.deepcopy(self.cv3)
@@ -418,7 +467,12 @@ class MDetect(nn.Module):
                     f_a_cat = torch.cat(f_a, dim=1)
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_a_cat), 1)
                 else:
-                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
+                    if 'texture' in self.sep:
+                        cvt_input = x_a[i]
+                        cvt_output = self.cvt[i](cvt_input)
+                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](self.cvt[i](x_a[i]))), 1)
+                    else:
+                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
             else:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
 

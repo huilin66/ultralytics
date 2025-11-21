@@ -918,6 +918,7 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         """Initializes the v8SegmentationLoss class, taking a de-paralleled model as argument."""
         super().__init__(model, tal_topk, epsilon, size_sum, weight_ratio)
         self.overlap = model.args.overlap_mask
+        self.use_contrastive_loss = model.args.contrastive_loss
 
     def __call__(self, preds, batch):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
@@ -1008,7 +1009,10 @@ class v8MSegmentationLoss(v8MDetectionLoss):
                                             )
             else:
                 loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3)
-
+        elif self.use_contrastive_loss:
+            pred_attributes_fg = pred_attributes[fg_mask]
+            gt_attributes_fg = gt_attributes[fg_mask]
+            loss[4] = self.contrastive_loss(pred_attributes_fg, gt_attributes_fg, margin=1.0)
         else:
             if fg_mask.sum() and self.mloss_mask:
                 pred_attributes_fg = pred_attributes[fg_mask]
@@ -1061,6 +1065,50 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         loss[4] *= self.hyp.mdet # mdet gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
+
+    def contrastive_loss(self, pred_attr_fg, gt_attr_fg, margin=1.0):
+        """
+        pred_attr_fg: [N, A]  预测的 attribute (A 可以是 1 或 4)
+        gt_attr_fg:   [N, A] 或 [N, 1] 或 [N]，表示是否扭曲（0/1）
+        """
+        if pred_attr_fg.numel() == 0:
+            # 没有前景，返回 0
+            return pred_attr_fg.new_tensor(0.)
+
+        # 取得 0/1 标签
+        if gt_attr_fg.dim() == 2 and gt_attr_fg.size(1) > 1:
+            labels = gt_attr_fg.argmax(dim=-1).long()  # one-hot 的情况
+        else:
+            labels = gt_attr_fg.view(-1).long()  # [N]
+
+        attrs = pred_attr_fg.view(pred_attr_fg.size(0), -1)  # [N, A]
+        N = attrs.size(0)
+
+        # pair-wise L2 距离，得到 [N, N]
+        diff = attrs.unsqueeze(1) - attrs.unsqueeze(0)  # [N, N, A]
+        dist = diff.pow(2).sum(-1).sqrt()  # [N, N]
+
+        # 同类/异类 mask
+        labels_i = labels.unsqueeze(0)  # [1, N]
+        labels_j = labels.unsqueeze(1)  # [N, 1]
+        same_mask = (labels_i == labels_j).float()  # [N, N]
+        diff_mask = 1.0 - same_mask
+
+        # 不跟自己比
+        diag = torch.eye(N, device=attrs.device)
+        same_mask = same_mask * (1.0 - diag)
+        diff_mask = diff_mask * (1.0 - diag)
+
+        eps = 1e-8
+
+        # 同类：希望距离趋向 0
+        pos_loss = (same_mask * dist.pow(2)).sum() / (same_mask.sum() + eps)
+
+        # 异类：希望距离至少大于 margin
+        neg_loss = (diff_mask * F.relu(margin - dist).pow(2)).sum() / (diff_mask.sum() + eps)
+
+        loss = pos_loss + neg_loss
+        return loss
 
     def _att_df_loss(
             self,

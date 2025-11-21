@@ -900,6 +900,8 @@ def pred2cfm_risk_single(label_dir, pred_dir_a, pred_dir_b, pred_dir_c, pred_dir
         pred_c_path = os.path.join(pred_dir_c, label_name)
         pred_d_path = os.path.join(pred_dir_d, label_name)
         pred_all_path = os.path.join(pred_dir_all, label_name)
+        if not os.path.exists(pred_a_path):
+            continue
         with open(pred_a_path, 'r') as fa, open(pred_b_path, 'r') as fb, open(pred_c_path, 'r') as fc, open(pred_d_path, 'r') as fd:
             lines_a, lines_b, lines_c, lines_d = fa.readlines(), fb.readlines(), fc.readlines(), fd.readlines()
             assert len(lines_a) == len(lines_b) == len(lines_c) == len(lines_d), f"{label_name} error"

@@ -14,7 +14,7 @@ MODEL1 = 'yolov8x-mseg-7.yaml'
 MODEL2 = 'yolov8x-mseg-dlka3res-7.yaml'
 MODEL3 = 'yolov10x-mseg-dlka3res-7.yaml'
 MODEL4 = 'yolov10x-mseg-dlka3res-7-unet.yaml'
-MODEL4_S = 'yolov10x-mseg-dlka3res-7-unet-single.yaml'
+MODEL4_S = 'yolov10x-mseg-dlka3res-7-unet-single-texture.yaml'
 MODEL5 = 'yolov10x-mseg-dlka3res-7-c3str.yaml'
 MODEL6 = 'yolov10x-mseg-dlka3res-7-unet-sep.yaml'
 MODEL7 = 'yolov10x-mseg-dlka3res-7-c3str-unet1.yaml'
@@ -29,32 +29,41 @@ DATA0 = "fusedata7961_mseg_c5_l2_1104_v5_test.yaml"
 DATA1 = "fusedata7961_mseg_c5_l2_1113_v17_test.yaml"
 
 DATA_SA = "fusedata7961_mseg_c5_l2_1113_v17_sa_test.yaml"
-DATA_SB = "fusedata7961_mseg_c5_l2_1113_v17_sb_test.yaml"
+DATA_SB1 = "fusedata7961_mseg_c5_l2_1117_v18_sb_test_broken.yaml"
+DATA_SB2 = "fusedata7961_mseg_c5_l2_1117_v19_sb_test_broken_syn_v1.yaml"
 DATA_SC = "fusedata7961_mseg_c5_l2_1113_v17_sc_test.yaml"
 DATA_SD = "fusedata7961_mseg_c5_l2_1113_v17_sd_test.yaml"
 
 if __name__ == '__main__':
     pass
+    # demo_base.yolo10(
+    #     MODEL6, weight_path=SEG_WEIGHT10, data=DATA1, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
+    # )
+    # demo_base.yolo10(
+    #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
+    # )
     demo_base.yolo10(
-        MODEL6, weight_path=SEG_WEIGHT10, data=DATA1, auto_optim=False, retrain=True,
+        MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB2, auto_optim=False, retrain=True,
         mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
     )
-    demo_base.yolo10(
-        MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
-    )
-    demo_base.yolo10(
-        MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SD, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
-    )
-    demo_base.yolo10(
-        MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SA, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
-    )
-    demo_base.yolo10(
-        MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SC, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
-    )
+    # demo_base.yolo10(
+    #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB2, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
+    # )
+    # demo_base.yolo10(
+    #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SD, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
+    # )
+    # demo_base.yolo10(
+    #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SA, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
+    # )
+    # demo_base.yolo10(
+    #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SC, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,
+    # )
 
 
 
