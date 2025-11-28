@@ -153,6 +153,18 @@ class YOLODataset(BaseDataset):
         save_dataset_cache_file(self.prefix, path, x, DATASET_CACHE_VERSION)
         return x
 
+    def check_files(self):
+        import os
+        if not os.path.exists(self.label_files[0]):
+            if self.label_files[0].startswith('images'):
+                self.label_files = [file_name.replace('images', 'labels') for file_name in self.label_files]
+            root_dir = os.path.dirname(self.img_path)
+            attempt_path = os.path.join(root_dir, self.label_files[0])
+            if os.path.exists(attempt_path):
+                self.label_files = [os.path.join(root_dir, file_path) for file_path in self.label_files]
+                self.im_files = [os.path.join(root_dir, file_path) for file_path in self.im_files]
+
+
     def get_labels(self):
         """
         Returns dictionary of labels for YOLO training.
@@ -163,6 +175,7 @@ class YOLODataset(BaseDataset):
             (List[dict]): List of label dictionaries, each containing information about an image and its annotations.
         """
         self.label_files = img2label_paths(self.im_files)
+        self.check_files()
         cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
         try:
             cache, exists = load_dataset_cache_file(cache_path), True  # attempt to load a *.cache file

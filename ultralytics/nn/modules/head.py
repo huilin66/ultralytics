@@ -385,6 +385,7 @@ class MDetect(nn.Module):
         self.com_path = com_path
         ca = c3 if ca is None else ca
         self.N = 3
+        self.use_contrast = False
         if not self.sep:
             self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
         elif self.sep=='dlka':
@@ -398,6 +399,12 @@ class MDetect(nn.Module):
             self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
         elif self.sep == 'unet':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+        elif self.sep == 'unet-contrastloss':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+            self.use_contrast = True
+        elif self.sep == 'unet-texture-contrastloss':
+            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
+            self.use_contrast = True
         elif self.sep == 'unet-texture':
             self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
         elif self.sep == 'c3str-unet1':
@@ -436,7 +443,7 @@ class MDetect(nn.Module):
                 torch.cat([x[2], x[5]], dim=1),
             ]
             x = x[:3]
-
+        contrast_embedding = []
         for i in range(self.nl):
             if not self.sep:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
@@ -467,17 +474,33 @@ class MDetect(nn.Module):
                     f_a_cat = torch.cat(f_a, dim=1)
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_a_cat), 1)
                 else:
-                    if 'texture' in self.sep:
-                        cvt_input = x_a[i]
-                        cvt_output = self.cvt[i](cvt_input)
+                    if self.sep == 'unet-texture':
                         x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](self.cvt[i](x_a[i]))), 1)
+                    elif self.sep == 'unet-contrastloss':
+                        f_input = x_a[i]
+                        f_0 = self.cva[i][0](f_input)
+                        f_1 = self.cva[i][1](f_0)
+                        contrast_embedding.append(f_1)
+                        f_2 = self.cva[i][2](f_1)
+                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_2), 1)
+                    elif self.sep == 'unet-texture-contrastloss':
+                        f_input = x_a[i]
+                        f_temp = self.cvt[i](f_input)
+                        f_0 = self.cva[i][0](f_temp)
+                        f_1 = self.cva[i][1](f_0)
+                        contrast_embedding.append(f_1)
+                        f_2 = self.cva[i][2](f_1)
+                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_2), 1)
                     else:
                         x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
             else:
                 x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
 
         if self.training:  # Training path
-            return x
+            if self.use_contrast:
+                return x, contrast_embedding
+            else:
+                return x
         y = self._inference(x)
         return y if self.export else (y, x)
 
@@ -713,7 +736,10 @@ class MSegment(MDetect):
         # TODO: change the bbox based attribute into mask based attribute
         x = MDetect.forward(self, x)
         if self.training:
-            return x, mc, p
+            if self.use_contrast:
+                return x[0], mc, p, x[1]
+            else:
+                return x, mc, p
         return (torch.cat([x, mc], 1), p) if self.export else (torch.cat([x[0], mc], 1), (x[1], mc, p))
 
 

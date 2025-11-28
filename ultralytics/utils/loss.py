@@ -919,8 +919,14 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         super().__init__(model, tal_topk, epsilon, size_sum, weight_ratio)
         self.overlap = model.args.overlap_mask
         self.use_contrastive_loss = model.args.contrastive_loss
+        self.contrastive_loss_weight = model.args.contrastive_loss_weight
 
     def __call__(self, preds, batch):
+        if self.use_contrastive_loss and len(preds) == 4:
+            use_contrastive_loss_train = True
+            preds, contrast_embedding = preds[:-1], preds[-1]
+        else:
+            use_contrastive_loss_train = False
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         loss = torch.zeros(5, device=self.device)  # box, seg, cls, dfl, att
         feats, pred_masks, proto = preds if len(preds) == 3 else preds[1]
@@ -998,10 +1004,10 @@ class v8MSegmentationLoss(v8MDetectionLoss):
         # Attribute loss
         # gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
 
-        if att_dfl:
-            pred_attributes_fg = pred_attributes[fg_mask]
-            gt_attributes_fg = gt_attributes[fg_mask]
 
+        pred_attributes_fg = pred_attributes[fg_mask]
+        gt_attributes_fg = gt_attributes[fg_mask]
+        if att_dfl:
             if self.mloss_weight:
                 loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3,
                                             alpha=torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype),
@@ -1009,14 +1015,8 @@ class v8MSegmentationLoss(v8MDetectionLoss):
                                             )
             else:
                 loss[4] = self._att_df_loss(pred_attributes_fg, gt_attributes_fg, N=3)
-        elif self.use_contrastive_loss:
-            pred_attributes_fg = pred_attributes[fg_mask]
-            gt_attributes_fg = gt_attributes[fg_mask]
-            loss[4] = self.contrastive_loss(pred_attributes_fg, gt_attributes_fg, margin=1.0)
         else:
             if fg_mask.sum() and self.mloss_mask:
-                pred_attributes_fg = pred_attributes[fg_mask]
-                gt_attributes_fg = gt_attributes[fg_mask]
                 if self.mloss_enlarge == 0:
                     weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
                 else:
@@ -1029,22 +1029,20 @@ class v8MSegmentationLoss(v8MDetectionLoss):
                 )
             else:
                 # task1: risk exists or not
-                pred_attributes_exist = pred_attributes[fg_mask]
-                gt_attributes_pos = gt_attributes[fg_mask]
-                gt_attributes_exist = (gt_attributes_pos>0).float()
+                gt_attributes_exist = (gt_attributes_fg>0).float()
 
                 pos_weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype)
                 loss_exists = F.binary_cross_entropy_with_logits(
-                                                             input=pred_attributes_exist,
+                                                             input=pred_attributes_fg,
                                                              target=gt_attributes_exist,
                                                              pos_weight=pos_weight,
                                                              )
 
-                has_high_label = (gt_attributes_pos == 2).any()
+                has_high_label = (gt_attributes_fg == 2).any()
                 if has_high_label:
-                    mask_active = gt_attributes_pos > 0
-                    pred_attribute_active = pred_attributes_exist[mask_active]
-                    gt_attributes_active = gt_attributes_pos[mask_active]-1
+                    mask_active = gt_attributes_fg > 0
+                    pred_attribute_active = pred_attributes_fg[mask_active]
+                    gt_attributes_active = gt_attributes_fg[mask_active]-1
                     if gt_attributes_active.shape[0]>0:
                         loss_active = F.binary_cross_entropy_with_logits(
                                                                      input=pred_attribute_active,
@@ -1058,6 +1056,14 @@ class v8MSegmentationLoss(v8MDetectionLoss):
                 else:
                     loss[4] = loss_exists
 
+
+        if self.use_contrastive_loss and use_contrastive_loss_train:
+            emb_fg = self.get_multi_scale_emb(contrast_embedding, fg_mask)  # [N_fg, 320]
+
+            con_loss = self.supervised_contrastive_loss(emb_fg, gt_attributes_fg, )
+
+            loss[4] += con_loss * self.contrastive_loss_weight
+
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.seg  # seg gain
         loss[2] *= self.hyp.cls  # cls gain
@@ -1066,48 +1072,63 @@ class v8MSegmentationLoss(v8MDetectionLoss):
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
-    def contrastive_loss(self, pred_attr_fg, gt_attr_fg, margin=1.0):
+    def get_multi_scale_emb(self, contrast_embedding, fg_mask):
         """
-        pred_attr_fg: [N, A]  预测的 attribute (A 可以是 1 或 4)
-        gt_attr_fg:   [N, A] 或 [N, 1] 或 [N]，表示是否扭曲（0/1）
+        contrast_embedding: list of 3 tensors, each [B, C, H, W]
+        fg_mask:            [B, N_all]  前景 mask，N_all = 所有尺度 anchor 总数
+                             （和你的 pred_attributes 一样的展平方式）
+        return: emb_fg [N_fg, C]  只包含前景的 embedding
         """
-        if pred_attr_fg.numel() == 0:
-            # 没有前景，返回 0
-            return pred_attr_fg.new_tensor(0.)
+        feats_flat = []  # 存每个尺度展平后的特征 [B, HW, C]
 
-        # 取得 0/1 标签
-        if gt_attr_fg.dim() == 2 and gt_attr_fg.size(1) > 1:
-            labels = gt_attr_fg.argmax(dim=-1).long()  # one-hot 的情况
-        else:
-            labels = gt_attr_fg.view(-1).long()  # [N]
+        for feat in contrast_embedding:  # feat: [B, C, H, W]
+            B, C, H, W = feat.shape
+            # [B, C, H, W] -> [B, H*W, C]
+            f = feat.view(B, C, -1).permute(0, 2, 1).contiguous()
+            feats_flat.append(f)
 
-        attrs = pred_attr_fg.view(pred_attr_fg.size(0), -1)  # [N, A]
-        N = attrs.size(0)
+        # [B, N_all, C]，N_all = 120*120 + 60*60 + 30*30 （再乘以 anchor 数的话就按你原来展平方式来）
+        feats_all = torch.cat(feats_flat, dim=1)
 
-        # pair-wise L2 距离，得到 [N, N]
-        diff = attrs.unsqueeze(1) - attrs.unsqueeze(0)  # [N, N, A]
-        dist = diff.pow(2).sum(-1).sqrt()  # [N, N]
+        # 用 fg_mask 取出所有前景特征
+        # fg_mask: [B, N_all]  -> emb_fg: [N_fg, C]
+        emb_fg = feats_all[fg_mask]
 
-        # 同类/异类 mask
-        labels_i = labels.unsqueeze(0)  # [1, N]
-        labels_j = labels.unsqueeze(1)  # [N, 1]
-        same_mask = (labels_i == labels_j).float()  # [N, N]
-        diff_mask = 1.0 - same_mask
+        # 做归一化，方便后面用 cosine 相似度
+        emb_fg = F.normalize(emb_fg, dim=-1)
+        return emb_fg
 
-        # 不跟自己比
-        diag = torch.eye(N, device=attrs.device)
-        same_mask = same_mask * (1.0 - diag)
-        diff_mask = diff_mask * (1.0 - diag)
+    def supervised_contrastive_loss(self, emb, labels, temperature=0.1):
+        """
+        emb:    [N, C]  前景样本 embedding（比如 320 维）
+        labels: [N]     每个样本的标签（0=正常, 1=扭曲）
+        """
+        device = emb.device
+        N = emb.size(0)
 
-        eps = 1e-8
+        if N <= 1:
+            return emb.new_tensor(0.0)
 
-        # 同类：希望距离趋向 0
-        pos_loss = (same_mask * dist.pow(2)).sum() / (same_mask.sum() + eps)
+        # 相似度矩阵 [N, N]，用 cosine/temperature
+        sim = torch.matmul(emb, emb.T) / temperature  # [N, N]
 
-        # 异类：希望距离至少大于 margin
-        neg_loss = (diff_mask * F.relu(margin - dist).pow(2)).sum() / (diff_mask.sum() + eps)
+        # 构造正样本 mask：同类为 1
+        labels = labels.view(-1, 1)  # [N,1]
+        mask = torch.eq(labels, labels.T).float()  # [N,N]
 
-        loss = pos_loss + neg_loss
+        # 去掉对角线（自己和自己不算）
+        logits_mask = torch.ones_like(mask) - torch.eye(N, device=device)
+        mask = mask * logits_mask
+
+        # InfoNCE / SupCon 公式
+        exp_sim = torch.exp(sim) * logits_mask  # [N,N]
+        log_prob = sim - torch.log(exp_sim.sum(dim=1, keepdim=True) + 1e-8)
+
+        # 只对正样本对求平均
+        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-8)
+
+        # 取负号，再对所有样本平均
+        loss = -mean_log_prob_pos.mean()
         return loss
 
     def _att_df_loss(

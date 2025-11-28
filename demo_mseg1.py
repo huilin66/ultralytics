@@ -22,20 +22,21 @@ SEG_WEIGHT10_v12 = r'runs/segment/fusedata7961_seg_c5_1106_v12_src-[yolov10x-seg
 DATA0 = "fusedata7961_mseg_c5_l2_1112_v16_test.yaml"
 DATA1 = "fusedata7961_mseg_c5_l2_1113_v17_test_rs.yaml"
 
-MODEL4_S = 'yolov10x-mseg-dlka3res-7-unet-single.yaml'
-MODEL4_ST = 'yolov10x-mseg-dlka3res-7-unet-single-texture.yaml'
-DATA_SB1 = "fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v3.yaml"
+DATA_TEST = "data80_v21_b_test.yaml"
+MODEL4_S = 'yolov10x-mseg-dlka3res-7-unet-single-ContrastLoss.yaml'
+MODEL4_ST = 'yolov10x-mseg-dlka3res-7-unet-single-texture-ContrastLoss.yaml'
+DATA_SB1 = "fusedata7961_mseg_c5_l2_1123_v22_sb_test_broken_syn_v4.yaml"
 DATA_SB2 = "fusedata7961_mseg_c5_l2_1117_v20_sb_test_broken_syn_v1.yaml"
 
 if __name__ == '__main__':
     pass
     demo_base.yolo10(
         MODEL4_ST, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True,
+        mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True, contrastive_loss_weight=0.5
     )
     demo_base.yolo10(
-        MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True,
+        MODEL4_ST, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
+        mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True, contrastive_loss_weight=0.1
     )
     # demo_base.yolo10(
     #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB2, auto_optim=False, retrain=True,

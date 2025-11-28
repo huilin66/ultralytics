@@ -80,7 +80,11 @@ if __name__ == '__main__':
         # 'val901', # 32
         # 'val902', # 38
         # 'val903', # 49
-        'val913',  # 49
+        # 'val913',  # 49
+        # 'val915',  # 49
+        # 'val916',  # 47
+        'val917',  # 36
+        # 'val918',  # 37
     ]
     for val in val_list:
         val_dir_b = os.path.join(r'/localnvme/project/ultralytics/runs/msegment', val)
@@ -97,4 +101,4 @@ if __name__ == '__main__':
 
         pred2cfm_risk_single(label_dir, pred_dir_b, pred_dir_b, pred_dir_b, pred_dir_b, pred_dir_all,
                              save_dir, att_file, class_file, with_conf=True, iou_thr=0.3, conf_threshold=0.4, only_save=False,
-                             defect_conf_threshold=0.5, filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk3', 'risk2'])
+                             defect_conf_threshold=0.4, filter_small=0.05, keep='ignore_other_pred_frame', show_list=['risk3', 'risk2'])

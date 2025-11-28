@@ -93,8 +93,8 @@ if __name__ == '__main__':
     # demo_base.model_val(r'/localnvme/project/ultralytics/runs/msegment/fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v1-[yolov10x-mseg-dlka3res-7-unet-single]2/weights_cp/last.pt',
     #                     conf=0.1, weight_name=False, save_txt=save_txt, save_conf=save_conf, iou=iou, data=DATA_SB21_test)
 
-    demo_base.model_val(r'/localnvme/project/ultralytics/runs/msegment/fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v3-[yolov10x-mseg-dlka3res-7-unet-single-texture]2/weights/epoch47.pt',
-                        conf=0.1, weight_name=False, save_txt=save_txt, save_conf=save_conf, iou=iou, data=DATA_SB21_test)
+    # demo_base.model_val(r'/localnvme/project/ultralytics/runs/msegment/fusedata7961_mseg_c5_l2_1123_v22_sb_test_broken_syn_v4-[yolov10x-mseg-dlka3res-7-unet-single-texture-ContrastLoss]3/weights/epoch37.pt',
+    #                     conf=0.1, weight_name=False, save_txt=save_txt, save_conf=save_conf, iou=iou, data=DATA_SB21_test)
 
     # demo_base.model_predict('/localnvme/project/ultralytics/runs/msegment/fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v1-[yolov10x-mseg-dlka3res-7-unet-single]2/weights_cp/last.pt',
     #                         r'/scrinvme/huilin/isds/other_data/1118_copy/synthetic_data_add6_v1',
@@ -135,6 +135,4 @@ if __name__ == '__main__':
     #                        )
     # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1111_v15_test-[yolov10x-mseg-dlka3res-7-unet-sep]3', imgsz=(608,992), batch=6,)
     # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1111_v15_sd_test-[yolov10x-mseg-dlka3res-7-unet-single]', imgsz=(608,992), batch=6,)
-    # demo_base.model_export(r'/localnvme/project/ultralytics/runs/msegment/fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v3-[yolov10x-mseg-dlka3res-7-unet-single-texture]2/weights/epoch49.pt', weight_name=False,  imgsz=(608,992), batch=6,)
-    # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1111_v15_sa_test-[yolov10x-mseg-dlka3res-7-unet-single]', imgsz=(608,992), batch=6,)
-    # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1111_v15_sc_test-[yolov10x-mseg-dlka3res-7-unet-single]', imgsz=(608,992), batch=6,)
+    demo_base.model_export(r'/localnvme/project/ultralytics/runs/msegment/fusedata7961_mseg_c5_l2_1123_v22_sb_test_broken_syn_v4-[yolov10x-mseg-dlka3res-7-unet-single-texture-ContrastLoss]3/weights/epoch36.pt', weight_name=False,  imgsz=(608,992), batch=6,)

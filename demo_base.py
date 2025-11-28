@@ -1,5 +1,7 @@
 import os
 import torch
+from dotenv import load_dotenv
+load_dotenv('ultralytics/cfg/.env')
 from ultralytics import YOLO
 
 BATCH_SIZE = 32

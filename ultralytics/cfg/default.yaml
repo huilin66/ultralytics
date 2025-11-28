@@ -40,6 +40,7 @@ freeze_head: None
 freeze_bn: False
 multi_scale: False # (bool) Whether to use multiscale during training
 contrastive_loss: False
+contrastive_loss_weight: 0.1
 # Attribute
 eval_att_by_class: True
 freeze_att_head: None

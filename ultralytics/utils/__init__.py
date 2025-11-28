@@ -494,6 +494,18 @@ def yaml_save(file="data.yaml", data=None, header=""):
         yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
 
 
+def _expand_env(obj):
+    if isinstance(obj, str):
+        return os.path.expandvars(obj)
+    elif isinstance(obj, dict):
+        return {k: _expand_env(v) for k,v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        t = obj.__class__
+        return t(_expand_env(v) for v in obj)
+    else:
+        return obj
+
+
 def yaml_load(file="data.yaml", append_filename=False):
     """
     Load YAML data from a file.
@@ -515,6 +527,7 @@ def yaml_load(file="data.yaml", append_filename=False):
 
         # Add YAML filename to dict and return
         data = yaml.safe_load(s) or {}  # always return a dict (yaml.safe_load() may return None for empty files)
+        data = _expand_env(data)
         if append_filename:
             data["yaml_file"] = str(file)
         return data
