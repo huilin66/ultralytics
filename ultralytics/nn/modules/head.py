@@ -742,6 +742,232 @@ class YOLOEDetect(Detect):
             c.bias.data[:] = math.log(5 / m.nc / (640 / s) ** 2)
 
 
+class ConvBlock(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.SiLU(inplace=True),
+        )
+
+    def forward(self, x):
+        return self.block(x)
+
+
+class MoE_Fusion(nn.Module):
+    def __init__(self, channels, num_experts=4, top_k=2):
+        super().__init__()
+        self.num_experts = num_experts
+        self.top_k = top_k
+        in_ch = channels * 2
+        self.experts = nn.ModuleList([
+            ConvBlock(in_ch, channels) for _ in range(num_experts)
+        ])
+        self.router = nn.Sequential(
+            nn.Linear(channels * 2, channels, bias=False),
+            nn.SiLU(inplace=True),
+            nn.Linear(channels, num_experts, bias=False)
+        )
+
+    def forward(self, E, D):
+        """
+        E, D: [B, C, H, W]
+        return: [B, C, H, W]
+        """
+        B, C, H, W = E.shape
+
+        e_pool = F.adaptive_avg_pool2d(E, 1).view(B, C)
+        d_pool = F.adaptive_avg_pool2d(D, 1).view(B, C)
+        router_inp = torch.cat([e_pool, d_pool], dim=1)
+
+        logits = self.router(router_inp)
+        gate = F.softmax(logits, dim=-1)
+
+        if self.top_k is not None and self.top_k < self.num_experts:
+            topk_val, topk_idx = torch.topk(gate, self.top_k, dim=-1)
+            mask = torch.zeros_like(gate)
+            mask.scatter_(1, topk_idx, 1.0)
+            gate = gate * mask
+            gate = gate / (gate.sum(dim=-1, keepdim=True) + 1e-9)
+
+        x = torch.cat([E, D], dim=1)
+        out = 0.0
+        for i, expert in enumerate(self.experts):
+            w = gate[:, i].view(B, 1, 1, 1)
+            out = out + w * expert(x)
+
+        return out
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class DWConvBlock(nn.Module):
+    """深度可分离卷积块，参数 & 激活都很省"""
+    def __init__(self, channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            # depthwise conv
+            nn.Conv2d(channels, channels, 3, padding=1, groups=channels, bias=False),
+            nn.BatchNorm2d(channels),
+            nn.SiLU(inplace=True),
+            # pointwise conv
+            nn.Conv2d(channels, channels, 1, bias=False),
+            nn.BatchNorm2d(channels),
+            nn.SiLU(inplace=True),
+        )
+
+    def forward(self, x):
+        return self.block(x)
+
+
+class TinyMoE_Fusion(nn.Module):
+    """
+    低显存版 MoE 用于 U-Net YOLO 的 encoder-decoder 特征融合
+    E, D: [B, C, H, W] -> out: [B, C, H, W]
+    """
+    def __init__(self, channels, num_experts=3, top_k=2, reduction=4):
+        super().__init__()
+        assert num_experts >= 2
+        assert top_k <= num_experts
+
+        self.num_experts = num_experts
+        self.top_k = top_k
+
+        # 1. 先把 concat 后的 2C 压到 C_r（比如 C/2 或 C/4）
+        cr = max(channels // reduction, 8)  # 最少留一点通道
+        self.cr = cr
+
+        self.pre_reduce = nn.Conv2d(channels * 2, cr, 1, bias=False)
+        self.pre_bn = nn.BatchNorm2d(cr)
+        self.pre_act = nn.SiLU(inplace=True)
+
+        # 2. 轻量 expert：在 C_r 通道上做 DWConvBlock
+        self.experts = nn.ModuleList([
+            DWConvBlock(cr) for _ in range(num_experts)
+        ])
+
+        # 3. Router：用 GAP 后的向量路由（batch-wise 路由）
+        self.router = nn.Sequential(
+            nn.Linear(cr, cr, bias=False),
+            nn.SiLU(inplace=True),
+            nn.Linear(cr, num_experts, bias=False)
+        )
+
+        # 4. MoE 输出再投回 C 通道
+        self.post_expand = nn.Conv2d(cr, channels, 1, bias=False)
+        self.post_bn = nn.BatchNorm2d(channels)
+        self.post_act = nn.SiLU(inplace=True)
+
+    def forward(self, E, D):
+        B, C, H, W = E.shape
+
+        # concat + 通道压缩
+        x = torch.cat([E, D], dim=1)          # [B, 2C, H, W]
+        x = self.pre_act(self.pre_bn(self.pre_reduce(x)))  # [B, C_r, H, W]
+
+        # Router 输入：GAP 之后的 [B, C_r]
+        pooled = F.adaptive_avg_pool2d(x, 1).view(B, self.cr)
+        logits = self.router(pooled)                 # [B, num_experts]
+        gate = F.softmax(logits, dim=-1)             # [B, num_experts]
+
+        # top-k gating（仍然是 MoE 逻辑）
+        if self.top_k < self.num_experts:
+            topk_val, topk_idx = torch.topk(gate, self.top_k, dim=-1)  # [B, k]
+            mask = torch.zeros_like(gate)
+            mask.scatter_(1, topk_idx, 1.0)
+            gate = gate * mask
+            gate = gate / (gate.sum(dim=-1, keepdim=True) + 1e-9)
+
+        # 计算 experts（在压缩后的通道上，省显存）
+        out = 0.0
+        for i, expert in enumerate(self.experts):
+            # 注意：这里仍然是所有 expert 都 forward 一遍，
+            # 但通道是 C_r << C，激活会小很多
+            y = expert(x)                           # [B, C_r, H, W]
+            w = gate[:, i].view(B, 1, 1, 1)        # [B,1,1,1]
+            out = out + w * y
+
+        # 投回原通道数
+        out = self.post_act(self.post_bn(self.post_expand(out)))  # [B, C, H, W]
+
+        return out
+
+class YOLODetectU(Detect):
+
+    def __init__(self, nc: int = 80, unet_method: str = 'none', ch: tuple = ()):
+        ch = ch[:3]
+        super().__init__(nc, ch)
+        c2, c3 = max((16, ch[0] // 4, self.reg_max * 4)), max(ch[0], min(self.nc, 100))  # channels
+        self.ch = ch
+        self.unet_method = unet_method
+        if self.unet_method == 'unet':
+            self.cv2 = nn.ModuleList(
+                nn.Sequential(Conv(x*2, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch
+            )
+            self.cv3 = (
+                nn.ModuleList(nn.Sequential(Conv(x*2, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
+                if self.legacy
+                else nn.ModuleList(
+                    nn.Sequential(
+                        nn.Sequential(DWConv(x*2, x*2, 3), Conv(x*2, c3, 1)),
+                        nn.Sequential(DWConv(c3, c3, 3), Conv(c3, c3, 1)),
+                        nn.Conv2d(c3, self.nc, 1),
+                    )
+                    for x in ch
+                )
+            )
+        elif self.unet_method == 'unet-cls':
+            self.cv3 = (
+                nn.ModuleList(nn.Sequential(Conv(x*2, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
+                if self.legacy
+                else nn.ModuleList(
+                    nn.Sequential(
+                        nn.Sequential(DWConv(x*2, x*2, 3), Conv(x*2, c3, 1)),
+                        nn.Sequential(DWConv(c3, c3, 3), Conv(c3, c3, 1)),
+                        nn.Conv2d(c3, self.nc, 1),
+                    )
+                    for x in ch
+                )
+            )
+        elif self.unet_method == 'moe':
+            self.moe = nn.ModuleList(MoE_Fusion(channels=x, num_experts=4, top_k=2) for x in ch)
+        elif self.unet_method == 'moe-tiny':
+            self.moe = nn.ModuleList(TinyMoE_Fusion(channels=x, num_experts=4, top_k=2) for x in ch)
+
+
+    def forward(self,x: list[torch.Tensor]) -> list[torch.Tensor] | tuple:
+        if self.unet_method in ['unet', 'unet-cls']:
+            self.nl = 3
+            x_cat = [
+                torch.cat([x[0], x[3]], dim=1),
+                torch.cat([x[1], x[4]], dim=1),
+                torch.cat([x[2], x[5]], dim=1),
+            ]
+            x = x[:3]
+        elif self.unet_method in ['moe', 'moe-tiny']:
+            self.nl = 3
+            x_cat = x[:3]
+            for i in range(self.nl):
+                x_cat[i] = self.moe[i](x[i], x[i+3])
+            x = x[:3]
+        else:
+            x_cat = x
+        for i in range(self.nl):
+            if self.unet_method == 'unet':
+                x[i] = torch.cat((self.cv2[i](x_cat[i]), self.cv3[i](x_cat[i])), 1)
+            elif self.unet_method == 'unet-cls':
+                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x_cat[i])), 1)
+            else:
+                x[i] = torch.cat((self.cv2[i](x_cat[i]), self.cv3[i](x_cat[i])), 1)
+        if self.training:  # Training path
+            return x
+        y = self._inference(x)
+        return y if self.export else (y, x)
+
 class YOLOESegment(YOLOEDetect):
     """YOLO segmentation head with text embedding capabilities.
 
