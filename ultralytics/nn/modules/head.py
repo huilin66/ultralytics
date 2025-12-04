@@ -759,7 +759,7 @@ class ConvBlock(nn.Module):
 
 
 class MoE_Fusion(nn.Module):
-    def __init__(self, channels, num_experts=4, top_k=2):
+    def __init__(self, channels, num_experts=4, top_k=2, ):
         super().__init__()
         self.num_experts = num_experts
         self.top_k = top_k
