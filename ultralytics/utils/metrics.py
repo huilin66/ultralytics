@@ -194,7 +194,8 @@ def _get_covariance_matrix(boxes: torch.Tensor) -> tuple[torch.Tensor, torch.Ten
         boxes (torch.Tensor): A tensor of shape (N, 5) representing rotated bounding boxes, with xywhr format.
 
     Returns:
-        (torch.Tensor): Covariance matrices corresponding to original rotated bounding boxes.
+        (tuple[torch.Tensor, torch.Tensor, torch.Tensor]): Covariance matrix components (a, b, c) where the covariance
+            matrix is [[a, c], [c, b]], each of shape (N, 1).
     """
     # Gaussian bounding boxes, ignore the center points (the first two columns) because they are not needed here.
     gbbs = torch.cat((boxes[:, 2:4].pow(2) / 12, boxes[:, 4:]), dim=-1)
@@ -309,7 +310,7 @@ class ConfusionMatrix(DataExportMixin):
     Attributes:
         task (str): The type of task, either 'detect' or 'classify'.
         matrix (np.ndarray): The confusion matrix, with dimensions depending on the task.
-        nc (int): The number of category.
+        nc (int): The number of classes.
         names (list[str]): The names of the classes, used as labels on the plot.
         matches (dict): Contains the indices of ground truths and predictions categorized into TP, FP and FN.
     """
