@@ -1,4 +1,6 @@
 import os
+import sys
+import yaml
 import torch
 from dotenv import load_dotenv
 load_dotenv('ultralytics/cfg/.env')
@@ -22,10 +24,41 @@ FREEZE_NUMS = {
 }
 
 # region meta tools
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for s in self.streams:
+            try:
+                s.write(data)
+            except Exception:
+                pass
+        return len(data)
+
+    def flush(self):
+        for s in self.streams:
+            try:
+                s.flush()
+            except Exception:
+                pass
+
+
+def tee_log_to_run_dir(trainer):
+    save_dir = trainer.save_dir
+    log_fp = open(os.path.join(save_dir, 'console.log'), 'w', buffering=1, encoding='utf-8')
+
+    stdout_orig = sys.__stdout__
+    stderr_orig = sys.__stderr__
+
+    sys.stdout = Tee(stdout_orig, log_fp)
+    sys.stderr = Tee(stderr_orig, log_fp)
+
 
 def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
     model = network(cfg_path, task=TASK)
     model.load(pretrain_path)
+    model.add_callback("on_train_start", tee_log_to_run_dir)
     train_params = {
         'data': DATA,
         'device': DEVICE,
@@ -67,6 +100,7 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
 def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwargs):
     if weight_name:
         weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
+
     print(f'val with {weight_path}')
     model = network(weight_path, task=TASK)
 
@@ -78,6 +112,13 @@ def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwa
     }
     val_params.update(kwargs)
     result = model.val(**val_params)
+
+    args_path = os.path.join(os.path.dirname(os.path.dirname(weight_path)), 'args.yaml')
+    print('project information:')
+    with open(args_path, 'r') as f:
+        data = yaml.load(f, Loader=yaml.FullLoader)
+        print(data)
+    print('============FINISH=============')
     return result
 
 def model_predict(weight_path, img_dir, weight_name=True, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):

@@ -11,45 +11,59 @@ demo_base.BATCH_SIZE = 8
 
 if __name__ == '__main__':
     pass
-    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2_v3_rel.yaml", name='debug', epochs=1, batch=4)
-    # img_dir = r'/localnvme/data/bdd/DReality_data/yolo_clip_v2/images'
-    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv1.yaml")
-    # demo_base.model_val('dreality_1c_fv2_v3-[yolov8x]')
-    # demo_base.model_val('dreality_1c_fv1-[yolov8x]7')
-    # demo_base.model_predict('dreality_1c_fv1-[yolov8x]6',
-    #                         img_dir,
-    #                         name=img_dir+'_infer',
-    #                         batch=16, save_txt=True, conf=0.01,
-    #                         )
-    # demo_base.model_predict('dreality_1c_fv1-[yolov8x]7',
-    #                         img_dir,
-    #                         name=img_dir+'_infer',
-    #                         batch=16, save_txt=True, conf=0.01,
-    #                         )
-    # demo_base.model_predict('dreality_1c_fv1-[yolov8x]7',
-    #                         img_dir,
-    #                         name=img_dir+'_infer',
-    #                         batch=16, save_txt=True, conf=0.01, imgsz=1280,
-    #                         )
-    # demo_base.model_predict('dreality_1c_fv2-[yolov8x]',
-    #                         img_dir,
-    #                         name=img_dir+'_infer',
-    #                         batch=16, save_txt=True, conf=0.01,
-    #                         )
-    # demo_base.model_predict('dreality_1c_fv2-[yolov8x]2',
-    #                         img_dir,
-    #                         name=img_dir+'_infer',
-    #                         batch=16, save_txt=True, conf=0.01,
-    #                         )
-    # demo_base.model_predict('dreality_1c_fv2-[yolov8x]2',
-    #                         img_dir,
-    #                         name=img_dir+'_infer',
-    #                         batch=16, save_txt=True, conf=0.01, imgsz=1280,
-    #                         )
-    demo_base.model_track('dreality_1c_fv2_v3-[yolov8x]',
-                            r'/localnvme/data/bdd/DReality_data/video_data/V6_DJI_0344_W_CLIP1.MP4',
-                            # tracker='bytetrack.yaml',
-                            tracker='botsort.yaml',
-                            imgsz=1280,
-                            batch=32, save_txt=True, conf=0.3, save_conf=True
-                            )
+    # demo_base.model_val('hmt_rgb_p12-[yolov8x]5', batch=32)
+    # demo_base.model_val('hmt_rgb_p12-[yolov8x]6', batch=32)
+    #
+    # demo_base.model_val('hmt_rgb_p12_s640-[yolov8x]5', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_s640-[yolov8x]6', batch=32)
+    #
+    # demo_base.model_val('hmt_rgb_p12_s960-[yolov8x]3', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_s960-[yolov8x]4', batch=32)
+    #
+    # demo_base.model_val('hmt_rgb_p12_s1280-[yolov8x]3', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_s1280-[yolov8x]4', batch=32)
+    #
+    #
+    # demo_base.model_val('hmt_rgb_p12_v2-[yolov8x]', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2-[yolov8x]2', batch=32)
+    #
+    # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov8x]', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov8x]2', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov8x]3', batch=32)
+    #
+    # demo_base.model_val('hmt_rgb_p12_v2_s960-[yolov8x]', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2_s960-[yolov8x]2', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2_s960-[yolov8x]3', batch=32)
+    #
+    # demo_base.model_val('hmt_rgb_p12_v2_s1280-[yolov8x]', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2_s1280-[yolov8x]2', batch=32)
+    # demo_base.model_val('hmt_rgb_p12_v2_s1280-[yolov8x]3', batch=32)
+
+
+    # demo_base.model_val('hmt_t_p12_v3-[yolov8x]2')
+    # demo_base.model_val('hmt_t_p12_v3-[yolov8x]3')
+    # demo_base.model_val('hmt_t_p12_v3-[yolov8x]4')
+    # demo_base.model_val('hmt_t_p12_v3-[yolov8x]5')
+    #
+    # demo_base.model_val('hmt_t_p12_v4-[yolov8x]')
+    #
+    # demo_base.model_val('hmt_t_p123_v4-[yolov8x]')
+    # demo_base.model_val('hmt_t_p123_v4-[yolov8x]2')
+    # demo_base.model_val('hmt_t_p123_v4-[yolov8x]3')
+    # demo_base.model_val('hmt_t_p123_v4-[yolov8x]4')
+
+    # demo_base.model_val('hmt_t_p123_v41-[yolov8x]2')
+
+    import os
+    root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/thermal_views'
+    infer_dir = root_dir + '_infer2'
+    data_list = os.listdir(root_dir)
+    os.makedirs(infer_dir, exist_ok=True)
+    for data_name in data_list:
+        data_path = os.path.join(root_dir, data_name)
+        infer_path = os.path.join(infer_dir, data_name)
+        if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
+            demo_base.model_predict('hmt_t_p123_v41-[yolov8x]2',
+                                    data_path,
+                                    name=infer_path,
+                                    batch=32, save_conf=True)

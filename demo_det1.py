@@ -2,19 +2,41 @@ import demo_base
 import torch
 
 demo_base.TASK = 'detect'
-demo_base.EPOCHS = 300
-demo_base.IMGSZ = 1280
+demo_base.EPOCHS = 500
+demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device('cuda:0')
-demo_base.BATCH_SIZE = 8
+demo_base.BATCH_SIZE = 16
 # demo_base.DATA = ".yaml"
 # demo_base.CONF = 0.5
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2_v3.yaml")
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2.yaml")
-    # demo_base.model_val('/localnvme/project/ultralytics/runs/detect/obj_t-[yolov8x]5/weights/best.pt', batch=32)
-    # demo_base.model_predict('/localnvme/project/ultralytics/runs/detect/obj_t-[yolov8x]5/weights/best.pt',
-    #                         r'/localnvme/data/added_data/rgbt/Testset/TIR',
-    #                         name=r'/localnvme/data/added_data/rgbt/Testset/TIR_infer_obj_rgb-[yolov8x]-%.2f'%demo_base.CONF,
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_s640.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v2_s640.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v3_s640.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_s960.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v2_s960.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v3_s960.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v2.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v3.yaml', imgsz=640)
+
+
+    # demo_base.model_predict('hmt_t_p12-[yolov8x]3',
+    #                         r'/scrinvme/huilin/bdd/collected_data/HMT_data/data/thermal',
+    #                         name=r'/scrinvme/huilin/bdd/collected_data/HMT_data/data/thermal_infer',
     #                         batch=32, save_conf=True)
+    # import os
+    # root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/thermal_views'
+    # infer_dir = root_dir + '_infer'
+    # data_list = os.listdir(root_dir)
+    # os.makedirs(infer_dir, exist_ok=True)
+    # for data_name in data_list:
+    #     data_path = os.path.join(root_dir, data_name)
+    #     infer_path = os.path.join(infer_dir, data_name)
+    #     if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
+    #         demo_base.model_predict('hmt_t_p123_v4-[yolov8x]',
+    #                                 data_path,
+    #                                 name=infer_path,
+    #                                 batch=32, save_conf=True)
