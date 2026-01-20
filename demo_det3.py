@@ -46,13 +46,17 @@ if __name__ == '__main__':
     # demo_base.model_val('hmt_t_p123_v41-[yolov10x]')
     # demo_base.model_val('hmt_t_p123_v41-[yolo12x]7')
     #
-    # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov8x]5')
+    demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov8x]5')
     # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolo11x]')
     # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov9e]')
     # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolov10x]')
     # demo_base.model_val('hmt_rgb_p12_v2_s640-[yolo12x]')
 
 
+    demo_base.model_val('hmt_rgb_p12_v3-[yolov8x]2')
+    demo_base.model_val('hmt_rgb_p12_v4-[yolov8x]')
+    demo_base.model_val('hmt_rgb_p12_v3_s640-[yolov8x]')
+    demo_base.model_val('hmt_rgb_p12_v4_s640-[yolov8x]')
 
     # demo_base.model_val('hmt_t_p12_v4-[yolov8x]')
     #
@@ -63,16 +67,16 @@ if __name__ == '__main__':
 
     # demo_base.model_val('hmt_t_p123_v41-[yolov8x]2')
 
-    import os
-    root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/thermal_views'
-    infer_dir = root_dir + '_infer3'
-    data_list = os.listdir(root_dir)
-    os.makedirs(infer_dir, exist_ok=True)
-    for data_name in data_list:
-        data_path = os.path.join(root_dir, data_name)
-        infer_path = os.path.join(infer_dir, data_name)
-        if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
-            demo_base.model_predict('hmt_t_p123_v41-[yolo11x]',
-                                    data_path,
-                                    name=infer_path,
-                                    batch=32, save_conf=True)
+    # import os
+    # root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/thermal_views'
+    # infer_dir = root_dir + '_infer3'
+    # data_list = os.listdir(root_dir)
+    # os.makedirs(infer_dir, exist_ok=True)
+    # for data_name in data_list:
+    #     data_path = os.path.join(root_dir, data_name)
+    #     infer_path = os.path.join(infer_dir, data_name)
+    #     if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
+    #         demo_base.model_predict('hmt_t_p123_v41-[yolo11x]',
+    #                                 data_path,
+    #                                 name=infer_path,
+    #                                 batch=32, save_conf=True)
