@@ -125,7 +125,7 @@ def mayolo(cfg_path, weight_path='yolov10x.pt', auto_optim=False, retrain=False,
 
 if __name__ == '__main__':
     pass
-    # region object detection results of different models
+    # # region object detection results of different models
     # model_val(r'runs/exp_results/exp_yolo8n/weights/best.pt')
     # model_val(r'runs/exp_results/exp_yolo8s/weights/best.pt')
     # model_val(r'runs/exp_results/exp_yolo8m/weights/best.pt')
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     # model_val(r'runs/exp_results/exp_mayolob_/weights/best.pt')
     # model_val(r'runs/exp_results/exp_mayolol_/weights/best.pt')
     # model_val(r'runs/exp_results/exp_mayolox_/weights/best.pt')
-    # endregion
+    # # endregion
 
     # region scale comparison
     # early stage, no sigmoid

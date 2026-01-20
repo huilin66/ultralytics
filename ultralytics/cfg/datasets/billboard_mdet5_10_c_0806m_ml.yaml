@@ -1,0 +1,20 @@
+path: /nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c_ml # dataset root dir
+train: train.txt # train images (relative to 'path') 118287 images
+val: val.txt # val images (relative to 'path') 5000 images
+test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+names:
+  0: background
+  1: wall_signboard
+  2: projecting_signboard
+  3: surface_missing
+  4: surface_incomplete
+  5: surface_corroded
+  6: frame_corroded
+  7: surface_peeling
+  8: surface_fade
+  9: surface_deformed
+  10: frame_deformed
+  11: disconnected
+  12: added_billboard
