@@ -1158,7 +1158,7 @@ class MDetMetrics(SimpleClass):
                 print('Error in get_attribute_names')
         self.attribute_names = attribute_names
 
-    def process(self, tp, ap, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1):
+    def process(self, tp, ap, conf, pred_cls, target_cls, pred_attributes, target_attributes, f1, precision=None, recall=None):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1173,27 +1173,33 @@ class MDetMetrics(SimpleClass):
         self.box.nc = self.nc
         self.box.update(results)
         self.attributes.nc = self.na
-        self.attributes.all_ap = np.mean(ap, axis=0)
-        self.attributes.f1 = np.mean(f1)
+        self.attributes.all_ap = ap
+        self.attributes.all_f1 = f1
+        self.attributes.all_precision = precision
+        self.attributes.all_recall = recall
+        self.attributes.mean_ap = float(np.mean(ap))
+        self.attributes.mean_f1 = float(np.mean(f1))
+        self.attributes.mean_precision = float(np.mean(precision))
+        self.attributes.mean_recall = float(np.mean(recall))
         # self.attribute_names = self.get_attribute_names(self.attribute_names)
 
 
     @property
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mAP", "metrics/F1"]
+        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mOA", "metrics/F1", "metrics/Precision", "metrics/Recall"]
 
 
     def mean_results(self):
         """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results() + [self.attributes.map, self.attributes.f1]
+        return self.box.mean_results() + [self.attributes.mean_ap, self.attributes.mean_f1, self.attributes.mean_precision, self.attributes.mean_recall]
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
         if i < self.nc:
-            return self.box.class_result(i) + (0, 0)
+            return self.box.class_result(i) + (0, 0, 0, 0)
         else:
-            return (0, 0, 0, 0) + (self.attributes.all_ap[i-self.nc], 0)
+            return (0, 0, 0, 0) + (self.attributes.all_ap[i-self.nc], self.attributes.all_f1[i-self.nc], self.attributes.all_precision[i-self.nc], self.attributes.all_recall[i-self.nc])
 
     @property
     def maps(self):

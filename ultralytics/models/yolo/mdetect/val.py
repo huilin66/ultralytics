@@ -91,12 +91,12 @@ class MDetectionValidator(BaseValidator):
         self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], ap=[], f1=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
+        self.stats = dict(tp=[], ap=[], f1=[], precision=[], recall=[],conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[])
         self.att_threshold = self.args.att_threshold
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 8) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)", "OA", "F1")
+        return ("%22s" + "%11s" * 10) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)", "OA", "F1", "Precision", "Recall")
 
     def postprocess(self, preds):
         """Apply Non-maximum suppression to prediction outputs."""
@@ -145,7 +145,9 @@ class MDetectionValidator(BaseValidator):
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 pred_attributes=torch.zeros(0, device=self.device),
                 ap = torch.zeros((0, self.na), device=self.device),
-                f1 = torch.zeros(0, device=self.device),
+                f1 = torch.zeros((0, self.na), device=self.device),
+                precision = torch.zeros((0, self.na), device=self.device),
+                recall = torch.zeros((0, self.na), device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, mdet_attributes = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("mdet_attributes")
@@ -171,7 +173,7 @@ class MDetectionValidator(BaseValidator):
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"], stat["f1"] = self._process_batch(predn, bbox, cls, mdet_attributes)
+                stat["tp"], stat["ap"], stat["f1"], stat["precision"], stat["recall"] = self._process_batch(predn, bbox, cls, mdet_attributes)
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
             for k in self.stats.keys():
@@ -216,6 +218,7 @@ class MDetectionValidator(BaseValidator):
                 LOGGER.info(pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i)))
             LOGGER.info('-'*20*(3+len(self.metrics.keys)))
             for i in range(self.nc, self.nc+self.na):
+                data_test = self.metrics.class_result(i)
                 LOGGER.info(pf % (self.metrics.attribute_names[i-self.nc], 0, self.nt_per_class[0], *self.metrics.class_result(i)))
 
         if self.args.plots:
@@ -243,80 +246,104 @@ class MDetectionValidator(BaseValidator):
     def match_predictions(self, pred_classes, true_classes, iou, pred_attributes,
                           gt_attributes, use_scipy=False):
         """
-        Matches predictions to ground truth objects (pred_classes, true_classes) using IoU.
-
-        Args:
-            pred_classes (torch.Tensor): Predicted class indices of shape(N,).
-            true_classes (torch.Tensor): Target class indices of shape(M,).
-            iou (torch.Tensor): An NxM tensor containing the pairwise IoU values for predictions and ground of truth
-            use_scipy (bool): Whether to use scipy for matching (more precise).
-
-        Returns:
-            (torch.Tensor): Correct tensor of shape(N,10) for 10 IoU thresholds.
+        修正后的函数：
+        1. 执行贪婪匹配。
+        2. 计算并返回 F1 (Per-Attribute)。
+        3. 【修改】计算并返回 AP (Per-Attribute Overall Accuracy, 10个值)。
         """
         # Dx10 matrix, where D - detections, 10 - IoU thresholds
         correct = np.zeros((pred_classes.shape[0], self.iouv.shape[0])).astype(bool)
         # LxD matrix where L - labels (rows), D - detections (columns)
-        correct_class = true_classes[:, None] == pred_classes
 
-        iou = iou * correct_class  # zero out the wrong classes
-
-        pred_attributes_result = torch.where(pred_attributes > self.att_threshold, 1, 0)
-
-        iou50 = iou >= 0.5
-        correct_box = correct_class & iou50 # n * 300
-        # gt_attributes: n * 14, pred_attributes_result: 300 * 14 --> correct_attributes: n * 300 * 14
-        correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
-
-        ap = []
-        # correct_attributes: n * 300 * 14 --> m *14
-        for i in range(correct_attributes.shape[0]):
-            ca = correct_attributes[i][correct_box[i]]
-            p = torch.mean(ca.float(), axis=0) if ca.shape[0] > 0 else torch.zeros(gt_attributes.shape[-1], device=self.device)
-            ap.append(p.unsqueeze(0))
-        ap = torch.cat(ap, dim=0)
-
-        # Compute True Positives (TP)
-        tp = torch.sum(correct_box, dim=1)  # Sum over detections (columns) to get per-ground-truth TP
-
-        # Compute False Negatives (FN)
-        fn = torch.sum(~torch.any(correct_box, dim=0))  # Ground truth boxes not matched to any predictions
-
-        # Compute False Positives (FP)
-        fp = torch.sum(~torch.any(correct_box, dim=1))  # Prediction boxes not matched to any ground truth
-
-        # Avoid division by zero
-        precision = tp / (tp + fp + 1e-8)
-        recall = tp / (tp + fn + 1e-8)
-
-        # Compute F1 score
-        f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
-
-        iou = iou.cpu().numpy()
-
+        iou_np = iou.cpu().numpy()
         for i, threshold in enumerate(self.iouv.cpu().tolist()):
             if use_scipy:
                 # WARNING: known issue that reduces mAP in https://github.com/ultralytics/ultralytics/pull/4708
                 import scipy  # scope import to avoid importing for all commands
 
-                cost_matrix = iou * (iou >= threshold)
+                cost_matrix = iou_np * (iou_np >= threshold)
                 if cost_matrix.any():
-                    labels_idx, detections_idx = scipy.optimize.linear_sum_assignment(cost_matrix, maximize=True)
+                    labels_idx, detections_idx = scipy.optimize.linear_sum_assignment(cost_matrix)
                     valid = cost_matrix[labels_idx, detections_idx] > 0
                     if valid.any():
                         correct[detections_idx[valid], i] = True
             else:
-                matches = np.nonzero(iou >= threshold)  # IoU > threshold and classes match
+                matches = np.nonzero(iou_np >= threshold)  # IoU > threshold and classes match
                 matches = np.array(matches).T
                 if matches.shape[0]:
                     if matches.shape[0] > 1:
-                        matches = matches[iou[matches[:, 0], matches[:, 1]].argsort()[::-1]]
+                        matches = matches[iou_np[matches[:, 0], matches[:, 1]].argsort()[::-1]]
                         matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
-                        # matches = matches[matches[:, 2].argsort()[::-1]]
                         matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
                     correct[matches[:, 1].astype(int), i] = True
+
         correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
-        return correct, ap, f1
+
+        # attribute result
+        pred_attributes_result = torch.floor(pred_attributes * 2).long()
+        pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=1)
+
+        matched_box = torch.zeros_like(iou, dtype=torch.bool, device=iou.device)
+        matches50 = np.array(np.nonzero(iou_np >= 0.5)).T
+        if matches50.shape[0]:
+            matches50 = matches50[iou_np[matches50[:, 0], matches50[:, 1]].argsort()[::-1]]
+            matches50 = matches50[np.unique(matches50[:, 1], return_index=True)[1]]
+            matches50 = matches50[np.unique(matches50[:, 0], return_index=True)[1]]
+            matched_box[matches50[:, 0], matches50[:, 1]] = True
+
+        if gt_attributes.numel() == 0 or pred_attributes.numel() == 0:
+            correct_attributes = torch.zeros(
+                (gt_attributes.shape[0], pred_attributes.shape[0], gt_attributes.shape[-1]),
+                dtype=torch.bool, device=self.device
+            )
+        else:
+            correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
+
+        ap = []
+        for i in range(correct_attributes.shape[0]):
+            ca = correct_attributes[i][matched_box[i]]
+            p = torch.mean(ca.float(), axis=0) if ca.shape[0] > 0 else torch.zeros(gt_attributes.shape[-1], device=self.device)
+            ap.append(p.unsqueeze(0))
+        if len(ap)> 0:
+            ap = torch.cat(ap, dim=0)
+        else:
+            ap = torch.zeros((0, gt_attributes.shape[-1]), device=self.device)
+
+        num_attrs = gt_attributes.shape[-1]
+        epsilon = 1e-7  # 防止除以零
+
+        # 2. 提取匹配成功的 GT 和 Pred 属性
+        if matches50.shape[0] > 0:
+            # matches50[:, 0] 是 gt_idx, matches50[:, 1] 是 pred_idx
+            matched_gt_attr = gt_attributes[matches50[:, 0]]           # Shape: [N_match, num_attrs]
+            matched_pred_attr = pred_attributes_result[matches50[:, 1]] # Shape: [N_match, num_attrs]
+        else:
+            matched_gt_attr = torch.empty((0, num_attrs), device=self.device)
+            matched_pred_attr = torch.empty((0, num_attrs), device=self.device)
+
+        # 3. 计算 TP (True Positive)
+        # 定义：检测框匹配成功 (IoU>=0.5) 且 属性预测正确 (均为1)
+        # 注意：这里假设属性为二分类 (0 vs 1)。如果是多分类，需指定 target class。
+        # 如果你的属性是多分类且想算整体准确率，请参考代码末尾的 "Accuracy" 部分。
+        tp = torch.sum((matched_gt_attr == 1) & (matched_pred_attr == 1), dim=0).float()
+
+        # 4. 计算 FP (False Positive)
+        # 定义：预测为 1，但实际上是 0 (或者检测框本身就是误检)
+        # 逻辑：总的预测为1的数量 - 真正确预测为1的数量
+        total_pred_positives = torch.sum(pred_attributes_result == 1, dim=0).float()
+        fp = total_pred_positives - tp
+
+        # 5. 计算 FN (False Negative)
+        # 定义：真值为 1，但预测为 0 (或者检测框漏检了)
+        # 逻辑：总的真值为1的数量 - 真正确预测为1的数量
+        total_gt_positives = torch.sum(gt_attributes == 1, dim=0).float()
+        fn = total_gt_positives - tp
+
+        # 6. 计算指标
+        precision_m = tp / (tp + fp + epsilon)
+        recall_m = tp / (tp + fn + epsilon)
+        f1_m = 2 * (precision_m * recall_m) / (precision_m + recall_m + epsilon)
+        return correct, torch.zeros(num_attrs), f1_m, precision_m, recall_m
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

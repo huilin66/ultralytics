@@ -55,7 +55,7 @@ def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
     print(weight_path)
     print(model.info(detailed=False))
-    model.val(data=DATA, device=DEVICE, **kwargs)
+    return model.val(data=DATA, device=DEVICE, **kwargs)
 
 def model_gat_val(weight_path, com_path, network=YOLO):
     model = network(weight_path, task=TASK)
@@ -163,7 +163,8 @@ if __name__ == '__main__':
     # model_val(r'runs/exp_results/exp_mloss_enlarge4/weights/best.pt')
     # model_val(r'runs/exp_results/exp_mloss_enlarge6/weights/best.pt')
     # model_val(r'runs/exp_results/exp_mloss_enlarge8/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge10/weights/best.pt')
+    result = model_val(r'runs/exp_results/exp_mloss_enlarge10/weights/best.pt')
+    print()
     # endregion
 
     # region ablation experiment
@@ -206,3 +207,24 @@ if __name__ == '__main__':
     #     IMG_DIR,
     #     name=r'prediction_mayolox'
     # )
+
+        # myolo8(cfg_path='yolov8n.yaml', weight_path='yolov8n.pt', name='exp_ml')
+    # myolo8(cfg_path='yolov8s.yaml', weight_path='yolov8s.pt', name='exp_ml')
+    # myolo8(cfg_path='yolov8m.yaml', weight_path='yolov8m.pt', name='exp_ml')
+    # myolo8(cfg_path='yolov8l.yaml', weight_path='yolov8l.pt', name='exp_ml')
+    # myolo8(cfg_path='yolov8x.yaml', weight_path='yolov8x.pt', name='exp_ml')
+    #
+    #
+    # myolo9(cfg_path='yolov9s.yaml', weight_path='yolov9s.pt', name='exp_ml')
+    # myolo9(cfg_path='yolov9m.yaml', weight_path='yolov9m.pt', name='exp_ml')
+    # myolo9(cfg_path='yolov9c.yaml', weight_path='yolov9c.pt', name='exp_ml')
+    # myolo9(cfg_path='yolov9e.yaml', weight_path='yolov9e.pt', name='exp_ml')
+    #
+    #
+    # myolo10(cfg_path='yolov10n.yaml', weight_path='yolov10n.pt', name='exp_ml')
+    # myolo10(cfg_path='yolov10s.yaml', weight_path='yolov10s.pt', name='exp_ml')
+    # myolo10(cfg_path='yolov10m.yaml', weight_path='yolov10m.pt', name='exp_ml')
+    # myolo10(cfg_path='yolov10l.yaml', weight_path='yolov10l.pt', name='exp_ml')
+    # myolo10(cfg_path='yolov10x.yaml', weight_path='yolov10x.pt', name='exp_ml')
+
+
