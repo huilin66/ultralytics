@@ -336,6 +336,7 @@ class Detect(nn.Module):
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
 
 
+
 class MDetect(nn.Module):
     """YOLOv8 Detect head for detection models."""
 
@@ -346,7 +347,6 @@ class MDetect(nn.Module):
     shape = None
     anchors = torch.empty(0)  # init
     strides = torch.empty(0)  # init
-    legacy = False  # backward compatibility for v3/v5/v8/v9 models
 
     def __init__(self, nc=80, na=14, nal=2, params=(), ch=()):
         """Initializes the YOLOv8 detection layer with specified number of classes and channels."""
@@ -354,7 +354,6 @@ class MDetect(nn.Module):
         self.nc = nc  # number of classes
         self.na = na  # number of attributes
         self.nal = nal
-        self.ch = ch
         self.nl = len(ch)  # number of detection layers
         self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
         self.no = nc + na + self.reg_max * 4  # number of outputs per anchor
@@ -368,14 +367,14 @@ class MDetect(nn.Module):
 
         params = [None if v == 'None' else v for v in params]
         if len(params) == 3:
-            sep, ca, gat = params
+            sep, c4, gat = params
             com_path = None
             retrain = False
         elif len(params) == 4:
-            sep, ca, gat, retrain = params
+            sep, c4, gat, retrain = params
             com_path = None
         elif len(params) == 5:
-            sep, ca, gat, retrain, com_path = params
+            sep, c4, gat, retrain, com_path = params
         else:
             raise ValueError("the length (%d) of params is not correct!"%len(params))
         self.sep = sep
@@ -383,124 +382,141 @@ class MDetect(nn.Module):
         if retrain:
             self.end2end = False
         self.com_path = com_path
-        ca = c3 if ca is None else ca
-        self.N = 3
-        self.use_contrast = False
+        c4 = c3 if c4 is None else c4
         if not self.sep:
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
-        elif self.sep=='dlka':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Deformable_LKA(ca), nn.Conv2d(ca, self.na, 1)) for x in ch)
-        elif self.sep == 'dlkaatt':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Deformable_LKA_Attention(ca), nn.Conv2d(ca, self.na, 1)) for x in ch)
-        elif self.sep == 'c3str':
-            self.cva = nn.ModuleList( nn.Sequential(Conv(x, ca, 3), C3STR(ca, ca), nn.Conv2d(ca, self.na, 1)) for x in ch)
-        elif self.sep == 'dfl':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na*self.N, 1)) for x in ch)
-            self.no = nc + na*self.N + self.reg_max * 4  # number of outputs per anchor
-        elif self.sep == 'unet':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-        elif self.sep == 'unet-contrastloss':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-            self.use_contrast = True
-        elif self.sep == 'unet-texture-contrastloss':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-            self.use_contrast = True
-        elif self.sep == 'unet-texture':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-        elif self.sep == 'c3str-unet1':
-            self.cva = nn.ModuleList(nn.Sequential(C3STR(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-        elif self.sep == 'c3str-unet2':
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), C3STR(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch[:3])
-        elif 'unet-sep' in self.sep:
-            self.cva = nn.ModuleList([nn.ModuleList(nn.Sequential(Conv(x*2, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, 1, 1)) for x in ch[:3]) for _ in range(self.na)])
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
+        elif self.sep=='6no':
+            self.cv4 = nn.ModuleList(nn.Sequential(C2fCIB(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
+        elif self.sep=='7no':
+            self.cv4 = nn.ModuleList(nn.Sequential(C2fCIB(x, x, 3), Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
+        elif self.sep=='8no':
+            self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, c4, c4, int(c4//2)), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
+        elif self.sep=='9no':
+            self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, x, x, int(x // 2)), Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
+        elif self.sep==1:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==2:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3), Conv(c4*self.na, c4*self.na, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==3:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, x, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==4:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==5:
+            self.cv4 = nn.ModuleList(nn.Sequential(nn.Identity()) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==6:
+            self.cv4 = nn.ModuleList(nn.Sequential(C2fCIB(x, c4, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4, c4//self.na, 3), nn.Conv2d(c4//self.na, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==7:
+            self.cv4 = nn.ModuleList(nn.Sequential(C2fCIB(x, x, 3)) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4 // self.na, 3), nn.Conv2d(c4 // self.na, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==8:
+            self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, c4, c4, int(c4//2))) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(c4, c4 // self.na, 3), nn.Conv2d(c4 // self.na, 1, 1)) for x in ch) for _ in range(self.na))
+        elif self.sep==9:
+            self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, x, x, int(x // 2))) for x in ch)
+            self.cv4_out = nn.ModuleList(nn.ModuleList(nn.Sequential(Conv(x, c4 // self.na, 3), nn.Conv2d(c4 // self.na, 1, 1)) for x in ch) for _ in range(self.na))
         else:
-            self.cva = nn.ModuleList(nn.Sequential(Conv(x, ca, 3), Conv(ca, ca, 3), nn.Conv2d(ca, self.na, 1)) for x in ch)
-        if 'texture' in self.sep:
-            self.cvt = nn.ModuleList(TextureAttention(x*2) for x in ch[:3])
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.na, 1)) for x in ch)
+            self.cv4_out = None
+
+        if self.gat == 'mlp':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp') for x in ch)
+        elif self.gat == 'mlpr':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpr') for x in ch)
+        elif self.gat == 'cos':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos') for x in ch)
+        elif self.gat == 'mlp_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp', res=True) for x in ch)
+        elif self.gat == 'mlpr_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpr', res=True) for x in ch)
+        elif self.gat == 'cos_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos', res=True) for x in ch)
+        elif self.gat == 'mlpt':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt') for x in ch)
+        elif self.gat == 'cost':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost') for x in ch)
+        elif self.gat == 'mlpt_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt', res=True) for x in ch)
+        elif self.gat == 'cost_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost', res=True) for x in ch)
+        elif self.gat == 'com_gat':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path, proj=True, add_softmax=False) for x in ch)
+        elif self.gat == 'com':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_res':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_nosf':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', add_softmax=False, com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_res_nosf':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path) for x in ch)
+        elif self.gat == 'com_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == 'com_res_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == 'com_nosf_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', add_softmax=False, com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == 'com_res_nosf_pure':
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path, proj=False) for x in ch)
         else:
-            self.cvt = None
+            self.gat_head = None
+
         if self.end2end:
             self.one2one_cv2 = copy.deepcopy(self.cv2)
             self.one2one_cv3 = copy.deepcopy(self.cv3)
-            self.one2one_cva = copy.deepcopy(self.cva)
+            self.one2one_cv4 = copy.deepcopy(self.cv4)
+            self.one2one_cv4_out = copy.deepcopy(self.cv4_out) if self.cv4_out is not None else None
+            self.one2one_gat_head = copy.deepcopy(self.gat_head) if self.gat_head is not None else None
+
+    def added_gat_head(self, com_path):
+        self.gat = 'com_nosf_pure'
+        self.com_path = com_path
+        self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=False, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1) for x in range(self.nl))
 
     def use_one2many_head(self):
         self.end2end = False
         self.one2one_cv2 = None
         self.one2one_cv3 = None
-        self.one2one_cva = None
-        self.one2one_cva_out = None
+        self.one2one_cv4 = None
+        self.one2one_cv4_out = None
+        self.one2one_gat_head = None
 
     def forward(self, x):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         if self.end2end:
             return self.forward_end2end(x)
-        if self.sep and 'unet' in self.sep:
-            self.nl=3
-            x_a = [
-                torch.cat([x[0], x[3]], dim=1),
-                torch.cat([x[1], x[4]], dim=1),
-                torch.cat([x[2], x[5]], dim=1),
-            ]
-            x = x[:3]
-        contrast_embedding = []
-        for i in range(self.nl):
-            if not self.sep:
-                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
-            elif 'unet' in self.sep:
-                if 'unet-sep' in self.sep:
-                    if self.sep == 'unet-sep':
-                        f_a = [cva[i](x_a[i]) for cva in self.cva]
-                    elif self.sep == 'unet-sep0':
-                        f_a = [cva[i](x_a[i]) if a_i==0 else
-                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[3], x_a[i].shape[4]),
-                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
-                               for a_i, cva in enumerate(self.cva)]
-                    elif self.sep == 'unet-sep1':
-                        f_a = [cva[i](x_a[i]) if a_i==1 else
-                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[2], x_a[i].shape[3]),
-                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
-                               for a_i, cva in enumerate(self.cva)]
-                    elif self.sep == 'unet-sep2':
-                        f_a = [cva[i](x_a[i]) if a_i==2 else
-                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[2], x_a[i].shape[3]),
-                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
-                               for a_i, cva in enumerate(self.cva)]
-                    elif self.sep == 'unet-sep3':
-                        f_a = [cva[i](x_a[i]) if a_i==3 else
-                               torch.full((x_a[i].shape[0], 1, x_a[i].shape[2], x_a[i].shape[3]),
-                                           fill_value=-10, dtype=x_a[i].dtype, device=x_a[i].device)
-                               for a_i, cva in enumerate(self.cva)]
-                    f_a_cat = torch.cat(f_a, dim=1)
-                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_a_cat), 1)
-                else:
-                    if self.sep == 'unet-texture':
-                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](self.cvt[i](x_a[i]))), 1)
-                    elif self.sep == 'unet-contrastloss':
-                        f_input = x_a[i]
-                        f_0 = self.cva[i][0](f_input)
-                        f_1 = self.cva[i][1](f_0)
-                        contrast_embedding.append(f_1)
-                        f_2 = self.cva[i][2](f_1)
-                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_2), 1)
-                    elif self.sep == 'unet-texture-contrastloss':
-                        f_input = x_a[i]
-                        f_temp = self.cvt[i](f_input)
-                        f_0 = self.cva[i][0](f_temp)
-                        f_1 = self.cva[i][1](f_0)
-                        contrast_embedding.append(f_1)
-                        f_2 = self.cva[i][2](f_1)
-                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), f_2), 1)
-                    else:
-                        x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x_a[i])), 1)
-            else:
-                x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
 
-        if self.training:  # Training path
-            if self.use_contrast:
-                return x, contrast_embedding
+        for i in range(self.nl):
+            if not self.sep or self.sep in ['6no', '7no', '8no', '9no']:
+                if self.gat is not None:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.gat_head[i](self.cv4[i](x[i]))), 1)
+                else:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
             else:
-                return x
+                if self.sep in [1, 2, 3, 4, 5, 6, 7, 8]:
+                    if self.gat is not None:
+                        attribute_feature = self.cv4[i](x[i])
+                        attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                        attribute_logits_cat = torch.cat(attribute_logits, 1)
+                        attribute_logits_gat = [self.gat_head[i](attribute_logits_cat)]
+                        x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits_gat, 1)
+                    else:
+                        attribute_feature = self.cv4[i](x[i])
+                        attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                        x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
+                else:
+                    raise ValueError('sep error %g'%self.sep)
+        if self.training:  # Training path
+            return x
         y = self._inference(x)
         return y if self.export else (y, x)
 
@@ -516,12 +532,46 @@ class MDetect(nn.Module):
                            If in training mode, returns a dictionary containing the outputs of one2many and one2one detections separately.
         """
         x_detach = [xi.detach() for xi in x]
-        one2one = [
-            torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.one2one_cva[i](x_detach[i])), 1) for i in range(self.nl)
-        ]
         for i in range(self.nl):
-            x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cva[i](x[i])), 1)
+            if not self.sep or self.sep in ['6no', '7no', '8no', '9no']:
+                if self.gat is not None:
+                    x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.gat_head[i](self.one2one_cv4[i](x_detach[i]))), 1)
+                else:
+                    x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.one2one_cv4[i](x_detach[i])), 1)
+            else:
+                if self.sep in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
+                    if self.gat is not None:
+                        attribute_feature = self.one2one_cv4[i](x_detach[i])
+                        attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                        attribute_logits = [self.one2one_gat_head[i](torch.cat(attribute_logits, 1))]
+                        x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
+                    else:
+                        attribute_feature = self.one2one_cv4[i](x_detach[i])
+                        attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                        x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
+                else:
+                    raise ValueError('sep error %g' % self.sep)
+        one2one = x_detach
 
+        for i in range(self.nl):
+            if not self.sep or self.sep in ['6no', '7no', '8no', '9no']:
+                if self.gat is not None:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.gat_head[i](self.cv4[i](x[i]))), 1)
+                else:
+                    x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
+            else:
+                if self.sep in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
+                    if self.gat is not None:
+                        attribute_feature = self.cv4[i](x[i])
+                        attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                        attribute_logits = [self.gat_head[i](torch.cat(attribute_logits, 1))]
+                        x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
+                    else:
+                        attribute_feature = self.cv4[i](x[i])
+                        attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
+                        x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
+                else:
+                    raise ValueError('sep error %g'%self.sep)
         if self.training:  # Training path
             return {"one2many": x, "one2one": one2one}
 
@@ -530,26 +580,12 @@ class MDetect(nn.Module):
         return y if self.export else (y, {"one2many": x, "one2one": one2one})
 
     def _inference(self, x):
-        def predict_score(feats):
-            # feats: [B, C, na*N]
-            B, _, C = feats.shape
-
-            # reshape
-            logits = feats.view(B, self.na, self.N, C)  # [B, C, na, N]
-            probs = torch.softmax(logits, dim=-1)  # [B, C, na, N]
-
-            # 区间中心，可以按实际需求修改
-            # centers = torch.arange(self.N, device=feats.device, dtype=torch.float)
-            centers = torch.linspace(0, 1, self.N, device=feats.device)
-
-            # [B, C, na]
-            score = (probs * centers.view(1, 1, self.N, 1)).sum(dim=-2)
-            return score
         """Decode predicted bounding boxes and class probabilities based on multiple-level feature maps."""
         # Inference path
         shape = x[0].shape  # BCHW
+        x_demo = x[0][0]
         x_cat = torch.cat([xi.view(shape[0], self.no, -1) for xi in x], 2)
-
+        x_cat_demo = x_cat[0]
         if self.dynamic or self.shape != shape:
             self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5))
             self.shape = shape
@@ -558,8 +594,6 @@ class MDetect(nn.Module):
             box = x_cat[:, : self.reg_max * 4]
             cls = x_cat[:, self.reg_max * 4 : self.reg_max * 4 + self.nc]
             att = x_cat[:, self.reg_max * 4 + self.nc : ]
-        elif self.sep=='dfl':
-            box, cls, att = x_cat.split((self.reg_max * 4, self.nc, self.na*self.N), 1)
         else:
             box, cls, att = x_cat.split((self.reg_max * 4, self.nc, self.na), 1)
 
@@ -573,10 +607,9 @@ class MDetect(nn.Module):
             dbox = self.decode_bboxes(self.dfl(box) * norm, self.anchors.unsqueeze(0) * norm[:, :2])
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
-        if self.sep=='dfl':
-            att = predict_score(att)
-            return torch.cat((dbox, cls.sigmoid(), att), 1)
-        return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
+
+        # return torch.cat((dbox, cls.sigmoid(), att.sigmoid()), 1)
+        return torch.cat((dbox, cls.sigmoid(), att), 1)
 
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""
@@ -591,11 +624,17 @@ class MDetect(nn.Module):
                 a[-1].bias.data[:] = 1.0  # box
                 b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
         if not self.sep:
-            for c, s in zip(m.cva, m.stride):
+            for c, s in zip(m.cv4, m.stride):
                 c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)
             if self.end2end:
-                for c, s in zip(m.one2one_cva, m.stride):
+                for c, s in zip(m.one2one_cv4, m.stride):
                     c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)
+        # elif self.sep in [1, 2, 3, 4, 5, 6]:
+        #     for c, s in zip(m.cv4_out, m.stride):
+        #         c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+        #     if self.end2end:
+        #         for c, s in zip(m.one2one_cv4_out, m.stride):
+        #             c[-1].bias.data[: m.na] = math.log(5 / m.na / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
 
     def decode_bboxes(self, bboxes, anchors):
         """Decode bounding boxes."""
@@ -623,6 +662,7 @@ class MDetect(nn.Module):
         boxes = torch.gather(boxes, dim=1, index=index.repeat(1, 1, boxes.shape[-1]))
         scores = torch.gather(scores, dim=1, index=index.repeat(1, 1, scores.shape[-1]))
         attributes = torch.gather(attributes, dim=1, index=index.repeat(1, 1, attributes.shape[-1]))
+        print(scores.max())
 
         # NOTE: simplify but result slightly lower mAP
         # scores, labels = scores.max(dim=-1)
@@ -635,6 +675,31 @@ class MDetect(nn.Module):
         attributes = attributes.gather(dim=1, index=index.unsqueeze(-1).repeat(1, 1, attributes.shape[-1]))
 
         return torch.cat([boxes, scores.unsqueeze(-1), labels.unsqueeze(-1).to(boxes.dtype), attributes], dim=-1)
+
+class Segment(Detect):
+    """YOLO Segment head for segmentation models."""
+
+    def __init__(self, nc=80, nm=32, npr=256, ch=()):
+        """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers."""
+        super().__init__(nc, ch)
+        self.nm = nm  # number of masks
+        self.npr = npr  # number of protos
+        self.proto = Proto(ch[0], self.npr, self.nm)  # protos
+
+        c4 = max(ch[0] // 4, self.nm)
+        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.nm, 1)) for x in ch)
+
+    def forward(self, x):
+        """Return model outputs and mask coefficients if training, otherwise return outputs and mask coefficients."""
+        p = self.proto(x[0])  # mask protos
+        bs = p.shape[0]  # batch size
+
+        mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
+        x = Detect.forward(self, x)
+        if self.training:
+            return x, mc, p
+        return (torch.cat([x, mc], 1), p) if self.export else (torch.cat([x[0], mc], 1), (x[1], mc, p))
+
 
 
 class Segment(Detect):

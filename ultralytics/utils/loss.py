@@ -254,9 +254,10 @@ class v8DetectionLoss:
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
-
+        class_weights = torch.tensor([1.0, 5.0, 5.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]).to(target_scores_sum.device)
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
+        self.bce = nn.BCEWithLogitsLoss(reduction='none', pos_weight=class_weights)
         loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
 
         # Bbox loss
@@ -885,23 +886,49 @@ class v8MDetectionLoss(v8DetectionLoss):
 
         gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
 
+        pred_attributes_fg = pred_attributes[fg_mask]
+        gt_attributes_fg = gt_attributes[fg_mask]
 
         if fg_mask.sum() and self.mloss_mask:
-            pred_attributes_fg = pred_attributes[fg_mask]
-            gt_attributes_fg = gt_attributes[fg_mask]
-
-            weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
-
+            if self.mloss_enlarge == 0:
+                weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
+            else:
+                weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device,
+                                      dtype=pred_attributes.dtype) if self.mloss_weight else None
             loss[3] = F.binary_cross_entropy_with_logits(
                 input=pred_attributes_fg,
                 target=gt_attributes_fg,
                 weight=weight
             )
         else:
-            loss[3] = F.binary_cross_entropy_with_logits(
-                                                         input=pred_attributes,
-                                                         target=gt_attributes,
-                                                         )
+            # task1: risk exists or not
+            gt_attributes_exist = (gt_attributes_fg > 0).float()
+
+            pos_weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype)
+            loss_exists = F.binary_cross_entropy_with_logits(
+                input=pred_attributes_fg,
+                target=gt_attributes_exist,
+                pos_weight=pos_weight,
+            )
+
+            has_high_label = (gt_attributes_fg == 2).any()
+            if has_high_label:
+                mask_active = gt_attributes_fg > 0
+                pred_attribute_active = pred_attributes_fg[mask_active]
+                gt_attributes_active = gt_attributes_fg[mask_active] - 1
+                if gt_attributes_active.shape[0] > 0:
+                    loss_active = F.binary_cross_entropy_with_logits(
+                        input=pred_attribute_active,
+                        target=gt_attributes_active,
+                        pos_weight=pos_weight,
+                    )
+                else:
+                    loss_active = 0
+
+                loss[3] = (1 - self.mloss_weight) * loss_exists + self.mloss_weight * loss_active
+            else:
+                loss[3] = loss_exists
+
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain

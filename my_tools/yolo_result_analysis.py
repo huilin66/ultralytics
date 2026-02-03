@@ -10,7 +10,7 @@ from tqdm import tqdm
 from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
-from seg_yolo2coco_analysis import seg_analysis, select_val, seg_cfm_analysis
+from seg_yolo2coco_analysis import obj_coco_analysis, select_val, seg_cfm_analysis
 from risk_confusion_matrix_analysis import risk_analysis
 
 warnings.filterwarnings('ignore')

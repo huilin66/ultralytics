@@ -1,8 +1,5 @@
-import os
-os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 import torch
 import numpy as np
-from fiftyone.brain.visualization import visualize
 from seaborn import heatmap
 
 from ultralytics import YOLO
@@ -12,7 +9,7 @@ IMGSZ = 640
 CONF = 0.5
 TASK = 'mdetect'
 DEVICE = torch.device('cuda:1')
-DATA = "billboard_mdet5_10_c_0806m.yaml"
+DATA ='billboard_mdet5_10_c_0806m_old.yaml'
 FREEZE_NUMS = {
     'yolov8' : 22,
     'yolov9e': 42,
@@ -74,7 +71,7 @@ def model_val_single(weight_path, network=YOLO):
     print(model.info(detailed=False))
     model.val(data=DATA, device=DEVICE)
 
-def model_predict(weight_path, img_dir, network=YOLO, name=None, visualize=False):
+def model_predict(weight_path, img_dir, network=YOLO, name=None):
     model = network(weight_path, task=TASK)
     model.predict(
         img_dir,
@@ -85,7 +82,6 @@ def model_predict(weight_path, img_dir, network=YOLO, name=None, visualize=False
         save_txt=True,
         save_conf=True,
         name=name,
-        visualize=visualize,
     )
 
 def model_export(weight_path, format='onnx', network=YOLO):
@@ -129,79 +125,56 @@ def mayolo(cfg_path, weight_path='yolov10x.pt', auto_optim=False, retrain=False,
 
 if __name__ == '__main__':
     pass
-    # model_val(r'runs/exp_results/exp_yolo10x/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mayolox_/weights/best.pt')
+    # # region object detection results of different models
+    model_val(r'runs/exp_results/exp_yolo8n/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo8s/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo8m/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo8l/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo8x/weights/best.pt')
 
+    model_val(r'runs/exp_results/exp_yolo9s/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo9m/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo9c/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo9e/weights/best.pt')
 
-    # # # region object detection results of different models
-    # model_val(r'runs/exp_results/exp_yolo8n/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo8s/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo8m/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo8l/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo8x/weights/best.pt')
-    #
-    # model_val(r'runs/exp_results/exp_yolo9s/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo9m/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo9c/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo9e/weights/best.pt')
-    # #
-    # model_val(r'runs/exp_results/exp_yolo10n/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo10s/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo10m/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo10b/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo10l/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_yolo10x/weights/best.pt')
-    # #
-    # model_val(r'runs/exp_results/exp_mayolon_/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mayolos_/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mayolom_/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mayolob_/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mayolol_/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mayolox_/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo10n/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo10s/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo10m/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo10b/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo10l/weights/best.pt')
+    model_val(r'runs/exp_results/exp_yolo10x/weights/best.pt')
+
+    model_val(r'runs/exp_results/exp_mayolon_/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mayolos_/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mayolom_/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mayolob_/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mayolol_/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mayolox_/weights/best.pt')
     # # # endregion
     #
     # # region scale comparison
     # # early stage, no sigmoid
-    # model_val(r'runs/exp_results/exp_mloss_enlarge/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge3/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge5/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge7/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge9/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge2/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge4/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge6/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge8/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_mloss_enlarge10/weights/best.pt')
-    # # # endregion
-    #
-    # # # region ablation experiment
-    # model_val('runs/exp_results/exp_ablation0107_GIA/weights/best.pt')
-    # model_val_single('runs/exp_results/exp_yolo10x/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_ablation0107_GCA/weights/best.pt')
-    #
-    # model_val(r'runs/exp_results/exp_ablation0107_HO_GCA/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_ablation0107_GIA_GCA/weights/best.pt')
-    # model_val_single('runs/exp_results/exp_ablation0107_GIA/weights/best.pt')
-    # # # endregion
+    model_val(r'runs/exp_results/exp_mloss_enlarge/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge3/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge5/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge7/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge9/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge2/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge4/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge6/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge8/weights/best.pt')
+    model_val(r'runs/exp_results/exp_mloss_enlarge10/weights/best.pt')
+    # # endregion
 
-    # model_val(r'runs/exp_results/exp_yolo10x/weights/best.pt')
+    # region ablation experiment
+    model_val('runs/exp_results/exp_ablation0107_GIA/weights/best.pt')
+    model_val_single('runs/exp_results/exp_yolo10x/weights/best.pt')
+    model_val(r'runs/exp_results/exp_ablation0107_GCA/weights/best.pt')
 
-    img_path = r'/scrinvme/huilin/tp/FLIR1444_img.png'
-    # output_dir = r'/scrinvme/huilin/tp/FLIR1444_img_yolo10'
-    # model_path = r'runs/exp_results/exp_yolo10x/weights/best.pt'
-    output_dir = r'/scrinvme/huilin/tp/FLIR1444_img_mayolo'
-    model_path = r'runs/exp_results/exp_mayolox_/weights/best.pt'
-    model_predict(
-        model_path,
-        img_path,
-        name=output_dir,
-        visualize=True,
-    )
-
-
-
-
-
+    model_val(r'runs/exp_results/exp_ablation0107_HO_GCA/weights/best.pt')
+    model_val(r'runs/exp_results/exp_ablation0107_GIA_GCA/weights/best.pt')
+    model_val_single('runs/exp_results/exp_ablation0107_GIA/weights/best.pt')
+    # endregion
 
 
     # model_val(r'runs/exp_results/exp_mayolox_/weights/best.pt')

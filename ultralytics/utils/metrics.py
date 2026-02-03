@@ -1014,6 +1014,43 @@ class Metric(SimpleClass):
             else:
                 f1_mean = 0
             return f1_mean
+    
+    @property
+    def mprecision(self):
+        if isinstance(self.all_precision, list):
+            all_precision = np.array(self.all_precision)
+            all_precision = all_precision.mean()
+            if np.isnan(all_precision):
+                return 0
+            else:
+                return all_precision
+        else:
+            if len(self.all_precision)> 0:
+                assert isinstance(self.all_precision, np.ndarray), ValueError(self.all_precision)
+                precision_class = self.all_precision.mean(axis=0)
+                precision_mean = precision_class.mean()
+            else:
+                precision_mean = 0
+            return precision_mean
+
+    @property
+    def mrecall(self):
+        if isinstance(self.all_recall, list):
+            all_recall = np.array(self.all_recall)
+            all_recall = all_recall.mean()
+            if np.isnan(all_recall):
+                return 0
+            else:
+                return all_recall
+        else:
+            if len(self.all_recall)> 0:
+                assert isinstance(self.all_recall, np.ndarray), ValueError(self.all_recall)
+                recall_class = self.all_recall.mean(axis=0)
+                recall_mean = recall_class.mean()
+            else:
+                recall_mean = 0
+            return recall_mean
+
     @property
     def mf1_macro(self):
         """
@@ -1024,6 +1061,8 @@ class Metric(SimpleClass):
         """
         conf_mats = self.all_conf_mat
         all_f1_macro = []
+        all_precision = []
+        all_recall = []
         for conf_mat in conf_mats:
             TP = conf_mat.diagonal()
             FP = conf_mat.sum(0) - TP
@@ -1034,12 +1073,16 @@ class Metric(SimpleClass):
             f1 = 2 * precision * recall / (precision + recall + 1e-8)
             f1_macro = f1.mean()
             all_f1_macro.append(f1_macro)
+            all_precision.append(np.mean(precision))
+            all_recall.append(np.mean(recall))
         self.all_f1_macro = all_f1_macro
+        self.all_precision = all_precision
+        self.all_recall = all_recall
         f1_macro = np.mean(all_f1_macro)
         return f1_macro
 
     @property
-    def mf1_micro(self):
+    def moa(self):
         """
         Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
 
@@ -1059,8 +1102,27 @@ class Metric(SimpleClass):
 
         precision_micro = tp_sum / (tp_sum + fp_sum + 1e-8)
         recall_micro = tp_sum / (tp_sum + fn_sum + 1e-8)
+        mao = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
+        return mao
+
+    @property
+    def mf1_micro(self):
+        """
+        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+
+        Returns:
+            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        """
+        conf_mat = self.all_conf_mat
+        conf_mat = np.sum(conf_mat, axis=0)
+        TP = conf_mat.diagonal()
+        FP = conf_mat.sum(0) - TP
+        FN = conf_mat.sum(1) - TP
+
+        precision_micro = TP / (TP + FP + 1e-8)
+        recall_micro = TP / (TP + FN + 1e-8)
         f1_micro = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
-        return f1_micro
+        return f1_micro.mean()
 
     def mean_results(self):
         """Return mean of results, mp, mr, map50, map."""
@@ -1310,19 +1372,19 @@ class MDetMetrics(SimpleClass):
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
         return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mAP",
-                "metrics/f1_macro", "metrics/f1_micro"]
+                "metrics/f1_macro", "metrics/f1_micro", "metrics/precision", "metrics/recall"]
 
 
     def mean_results(self):
         """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results() + [self.attributes.map, self.attributes.f1_macro, self.attributes.f1_micro]
+        return self.box.mean_results() + [self.attributes.moa, self.attributes.mf1_macro, self.attributes.mf1_micro, self.attributes.mprecision, self.attributes.mrecall]
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
         if i < self.nc:
-            return self.box.class_result(i) + (0, 0, 0)
+            return self.box.class_result(i) + (0, 0, 0, 0, 0)
         else:
-            return (0, 0, 0, 0) + (self.attributes.all_ap[i-self.nc], self.attributes.all_f1_macro[i - self.nc], self.attributes.all_f1_micro[i - self.nc])
+            return (0, 0, 0, 0) + (0, self.attributes.all_f1_macro[i - self.nc], 0, self.attributes.all_precision[i-self.nc],self.attributes.all_recall[i-self.nc],)
 
     @property
     def maps(self):
@@ -1332,7 +1394,7 @@ class MDetMetrics(SimpleClass):
     @property
     def fitness(self):
         """Returns the fitness of box object."""
-        return self.box.fitness()*100 + self.box.fitness() * (self.attributes.f1_macro + self.attributes.f1_micro)
+        return self.box.fitness()*100 + self.box.fitness() * (self.attributes.mf1_macro*10 + self.attributes.mf1_micro*0)
 
     @property
     def ap_class_index(self):

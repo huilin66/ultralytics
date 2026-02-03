@@ -100,7 +100,7 @@ class MDetectionValidator(BaseValidator):
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 8) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)", "OA", "F1_marco",
+        return ("%22s" + "%11s" * 9) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)", "OA", "F1_marco",
             "F1_mirco",)
 
     def postprocess(self, preds):
@@ -270,7 +270,7 @@ class MDetectionValidator(BaseValidator):
         return batch_conf_mat.unsqueeze(0)
 
     def match_predictions(self, pred_boxes, gt_boxes, pred_classes, true_classes, iou, pred_attributes,
-                          gt_attributes, nal, use_scipy=False, pbatch=None):
+                          gt_attributes, nal=2, use_scipy=False, pbatch=None):
         """
         Matches predictions to ground truth objects (pred_classes, true_classes) using IoU.
 

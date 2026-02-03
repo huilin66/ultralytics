@@ -1358,8 +1358,12 @@ class MdetResults(SimpleClass):
             for j, d in enumerate(boxes):
                 att = attributes.data[j].cpu().numpy()
                 if not save_risk_score:
-                    att = np.floor(att * self.attributes.risk_enlarge * self.nal).astype(np.int32)
-                    att = np.clip(att, 0, self.nal-1)
+                    if self.nal is not None:
+                        att = np.floor(att * self.attributes.risk_enlarge * self.nal).astype(np.int32)
+                        att = np.clip(att, 0, self.nal-1)
+                    else:
+                        att = np.floor(att * self.attributes.risk_enlarge * 2).astype(np.int32)
+                        att = np.clip(att, 0, 1)
                 c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
                 line = (c, len(att), *att, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
                 if masks:

@@ -30,14 +30,14 @@ DATA_SB2 = "fusedata7961_mseg_c5_l2_1117_v20_sb_test_broken_syn_v1.yaml"
 
 if __name__ == '__main__':
     pass
-    demo_base.yolo10(
-        MODEL4_ST, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True, contrastive_loss_weight=0.5
-    )
-    demo_base.yolo10(
-        MODEL4_ST, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
-        mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True, contrastive_loss_weight=0.1
-    )
+    # demo_base.yolo10(
+    #     MODEL4_ST, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True, contrastive_loss_weight=0.5
+    # )
+    # demo_base.yolo10(
+    #     MODEL4_ST, weight_path=SEG_WEIGHT10, data=DATA_SB1, auto_optim=False, retrain=True,
+    #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10, save_period=1, contrastive_loss=True, contrastive_loss_weight=0.1
+    # )
     # demo_base.yolo10(
     #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB2, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20,

@@ -1,10 +1,10 @@
 import demo_base
 import torch
 
-demo_base.TASK = 'msegment'
+demo_base.TASK = 'mdetect'
 demo_base.EPOCHS = 100
-demo_base.IMGSZ = 960
-demo_base.BATCH_SIZE = 64
+demo_base.IMGSZ = 640
+demo_base.BATCH_SIZE = 32
 demo_base.DEVICE = torch.device('cuda:0')
 demo_base.DATA = "fusedata2419_mseg_c5_0730.yaml"
 # demo_base.CONF_VAL = 0.5
@@ -37,6 +37,11 @@ DATA_Test = 'defect_test_1021.yaml'
 
 if __name__ == '__main__':
     pass
+    demo_base.yolo10(
+        'yolov10x-mdetect.yaml', weight_path='runs/mdetect/debug4/weights/best.pt', data="billboard_mdet5_10_c_0806m.yaml", auto_optim=False, retrain=True,
+
+        mloss_mask=False, mloss_weight=0, mloss_enlarge=20, name='debug'
+    )
     # demo_base.yolo10(
     #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_Test, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20, name='debug'
