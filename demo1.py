@@ -15,4 +15,4 @@ if __name__ == "__main__":
     for MODEL_NAME in MODEL_LIST:
         NAME = f'{DATASET_NAME.split(".")[0]}_{MODEL_NAME.split(".")[0]}'
         model = YOLO(MODEL_NAME)
-        model.train(data=DATASET_NAME, epochs=EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, device=DEVICE, name=NAME, weights=None)
+        model.train(data=DATASET_NAME, epochs=EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, device=DEVICE, name=NAME, pretrained=False)
