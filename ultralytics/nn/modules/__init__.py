@@ -59,6 +59,8 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    C3k2_mHC,
+    Concat_mHC,
 )
 from .conv import (
     CBAM,
@@ -187,4 +189,6 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
+    "C3k2_mHC",
+    "Concat_mHC",
 )

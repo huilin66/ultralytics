@@ -52,6 +52,8 @@ __all__ = (
     "ResNetLayer",
     "SCDown",
     "TorchVision",
+    "C3k2_mHC",
+    "Concat_mHC",
 )
 
 
@@ -1104,6 +1106,118 @@ class C3k2(C2f):
             else Bottleneck(self.c, self.c, shortcut, g)
             for _ in range(n)
         )
+
+
+class ManifoldConstraint(nn.Module):
+    """
+    DeepSeek mHC 的核心：Sinkhorn-Knopp 算法实现的流形约束
+    将权重矩阵投影到 Birkhoff 多胞形 (双随机矩阵)
+    """
+    def __init__(self, channels, iterations=5):
+        super().__init__()
+        self.channels = channels
+        self.iterations = iterations
+        self.weight = nn.Parameter(torch.eye(channels) + torch.randn(channels, channels) * 0.01)
+
+    def sinkhorn(self, w):
+        w = torch.exp(w)
+        
+        for _ in range(self.iterations):
+            w = w / (w.sum(dim=0, keepdim=True) + 1e-6) # 列归一化
+            w = w / (w.sum(dim=1, keepdim=True) + 1e-6) # 行归一化
+        return w
+
+    def forward(self, x):
+        
+        W_constrained = self.sinkhorn(self.weight)
+        W_constrained = W_constrained.view(self.channels, self.channels, 1, 1)
+        
+        return F.conv2d(x, W_constrained)
+
+
+class mHCBottleneck(nn.Module):
+    """
+    带有 mHC 约束的 Bottleneck 模块
+    """
+    def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5):
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, k[0], 1)
+        self.cv2 = Conv(c_, c2, k[1], 1, g=g)
+        
+        self.add = shortcut and c1 == c2
+        if self.add:
+            self.mhc = ManifoldConstraint(c1)
+
+    def forward(self, x):
+        return self.mhc(x) + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+
+
+class C3k2_mHC(C3k2):
+    """
+    继承自 C3k2，但使用 mHCBottleneck
+    """
+    def __init__(self, c1, c2, n=1, c3k=False, e=0.5, attn=False, g=1, shortcut=True):
+        super().__init__(c1, c2, n, c3k, e, attn, g, shortcut)
+        c_ = int(c2 * e)
+
+        self.m = nn.Sequential(*(mHCBottleneck(c_, c_, shortcut=shortcut, g=g, k=(3, 3), e=1.0) for _ in range(n)))
+
+
+class Concat_mHC(nn.Module):
+    """
+    智能 mHC 融合模块：专为替换 YAML 中的 Concat 设计。
+    功能：
+    1. 自动将不同通道的输入投影对齐到统一维度 (默认对齐到第一个输入的维度)。
+    2. 对齐后的特征相加。
+    3. 应用 Sinkhorn 双随机矩阵进行流形约束混合。
+    """
+    def __init__(self, inc_list, out_c=None, iterations=3):
+        """
+        inc_list (list): 来自 tasks.py 的输入通道列表，例如 [256, 512]
+        out_c (int): 输出通道数。如果为 None，默认等于 inc_list[0]
+        """
+        super().__init__()
+        
+        # 1. 确定输出通道数 (通常对齐到较小的那个，即 Upsample 层，以节省计算)
+        self.out_c = out_c if out_c is not None else inc_list[0]
+        self.iterations = iterations
+        
+        # 2. 构建内部投影层 (ModuleList)
+        # 如果输入通道 != 输出通道，创建一个 1x1 Conv 进行降维/升维
+        # 如果输入通道 == 输出通道，直接用 Identity (不做处理)
+        self.projections = nn.ModuleList()
+        for c in inc_list:
+            if c != self.out_c:
+                # 1x1 Conv, 这里的 p=0 是 padding
+                self.projections.append(Conv(c, self.out_c, 1, 1, p=0)) 
+            else:
+                self.projections.append(nn.Identity())
+        
+        # 3. 初始化 mHC 权重 (双随机矩阵)
+        # 这是一个对 "混合后特征" 进行再整理的矩阵
+        self.weight = nn.Parameter(torch.eye(self.out_c) + torch.randn(self.out_c, self.out_c) * 0.01)
+
+    def sinkhorn(self, w):
+        w = torch.exp(w)
+        for _ in range(self.iterations):
+            w = w / (w.sum(dim=0, keepdim=True) + 1e-6)
+            w = w / (w.sum(dim=1, keepdim=True) + 1e-6)
+        return w
+
+    def forward(self, x):
+        # x 是一个 Tensor 列表，例如 [P5_upsample, P4_backbone]
+        
+        # 1. 投影对齐 & 求和
+        # 遍历输入 x_i 和对应的投影层 proj_i
+        aligned_sum = sum(proj(x_i) for x_i, proj in zip(x, self.projections))
+        
+        # 2. 生成双随机权重
+        W = self.sinkhorn(self.weight)
+        W = W.view(self.out_c, self.out_c, 1, 1)
+        
+        # 3. 流形约束混合 (相当于 1x1 卷积)
+        return F.conv2d(aligned_sum, W)
 
 
 class C3k(C3):
