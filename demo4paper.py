@@ -58,7 +58,12 @@ def model_val(weight_path, network=YOLO, **kwargs):
     model = network(weight_path, task=TASK)
     print(weight_path)
     print(model.info(detailed=False))
-    return model.val(data=DATA, device=DEVICE, **kwargs)
+    val_params = {
+        'data': DATA,
+        'device': DEVICE,
+    }
+    val_params.update(kwargs)
+    return model.val(**val_params)
 
 def model_gat_val(weight_path, com_path, network=YOLO):
     model = network(weight_path, task=TASK)
@@ -78,7 +83,7 @@ def model_predict(weight_path, img_dir, network=YOLO, name=None, visualize=False
     model = network(weight_path, task=TASK)
     model.predict(
         img_dir,
-        save=True,
+        save=False,
         conf=CONF,
         device=DEVICE,
         imgsz=IMGSZ,
@@ -186,17 +191,17 @@ if __name__ == '__main__':
 
     # model_val(r'runs/exp_results/exp_yolo10x/weights/best.pt')
 
-    img_path = r'/scrinvme/huilin/tp/FLIR1444_img.png'
+    # img_path = r'/scrinvme/huilin/tp/FLIR1444_img.png'
     # output_dir = r'/scrinvme/huilin/tp/FLIR1444_img_yolo10'
     # model_path = r'runs/exp_results/exp_yolo10x/weights/best.pt'
-    output_dir = r'/scrinvme/huilin/tp/FLIR1444_img_mayolo'
-    model_path = r'runs/exp_results/exp_mayolox_/weights/best.pt'
-    model_predict(
-        model_path,
-        img_path,
-        name=output_dir,
-        visualize=True,
-    )
+    # output_dir = r'/scrinvme/huilin/tp/FLIR1444_img_mayolo'
+    # model_path = r'runs/exp_results/exp_mayolox_/weights/best.pt'
+    # model_predict(
+    #     model_path,
+    #     img_path,
+    #     name=output_dir,
+    #     visualize=True,
+    # )
 
 
 
@@ -254,3 +259,33 @@ if __name__ == '__main__':
     # myolo10(cfg_path='yolov10x.yaml', weight_path='yolov10x.pt', name='exp_ml')
 
 
+
+    # val_data_list = [
+    #     'billboard_mdet5_10_c_0806m.yaml',
+    #     'billboard_mdet5_10_c_0806m_b50.yaml',
+    #     'billboard_mdet5_10_c_0806m_b75.yaml',
+    #     'billboard_mdet5_10_c_0806m_b125.yaml',
+    #     'billboard_mdet5_10_c_0806m_b150.yaml',
+    #     # 'billboard_mdet5_10_c_0806m_b200.yaml',
+    # ]
+    # for val_data in val_data_list:
+    #     model_val(
+    #         r'runs/exp_results/exp_mayolox_/weights/best.pt',
+    #         data=val_data,
+    #     )
+
+
+    src_dir = r'/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c'
+    brightness_list = [
+        0.5,
+        0.75,
+        1.25,
+        1.5,
+    ]
+    for brightness in brightness_list:
+        dst_dir = f'{src_dir}_b{int(brightness*100)}'
+        model_predict(
+            r'runs/exp_results/exp_mayolox_/weights/best.pt',
+            os.path.join(dst_dir, 'val', 'images'),
+            name=os.path.join(dst_dir, 'val', 'images_infer'),
+        )
