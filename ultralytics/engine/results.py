@@ -1272,21 +1272,32 @@ class MdetResults(SimpleClass):
             for i, a in enumerate(reversed(pred_attributes)):
                 attribute = a.result
                 count = 0
+                re_count = 0
                 pos_base = poss[i]
                 br_poss = []
                 for idx, (k, v) in enumerate(attribute.items()):
                     label = f'{k}-{v}'
-                    if filter_no and (not v or 'no' in v):
+                    if filter_no and (not v or 'no' in str(v)):
                         continue
                     count += 1
                     pos = [pos_base[0], pos_base[1]+15*(count+1)-10]
                     br_pos = annotator.text(pos, label, txt_color=colors(idx, True))
                     br_poss.append(br_pos)
                 if len(br_poss)>0:
-                    br_poss = np.array(br_poss)
+                    br_poss_np = np.array(br_poss)
                     tl_pos = pos_base
-                    br_pos = (np.max(br_poss, axis=0)[0], br_poss[-1][1])
+                    br_pos = (np.max(br_poss_np, axis=0)[0], br_poss_np[-1][1])
                     annotator.rectangle_mask(box=tl_pos + br_pos, color=(255, 255, 255), alpha=0.5, )
+
+                for idx, (k, v) in enumerate(attribute.items()):
+                    label = f'{k}-{v}'
+                    if filter_no and (not v or 'no' in str(v)):
+                        continue
+                    re_count += 1
+                    pos = [pos_base[0], pos_base[1]+15*(re_count+1)-10]
+                    br_pos = annotator.text(pos, label, txt_color=colors(idx, True))
+                    br_poss.append(br_pos)
+
 
         # Plot Classify results
         if pred_probs is not None and show_probs:

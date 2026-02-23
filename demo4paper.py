@@ -83,7 +83,7 @@ def model_predict(weight_path, img_dir, network=YOLO, name=None, visualize=False
     model = network(weight_path, task=TASK)
     model.predict(
         img_dir,
-        save=False,
+        save=True,
         conf=CONF,
         device=DEVICE,
         imgsz=IMGSZ,
@@ -286,6 +286,11 @@ if __name__ == '__main__':
         dst_dir = f'{src_dir}_b{int(brightness*100)}'
         model_predict(
             r'runs/exp_results/exp_mayolox_/weights/best.pt',
-            os.path.join(dst_dir, 'val', 'images'),
-            name=os.path.join(dst_dir, 'val', 'images_infer'),
+            os.path.join(dst_dir, 'images'),
+            name=os.path.join(dst_dir,  'image_infer_vis'),
         )
+    model_predict(
+        r'runs/exp_results/exp_mayolox_/weights/best.pt',
+        os.path.join(src_dir,'images'),
+        name=os.path.join(src_dir,'image_infer_vis'),
+    )
