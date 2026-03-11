@@ -143,22 +143,36 @@ if __name__ == "__main__":
 
     import os
 
-    class_path = r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/rgb_selected_3_p12_v2/class_train.txt'
-    root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/visible_views'
-    infer_dir = root_dir + '_infer1'
+    class_path = r'/scrinvme/huilin/bdd/collected_data/20251216_HMT_data/docs/class_train.txt'
+    # root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_split/visible_views'
+    # infer_dir = root_dir + '_infer'
+    # data_list = os.listdir(root_dir)
+    # os.makedirs(infer_dir, exist_ok=True)
+    # inference = SAHIInference(class_path)
+    # for data_name in data_list:
+    #     data_path = os.path.join(root_dir, data_name)
+    #     infer_path = os.path.join(infer_dir, data_name)
+    #     if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
+    #         # demo_base.model_predict('hmt_t_p123_v41-[yolo11x]',
+    #         #                         data_path,
+    #         #                         name=infer_path,
+    #         #                         batch=32, save_conf=True)
+    #         inference.inference(
+    #             r'/localnvme/project/ultralytics/runs/detect/hmt_rgb_p12_v2_s640-[yolov8x]5/weights/best.pt',
+    #             data_path,
+    #             infer_path,
+    #         )
+
+
+    # root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/rgb_selected_yolo/images'
+    root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/rgb_align_selected_yolo/images'
+    infer_dir = root_dir + '_infer'
     data_list = os.listdir(root_dir)
     os.makedirs(infer_dir, exist_ok=True)
     inference = SAHIInference(class_path)
-    for data_name in data_list:
-        data_path = os.path.join(root_dir, data_name)
-        infer_path = os.path.join(infer_dir, data_name)
-        if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
-            # demo_base.model_predict('hmt_t_p123_v41-[yolo11x]',
-            #                         data_path,
-            #                         name=infer_path,
-            #                         batch=32, save_conf=True)
-            inference.inference(
-                r'/localnvme/project/ultralytics/runs/detect/hmt_rgb_p12_v2_s640-[yolov8x]5/weights/best.pt',
-                data_path,
-                infer_path,
-            )
+
+    inference.inference(
+        r'/localnvme/project/ultralytics/runs/detect/hmt_rgb_p12_v2_s640-[yolov8x]5/weights/best.pt',
+        root_dir,
+        infer_dir,
+    )

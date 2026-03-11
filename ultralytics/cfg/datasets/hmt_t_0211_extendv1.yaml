@@ -1,0 +1,17 @@
+path: /scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected_yolo_extendv1 # dataset root dir
+train: train.txt # train images (relative to 'path') 118287 images
+val: val.txt # val images (relative to 'path') 5000 images
+test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+names:
+  0: high_line
+  1: high
+  2: medium
+  3: low
+  4: leakage
+  5: window
+  6: compressor
+  7: other
+  8: hollow high
+  9: hollow low

@@ -4,21 +4,22 @@ import torch
 demo_base.TASK = 'detect'
 demo_base.EPOCHS = 500
 demo_base.IMGSZ = 640
-demo_base.DEVICE = torch.device('cuda:0')
-demo_base.BATCH_SIZE = 16
+demo_base.DEVICE = torch.device('cuda:1')
+demo_base.BATCH_SIZE = 4
 # demo_base.DATA = ".yaml"
 # demo_base.CONF = 0.5
+
 
 if __name__ == '__main__':
     pass
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v3.yaml', imgsz=640)
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v3_s640.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v3_s640.yaml', imgsz=640)
 
-    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo9('yolov9e.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo10('yolov10x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo12('yolo12x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960, batch=8)
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=960)
+    demo_base.yolo9('yolov9e.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=960)
+    demo_base.yolo10('yolov10x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=960)
+    demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=960)
+    demo_base.yolo12('yolo12x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=960, batch=8)
 
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_s640.yaml', imgsz=640)
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v2_s640.yaml', imgsz=640)

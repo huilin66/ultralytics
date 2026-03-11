@@ -12,7 +12,7 @@ demo_base.DATA = "hmt_rgb_p12.yaml"
 if __name__ == '__main__':
     pass
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v4.yaml', imgsz=640)
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v4_s640.yaml', imgsz=640)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v4_s640.yaml', imgsz=640)
 
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v2_s640.yaml', imgsz=640)
     # demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_rgb_p12_v2_s640.yaml', imgsz=640)
@@ -50,7 +50,8 @@ if __name__ == '__main__':
     # demo_base.yolo8('yolov8x.yaml', auto_optim=True, imgsz=1280)
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2_v3.yaml")
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2.yaml")
-    # demo_base.model_val('hmt_t_p12-[yolov8x]2', batch=32, save_hybrid=True)
+    demo_base.model_val('hmt_t_0211_extendv1-[yolov8x]',)
+    demo_base.model_val('hmt_t_0211_extendv1-[yolov9e]',)
     # demo_base.model_predict('hmt_t_p12-[yolov8x]2',
     #                         r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/thermal_selected_4_p12/val/images',
     #                         name=r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/thermal_selected_4_p12/result_analysis/val_infer',
