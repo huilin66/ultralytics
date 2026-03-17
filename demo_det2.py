@@ -7,30 +7,29 @@ demo_base.TASK = 'detect'
 demo_base.EPOCHS = 300
 demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device('cuda:0')
-demo_base.BATCH_SIZE = 16
+demo_base.BATCH_SIZE = 2
 # demo_base.DATA = ".yaml"
 # demo_base.CONF = 0.5
 
 
 if __name__ == '__main__':
     pass
-    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=640,  workers=0)
-    # demo_base.yolo9('yolov9e.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=640,  workers=0)
-    # demo_base.yolo10('yolov10x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=640,  workers=0)
-    # demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=640,  workers=0)
-    # demo_base.yolo12('yolo12x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=640,  workers=0)
-    # demo_base.yolo26('yolo26x.yaml', auto_optim=False, data='hmt_t_0211_extendv1.yaml', imgsz=640,  workers=0)
+    # demo_base.model_val('hmt_t_0211_extendv1-[yolo11x]', conf=0.5)
+    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]', conf=0.5)
+    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov8x]', conf=0.5)
+    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov9e]', conf=0.5)
 
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_0211_v1.yaml', imgsz=640, workers=0)
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_0211_slice640_v1.yaml', imgsz=640, workers=0)
-    demo_base.yolo9('yolov9e.yaml', auto_optim=False, data='hmt_rgb_0211_slice640_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo10('yolov10x.yaml', auto_optim=False, data='hmt_rgb_0211_slice640_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_rgb_0211_slice640_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo12('yolo12x.yaml', auto_optim=False, data='hmt_rgb_0211_slice640_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo26('yolo26x.yaml', auto_optim=False, data='hmt_rgb_0211_slice640_v1.yaml', imgsz=640,  workers=0)
+    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov8x]')
+    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov9e]')
+    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]')
+    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]2')
+    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]3')
 
-    demo_base.yolo9('yolov9e.yaml', auto_optim=False, data='hmt_rgb_0211_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo10('yolov10x.yaml', auto_optim=False, data='hmt_rgb_0211_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_rgb_0211_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo12('yolo12x.yaml', auto_optim=False, data='hmt_rgb_0211_v1.yaml', imgsz=640,  workers=0)
-    demo_base.yolo26('yolo26x.yaml', auto_optim=False, data='hmt_rgb_0211_v1.yaml', imgsz=640,  workers=0)
+    # demo_base.model_val('debug')
+    # demo_base.model_val('debug5')
+    # demo_base.model_val('debug6')
+    # demo_base.model_val('debug7')
+    # demo_base.model_val('debug8')
+
+    demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]3')
+    demo_base.model_val('debug6')
