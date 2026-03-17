@@ -104,10 +104,10 @@ def compress_to_zip(json_path, zip_path):
 
 # ================= 使用示例 =================
 if __name__ == "__main__":
-    pred_name = 'yolov8x-seg'
+    pred_name = 'a100_yolov8x-seg2'
 
-    REF_JSON = r'/scrinvme/huilin/bdd/cp_data/rip_seg/val_no_annotations.json'
-    MY_TXT_FOLDER = rf"/scrinvme/huilin/bdd/cp_data/rip_seg/val_images_infer/{pred_name}/labels"
+    REF_JSON = r'/data/huilin//scrinvme/huilin/bdd/cp_data/rip_seg/val_no_annotations.json'
+    MY_TXT_FOLDER = rf"/data/huilin//scrinvme/huilin/bdd/cp_data/rip_seg/val_images_infer/{pred_name}/labels"
     # MY_IMAGE_FOLDER = r"/scrinvme/huilin/bdd/cp_data/rip_seg/val_images"
     FINAL_JSON = f"submission/{pred_name}/predictions_both.json"
     FINAL_ZIP = f"submission//{pred_name}/submission.zip"

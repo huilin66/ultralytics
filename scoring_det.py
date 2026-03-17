@@ -218,10 +218,11 @@ def evaluate_seg(gt_coco, pred_coco, thresholds):
 # Main
 # -----------------------
 if __name__ == "__main__":
+    pred_name = 'a100_yolov8x-seg'
     # Codabench-specific paths
     ### MODIFY THESE FILES TO MAKE IT WORK LOCALLY ###
-    ground_truth_json = r"/scrinvme/huilin/bdd/cp_data/rip_seg/val_no_annotations.json"
-    input_path = r"/localnvme/project/ultralytics_main/submission/yolov8x-seg"
+    ground_truth_json = r"data/huilin/scrinvme/huilin/bdd/cp_data/rip_seg/val_no_annotations.json"
+    input_path = rf"data/huilin/localnvme/project/ultralytics_main/submission/{pred_name}"
     output_dir = input_path
     
     predictions_both = os.path.join(input_path, "predictions_both.json")
