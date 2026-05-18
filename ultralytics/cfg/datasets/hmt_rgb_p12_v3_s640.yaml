@@ -1,0 +1,13 @@
+path: /scrinvme/huilin/bdd/collected_data/HMT_data/dataset/rgb_selected_3_p12_v3_slice_640 # dataset root dir
+train: train.txt # train images (relative to 'path') 118287 images
+val: val.txt # val images (relative to 'path') 5000 images
+test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+names:
+  0: Broken tile
+  1: Corrosion
+  2: Cracked Tile
+  3: Delaminated Tile
+  4: Efflorescence
+  5: Peeling

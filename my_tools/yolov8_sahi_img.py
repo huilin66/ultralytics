@@ -57,7 +57,7 @@ class SAHIInference:
         weights: str = "yolo11n.pt",
         input_dir: str = "test.mp4",
         output_dir: str = "",
-        exist_ok: bool = False,
+        conf: float = 0.5,
     ) -> None:
         output_image_dir = output_dir
         # Output setup
@@ -114,6 +114,8 @@ class SAHIInference:
                         cls_name = det[0]
                         cls_id = self.classes.index(cls_name)
                         score = det[2]
+                        if score<conf:
+                            continue
                         bbox = det[3]
 
                         box_w = bbox[2] - bbox[0]
@@ -178,10 +180,12 @@ if __name__ == "__main__":
     #             data_path,
     #             infer_path,
 
+
     class_path = None
     # root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/rgb_selected_yolo/images'
     root_dir = r"/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/rgb_align_selected_yolo/images"
     infer_dir = root_dir + "_infer"
+
     data_list = os.listdir(root_dir)
     os.makedirs(infer_dir, exist_ok=True)
     inference = SAHIInference(class_path)
@@ -190,4 +194,5 @@ if __name__ == "__main__":
         r"/localnvme/project/ultralytics/runs/detect/hmt_rgb_p12_v2_s640-[yolov8x]5/weights/best.pt",
         root_dir,
         infer_dir,
+        conf=0.5
     )

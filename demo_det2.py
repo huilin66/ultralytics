@@ -7,7 +7,7 @@ demo_base.IMGSZ = 2560
 demo_base.DEVICE = torch.device('cuda:1')
 demo_base.BATCH_SIZE = 16
 demo_base.DATA = "hmt_rgb_p12.yaml"
-# demo_base.CONF = 0.5
+demo_base.CONF_PREDICT = 0.5
 
 if __name__ == '__main__':
     pass
@@ -50,9 +50,15 @@ if __name__ == '__main__':
     # demo_base.yolo8('yolov8x.yaml', auto_optim=True, imgsz=1280)
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2_v3.yaml")
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data="dreality_1c_fv2.yaml")
-    demo_base.model_val('hmt_t_0211_extendv1-[yolov8x]',)
-    demo_base.model_val('hmt_t_0211_extendv1-[yolov9e]',)
-    # demo_base.model_predict('hmt_t_p12-[yolov8x]2',
-    #                         r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/thermal_selected_4_p12/val/images',
-    #                         name=r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/thermal_selected_4_p12/result_analysis/val_infer',
-    #                         batch=32,)
+    # demo_base.model_val('hmt_t_p123_v41-[yolov9e]', )
+    # demo_base.model_val('hmt_t_0211_extendv1-[yolov8x]', )
+    # demo_base.model_val('hmt_t_0211_extendv1-[yolov9e]', )
+    # demo_base.model_val('hmt_t_p123_v41-[yolov9e]', conf=0.5)
+    # demo_base.model_val('hmt_t_0211_extendv1-[yolov8x]', conf=0.5)
+    # demo_base.model_val('hmt_t_0211_extendv1-[yolov9e]', conf=0.5)
+
+
+    demo_base.model_predict('hmt_t_0211_extendv1-[yolov9e]',
+                            r'//scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected',
+                            name=r'//scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected_infer',
+                            batch=32,)

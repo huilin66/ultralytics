@@ -1,0 +1,80 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class AttributeContrastiveLoss_NoParam(nn.Module):
+    """
+    pred_attr: [B,N] / [B,N,1] (logit)
+    gt_attr:   [B,N] / [B,N,1] (0/1)
+    fg_mask:   [B,N]           (bool)
+    """
+
+    def __init__(self,
+                 emb_dim=32,
+                 temperature=0.1,
+                 lambda_contrast=0.1,
+                 margin=1.0):
+        super().__init__()
+        self.emb_dim = emb_dim
+        self.temperature = temperature
+        self.lambda_contrast = lambda_contrast
+        self.margin = margin
+
+        proj = torch.randn(1, emb_dim)
+        proj = proj / proj.norm()
+        self.register_buffer("proj_matrix", proj)
+    
+        self.bce = nn.BCEWithLogitsLoss()
+
+    def forward(self, pred_attr, gt_attr, fg_mask):
+        if pred_attr.dim() == 2:
+            pred_attr = pred_attr.unsqueeze(-1)
+        if gt_attr.dim() == 2:
+            gt_attr = gt_attr.unsqueeze(-1)
+        fg_mask = fg_mask.bool()
+
+        if fg_mask.sum() == 0:
+            zero = pred_attr.new_tensor(0.0)
+            return zero, zero, zero
+
+        pred_fg = pred_attr[fg_mask]  # [N_fg,1]
+        gt_fg = gt_attr[fg_mask]      # [N_fg,1]
+
+
+        pred_flat = pred_fg.view(-1)
+        gt_flat = gt_fg.view(-1).float()
+        bce_loss = self.bce(pred_flat, gt_flat)
+
+
+        # pred_fg: [N,1] -- [N,32]
+        emb = pred_fg @ self.proj_matrix    # [N,1]*[1,emb_dim] = [N,emb_dim]
+        emb = F.normalize(emb, dim=-1)
+
+        labels = gt_flat.long()
+
+        con_loss = self._contrastive(emb, labels)
+
+        total_loss = bce_loss + self.lambda_contrast * con_loss
+        return total_loss, bce_loss, con_loss
+
+    def _contrastive(self, emb, labels):
+        N = emb.size(0)
+        if N <= 1:
+            return emb.new_tensor(0.0)
+
+        sim = emb @ emb.t() / self.temperature  # [N,N]
+
+        labels = labels.view(-1, 1)
+        mask = (labels == labels.t()).float()
+
+        logits_mask = 1 - torch.eye(N, device=emb.device)
+        mask = mask * logits_mask
+
+        exp_sim = torch.exp(sim) * logits_mask
+        log_prob = sim - torch.log(exp_sim.sum(dim=1, keepdim=True) + 1e-8)
+
+        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-8)
+
+        loss = -mean_log_prob_pos.mean()
+        return loss

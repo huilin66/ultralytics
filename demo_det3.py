@@ -4,7 +4,7 @@ import torch
 demo_base.TASK = 'detect'
 demo_base.EPOCHS = 300
 demo_base.IMGSZ = 640
-demo_base.DEVICE = torch.device('cuda:0')
+demo_base.DEVICE = torch.device('cuda:1')
 demo_base.BATCH_SIZE = 8
 # demo_base.DATA = ".yaml"
 demo_base.CONF = 0.5
@@ -68,25 +68,28 @@ if __name__ == '__main__':
 
     # demo_base.model_val('hmt_t_p123_v41-[yolov8x]2')
 
-    # import os
-    #
-    # root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_split/thermal_views'
-    # infer_dir = root_dir + '_infer'
-    # data_list = os.listdir(root_dir)
-    # os.makedirs(infer_dir, exist_ok=True)
-    # for data_name in data_list:
-    #     data_path = os.path.join(root_dir, data_name)
-    #     infer_path = os.path.join(infer_dir, data_name)
-    #     if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
-    #         demo_base.model_predict('hmt_t_p123_v41-[yolov8x]5',
-    #                                 data_path,
-    #                                 name=infer_path,
-    #                                 batch=2, save_conf=True)
+    import os
 
-
-    root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected_yolo/images'
+    root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_split/thermal_views'
     infer_dir = root_dir + '_infer'
-    demo_base.model_predict('hmt_t_p123_v41-[yolov8x]5',
-                            root_dir,
-                            name=infer_dir,
-                            batch=2, save_conf=True)
+    data_list = os.listdir(root_dir)
+    os.makedirs(infer_dir, exist_ok=True)
+    for data_name in data_list:
+        data_path = os.path.join(root_dir, data_name)
+        infer_path = os.path.join(infer_dir, data_name)
+        if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
+            demo_base.model_predict(
+                                    # 'hmt_t_p123_v41-[yolov8x]5',
+                                    'hmt_t_0211_extendv1-[yolov9e]',
+                                    data_path,
+                                    name=infer_path, conf=0.5, iou=0.3,
+                                    batch=32, save_conf=True)
+
+
+    # root_dir = r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected_yolo/images'
+    # infer_dir = root_dir + '_infer'
+    # demo_base.model_predict(
+    #                         'hmt_t_p123_v41-[yolov8x]5',
+    #                         root_dir,
+    #                         name=infer_dir,
+    #                         batch=2, save_conf=True)
