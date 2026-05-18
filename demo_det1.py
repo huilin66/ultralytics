@@ -15,11 +15,11 @@ if __name__ == "__main__":
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v3.yaml', imgsz=640)
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p12_v3_s640.yaml', imgsz=640)
 
-    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo11('yolo11x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo9('yolov9e.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo10('yolov10x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960)
-    # demo_base.yolo12('yolo12x.yaml', auto_optim=False, data='hmt_t_p123_v41.yaml', imgsz=960, batch=8)
+    demo_base.yolo8("yolov8x.yaml", auto_optim=False, data="hmt_t_0211_extendv1.yaml", imgsz=960)
+    demo_base.yolo9("yolov9e.yaml", auto_optim=False, data="hmt_t_0211_extendv1.yaml", imgsz=960)
+    demo_base.yolo10("yolov10x.yaml", auto_optim=False, data="hmt_t_0211_extendv1.yaml", imgsz=960)
+    demo_base.yolo11("yolo11x.yaml", auto_optim=False, data="hmt_t_0211_extendv1.yaml", imgsz=960)
+    demo_base.yolo12("yolo12x.yaml", auto_optim=False, data="hmt_t_0211_extendv1.yaml", imgsz=960, batch=8)
 
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_s640.yaml', imgsz=640)
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, data='hmt_rgb_p3_v2_s640.yaml', imgsz=640)

@@ -4,8 +4,10 @@ import shutil
 from tqdm import tqdm
 import numpy as np
 
-def random_split(input_dir, output_dir, train_ratio=0.9, random_seed=1010):
+def random_split(input_dir, output_dir=None, train_ratio=0.9, random_seed=1010):
     pass
+    if output_dir is None:
+        output_dir = input_dir
     level_list= os.listdir(input_dir)
     if 'train' in level_list:
         level_list.remove('train')
@@ -35,11 +37,12 @@ def random_split(input_dir, output_dir, train_ratio=0.9, random_seed=1010):
 
 if __name__ == '__main__':
     pass
-    risk_a_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/abandonment'
-    risk_b_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/broken'
-    risk_c_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/corrosion'
-    risk_d_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/deformation'
-    random_split(risk_a_dir, risk_a_dir)
-    random_split(risk_b_dir, risk_b_dir)
-    random_split(risk_c_dir, risk_c_dir)
-    random_split(risk_d_dir, risk_d_dir)
+    # risk_a_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/abandonment'
+    # risk_b_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/broken'
+    # risk_c_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/corrosion'
+    # risk_d_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001/images_crop_box/deformation'
+    # random_split(risk_a_dir, risk_a_dir)
+    # random_split(risk_b_dir, risk_b_dir)
+    # random_split(risk_c_dir, risk_c_dir)
+    # random_split(risk_d_dir, risk_d_dir)
+    random_split(r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected_yolo_extendv1')

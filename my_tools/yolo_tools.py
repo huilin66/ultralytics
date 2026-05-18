@@ -1,9 +1,10 @@
 import os
 import shutil
-
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+
 def mseg2seg_gt(input_dir, output_dir):
     label_list = os.listdir(input_dir)
     os.makedirs(output_dir, exist_ok=True)
@@ -223,115 +224,42 @@ def data_merge(input_dir1, input_dir2, output_dir):
     df_output_val = pd.concat([df_input_val1, df_input_val2])
     df_output_val.to_csv(output_val_path, index=False, header=False)
 
+
+
+def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, full_path=True, suffix=''):
+    image_dir = os.path.join(data_dir, 'images')
+    label_dir = os.path.join(data_dir, 'labels')
+    file_list = os.listdir(image_dir)
+    if label_dir is not None:
+        label_list = os.listdir(label_dir)
+        label_list = [Path(label_name).stem for label_name in label_list]
+        file_list_check = []
+        for img_name in tqdm(file_list, desc='img check', total=len(file_list)):
+            name = Path(img_name).stem
+            if name in label_list:
+                file_list_check.append(img_name)
+        file_list = file_list_check
+    if save_dir is None:
+        save_dir = os.path.dirname(image_dir)
+    if full_path:
+        file_list = [os.path.join(image_dir, filename) for filename in file_list]
+    np.random.seed(random_seed)
+    np.random.shuffle(file_list)
+    train_num = int(len(file_list)*train_ratio)
+
+
+    train_list = file_list[:train_num]
+    val_list = file_list[train_num:]
+
+    df_train = pd.DataFrame({'filename': train_list})
+    df_val = pd.DataFrame({'filename': val_list})
+    df_all = pd.DataFrame({'filename': train_list+val_list})
+    df_train.to_csv(os.path.join(save_dir, f'train{suffix}.txt'), header=None, index=None)
+    df_val.to_csv(os.path.join(save_dir, f'val{suffix}.txt'), header=None, index=None)
+    df_all.to_csv(os.path.join(save_dir, 'all.txt'), header=None, index=None)
+    print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, f'train{suffix}.txt'),
+                                           len(val_list), os.path.join(save_dir, f'val{suffix}.txt')))
+
 if __name__ == '__main__':
     pass
-    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg', cp_img=True)
-    # seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg',
-    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_seg_c6', cp_img=True)
-    # mseg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389',
-    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_c6', cp_img=True)
-
-    # seg_filter_small(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389',
-    #                  output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001',
-    #                  threshold=0.01, class_list=[2, 4, 5, 7], with_attribute=True)
-    # seg_filter_small(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389',
-    #                  output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005',
-    #                  threshold=0.05, class_list=[2, 4, 5, 7], with_attribute=True)
-    # seg_filter_small(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389',
-    #                  output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010',
-    #                  threshold=0.10, class_list=[2, 4, 5, 7], with_attribute=True)
-
-    # mseg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001',
-    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6', cp_img=True)
-    # mseg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005',
-    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6', cp_img=True)
-    # mseg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010',
-    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6', cp_img=True)
-    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter001_c6_seg', cp_img=True)
-    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter005_c6_seg', cp_img=True)
-    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data389_filter010_c6_seg', cp_img=True)
-
-
-    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data611_seg', cp_img=True)
-
-    # mseg2seg(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg', cp_img=True)
-    # seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg',
-    #              output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6', cp_img=True)
-
-    # seg_class_update(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618',
-    #                  output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data618_mseg_c6', cp_img=True)
-
-    # data_copy(input_dir='/nfsv4/23039356r/data/billboard/bd_data/data618_seg_c6',
-    #           output_dir='/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6',
-    #           )
-
-    # mseg2seg_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels_seg')
-    # seg_class_update_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels_seg',
-    #                     output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/demo_data/labels0515/labels_seg_c6')
-
-    # mseg2seg_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6/added_labels/labels',
-    #          output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data664_seg_c6/added_labels/labels_seg')
-    # seg_class_update_gt(input_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg',
-    #                     output_dir=r'/nfsv4/23039356r/data/billboard/bd_data/data667_seg_c6/added_labels/labels_seg_c6')
-
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/bd_data/data626_mseg',
-    #          output_dir=r'/localnvme/data/billboard/bd_data/data626_seg', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/bd_data/data626_seg',
-    #                     output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_c6', cp_img=True)
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/bd_data/data626_mseg_f001',
-    #          output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f001', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f001',
-    #                     output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f001_c6', cp_img=True)
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/bd_data/data626_mseg_f010',
-    #          output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f010', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f010',
-    #                     output_dir=r'/localnvme/data/billboard/bd_data/data626_seg_f010_c6', cp_img=True)
-
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_mseg',
-    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg',
-    #                  output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_c6', cp_img=True)
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_mseg_f001',
-    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001',
-    #                     output_dir=r'/localnvme/data/billboard/ps_data/psdata122_seg_f001_c6', cp_img=True)
-
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg',
-    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg',
-    #                  output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_c6', cp_img=True)
-    # mseg2seg(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg_f001',
-    #          output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001', cp_img=True)
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001',
-    #                     output_dir=r'/localnvme/data/billboard/ps_data/psdata244_seg_f001_c6', cp_img=True)
-
-    # seg_class_update(input_dir=r'/localnvme/data/billboard/fused_data/data870_mseg',
-    #                  output_dir=r'/localnvme/data/billboard/fused_data/data870_mseg_c6', cp_img=True)
-
-
-    # mseg_class_update(input_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg',
-    #              output_dir=r'/localnvme/data/billboard/ps_data/psdata244_mseg_c6', cp_img=True)
-
-    # data_merge(r'/localnvme/data/billboard/ps_data/psdata244_mseg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata167_mseg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata411_mseg_c6')
-    #
-    # data_merge(r'/localnvme/data/billboard/ps_data/psdata244_seg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata167_seg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata411_seg_c6')
-
-
-    data_merge(r'/localnvme/data/billboard/fused_data/data870_mseg_c6',
-               r'/localnvme/data/billboard/ps_data/psdata167_mseg_c6',
-               r'/localnvme/data/billboard/fused_data/data1037_mseg_c6')
-
-    data_merge(r'/localnvme/data/billboard/fused_data/data870_seg_c6',
-               r'/localnvme/data/billboard/ps_data/psdata167_seg_c6',
-               r'/localnvme/data/billboard/fused_data/data1037_seg_c6')
+    random_select(r'/scrinvme/huilin/bdd/collected_data/20260211_HMT_data/data_anno/t_selected_yolo_extendv1')
