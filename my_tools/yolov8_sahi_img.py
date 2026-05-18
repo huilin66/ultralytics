@@ -27,11 +27,12 @@ class SAHIInference:
         parse_opt: Parses command line arguments for the inference process.
     """
 
-    def __init__(self, class_path):
+    def __init__(self, classes, class_path=None):
         """Initializes the SAHIInference class for performing sliced inference using SAHI with YOLO11 models."""
         self.detection_model = None
-        self.class_path = class_path
-        self._load_class()
+        self.classes = classes
+        # self.class_path = class_path
+        # self._load_class()
 
     def _load_class(self):
 
@@ -47,7 +48,7 @@ class SAHIInference:
         """
 
         self.detection_model = AutoDetectionModel.from_pretrained(
-            model_type="ultralytics", model_path=weights, device="cuda"
+            model_type="yolov8", model_path=weights, device="cuda"
         )
 
     def inference(
@@ -140,25 +141,33 @@ if __name__ == "__main__":
     #     r'/data/huilin/data/BDD/demo',
     #     r'/data/huilin/data/BDD/demo_pred',
     # )
-
-    import os
-
-    class_path = r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/rgb_selected_3_p12_v2/class_train.txt'
-    root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/visible_views'
-    infer_dir = root_dir + '_infer1'
-    data_list = os.listdir(root_dir)
-    os.makedirs(infer_dir, exist_ok=True)
-    inference = SAHIInference(class_path)
-    for data_name in data_list:
-        data_path = os.path.join(root_dir, data_name)
-        infer_path = os.path.join(infer_dir, data_name)
-        if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
-            # demo_base.model_predict('hmt_t_p123_v41-[yolo11x]',
-            #                         data_path,
-            #                         name=infer_path,
-            #                         batch=32, save_conf=True)
-            inference.inference(
-                r'/localnvme/project/ultralytics/runs/detect/hmt_rgb_p12_v2_s640-[yolov8x]5/weights/best.pt',
-                data_path,
-                infer_path,
-            )
+    model_path = r'C:\Users\USER\Downloads\model.pt'
+    data_path = r'C:\Users\USER\Downloads\demo'
+    infer_path = r'C:\Users\USER\Downloads\demo_infer'
+    inference = SAHIInference(['FACE'])
+    inference.inference(
+        model_path,
+        data_path,
+        infer_path,
+    )
+    # import os
+    #
+    # class_path = r'/scrinvme/huilin/bdd/collected_data/HMT_data/dataset/rgb_selected_3_p12_v2/class_train.txt'
+    # root_dir = r'/scrinvme/huilin/bdd/collected_data/HMT_data/data_split/visible_views'
+    # infer_dir = root_dir + '_infer1'
+    # data_list = os.listdir(root_dir)
+    # os.makedirs(infer_dir, exist_ok=True)
+    # inference = SAHIInference(class_path)
+    # for data_name in data_list:
+    #     data_path = os.path.join(root_dir, data_name)
+    #     infer_path = os.path.join(infer_dir, data_name)
+    #     if os.path.isdir(data_path) and len(os.listdir(data_path)) > 0:
+    #         # demo_base.model_predict('hmt_t_p123_v41-[yolo11x]',
+    #         #                         data_path,
+    #         #                         name=infer_path,
+    #         #                         batch=32, save_conf=True)
+    #         inference.inference(
+    #             r'/localnvme/project/ultralytics/runs/detect/hmt_rgb_p12_v2_s640-[yolov8x]5/weights/best.pt',
+    #             data_path,
+    #             infer_path,
+    #         )
