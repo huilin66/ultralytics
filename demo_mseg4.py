@@ -165,14 +165,14 @@ if __name__ == '__main__':
     # demo_base.model_val(val_name, save_conf=True, save_txt=True)
 
 
-    img_dir = r'/localnvme/data/added_data/test_data1121/images'
-    save_dir = r'/localnvme/data/added_data/test_data1121/images_infer'
+    # img_dir = r'/localnvme/data/added_data/test_data1121/images'
+    # save_dir = r'/localnvme/data/added_data/test_data1121/images_infer'
     # val_name = 'fusedata7961_mseg_c5_l2_1117_v19_sb_test_broken_syn_v1-[yolov10x-mseg-dlka3res-7-unet-single]'
     # demo_base.model_predict(val_name, img_dir = img_dir, name=save_dir, conf=0.1)
     # demo_base.model_predict(val_name, img_dir = img_dir, name=save_dir, conf=0.4)
-    val_name = 'fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v3-[yolov10x-mseg-dlka3res-7-unet-single-texture]2'
-    demo_base.model_predict(val_name, img_dir = img_dir, name=save_dir, conf=0.1)
-    demo_base.model_predict(val_name, img_dir = img_dir, name=save_dir, conf=0.4)
+    # val_name = 'fusedata7961_mseg_c5_l2_1117_v21_sb_test_broken_syn_v3-[yolov10x-mseg-dlka3res-7-unet-single-texture]2'
+    # demo_base.model_predict(val_name, img_dir = img_dir, name=save_dir, conf=0.1)
+    # demo_base.model_predict(val_name, img_dir = img_dir, name=save_dir, conf=0.4)
 
     # demo_base.model_predict(val_name, img_dir = img_dir,name=save_dir, conf=0.2)
     # demo_base.model_predict(val_name, img_dir = img_dir,name=save_dir, conf=0.3)
@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
     # demo_base.model_val('fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]',
     #                     data='fusedata7961_mseg_c5_l2_1023_src_all.yaml', save_txt=True, save_conf=True)
-    # demo_base.model_val('fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]', save_txt=True, save_conf=True, eval_att_by_class=False)
+    demo_base.model_val('fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]', save_txt=True, save_conf=True, eval_att_by_class=False)
 
     # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3',
     #                         imgsz=(608,960),batch=6)
