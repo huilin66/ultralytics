@@ -198,11 +198,16 @@ if __name__ == '__main__':
     #                         imgsz=(608,960),batch=6)
 
     val_name = r'fusedata7961_mseg_c5_l2_1113_v17_test-[yolov10x-mseg-dlka3res-7-unet-sep]2'
+    image_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17/val_80p/images'
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_test.yaml', save_txt=True, save_conf=True, conf=0.5)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.001)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.01)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.1)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.2)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.3)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.4)
-    demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.5)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.001)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.01)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.1,filter_small=0.05)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.2)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.3)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.4)
+    # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.5)
+
+    demo_base.model_predict(val_name, img_dir=image_dir, conf=0.1, name=image_dir+'_infer', save_conf=True)
+
+    # demo_base.model_export(val_name, imgsz=(608,992),batch=1)

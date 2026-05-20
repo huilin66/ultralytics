@@ -9,8 +9,8 @@ if __name__ == '__main__':
     # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val717'
     # val_name = 'val_80p_ref'
     val_dir = r'/localnvme/project/ultralytics/runs/msegment/val724'
-    val_name = 'val_test'
-    data_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1031_v4'
+    val_name = 'val_80p'
+    data_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17'
     pred_dir = os.path.join(val_dir, 'labels')
     label_dir = os.path.join(data_dir, val_name, 'labels')
     save_dir = os.path.join(data_dir, val_name, 'result_analysis', val_dir)
@@ -39,8 +39,8 @@ if __name__ == '__main__':
         # [0.3, 0.4, None, 0.05],
         [0.3, 0.4, 0.001, 0.05],
     ]
-    for param in params:
-        pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=param[0],
-                      conf_threshold=param[1], defect_conf_threshold=param[2], filter_small=param[3],
-                      keep='ignore_other_pred_frame', show_list=['risk3'])
+    # for param in params:
+    #     pred2cfm_risk(label_dir, pred_dir, save_dir, att_file, class_file, with_conf=True, iou_thr=param[0],
+    #                   conf_threshold=param[1], defect_conf_threshold=param[2], filter_small=param[3],
+    #                   keep='ignore_other_pred_frame', show_list=['risk3'])
 

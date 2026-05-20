@@ -114,11 +114,11 @@ def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwa
     result = model.val(**val_params)
 
     args_path = os.path.join(os.path.dirname(os.path.dirname(weight_path)), 'args.yaml')
-    print('project information:')
-    with open(args_path, 'r') as f:
-        data = yaml.load(f, Loader=yaml.FullLoader)
-        print(data)
-    print('============FINISH=============')
+    # print('project information:')
+    # with open(args_path, 'r') as f:
+    #     data = yaml.load(f, Loader=yaml.FullLoader)
+    #     print(data)
+    # print('============FINISH=============')
     return result
 
 def model_predict(weight_path, img_dir, weight_name=True, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):

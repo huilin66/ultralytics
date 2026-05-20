@@ -1,6 +1,6 @@
 path: /localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17 # dataset root dir
 train: train_test.txt # train images (relative to 'path') 118287 images
-val: val_80p_ref.txt # val images (relative to 'path') 5000 images
+val: val_80p.txt # val images (relative to 'path') 5000 images
 test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
 
 
