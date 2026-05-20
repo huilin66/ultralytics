@@ -12,7 +12,7 @@ IMGSZ = 640
 CONF_VAL = 0.001
 CONF_PREDICT = 0.25
 TASK = 'msegment'
-DEVICE = torch.device('cuda:0')
+DEVICE = torch.device('cpu')
 DATA = "billboard_mseg_389.yaml"
 FREEZE_NUMS = {
     'yolov8' : 22,
