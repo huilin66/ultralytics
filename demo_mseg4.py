@@ -208,6 +208,15 @@ if __name__ == '__main__':
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.4)
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.5)
 
-    demo_base.model_predict(val_name, img_dir=image_dir, conf=0.1, name=image_dir+'_infer', save_conf=True)
+    # demo_base.model_predict(val_name, img_dir=image_dir, conf=0.1, name=image_dir+'_infer', save_conf=True)
+    brightness_list = [
+        0.5,
+        0.75,
+        1.25,
+        1.5,
+    ]
+    for brightness in brightness_list:
+        image_bright_dir = image_dir + f'_b{int(brightness*100)}'
+        demo_base.model_predict(val_name, img_dir=image_bright_dir, conf=0.1, name=image_bright_dir+'_infer', save_conf=True)
 
     # demo_base.model_export(val_name, imgsz=(608,992),batch=1)
