@@ -14,22 +14,20 @@ demo_base.BATCH_SIZE = 2
 
 if __name__ == '__main__':
     pass
-    # demo_base.model_val('hmt_t_0211_extendv1-[yolo11x]', conf=0.5)
-    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]', conf=0.5)
-    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov8x]', conf=0.5)
-    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov9e]', conf=0.5)
+    # demo_base.model_val('debug14')
+    # demo_base.model_val('debug15')
+    # demo_base.model_val('debug16')
+    # demo_base.model_val('debug17')
+    # demo_base.model_val('debug18')
+    # demo_base.model_val('debug19')
+    # demo_base.model_val('debug26')
+    # demo_base.model_val('debug27')
 
-    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov8x]')
-    # demo_base.model_val('hmt_rgb_0211_slice640_v1-[yolov9e]')
-    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]')
-    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]2')
-    # demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]3')
-
-    # demo_base.model_val('debug')
-    # demo_base.model_val('debug5')
-    # demo_base.model_val('debug6')
-    # demo_base.model_val('debug7')
-    # demo_base.model_val('debug8')
-
-    demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]3')
-    demo_base.model_val('debug6')
+    demo_base.model_val('cubit-[yolov8x]')
+    demo_base.model_val('cubit-[yolov9e]')
+    demo_base.model_val('cubit-[yolov10x]')
+    demo_base.model_val('cubit-[yolo11x]')
+    demo_base.model_val('cubit-[yolo12x]')
+    demo_base.model_val('cubit-[yolo26x]')
+    demo_base.model_val('cubit-[yolo26x_dlka]')
+    demo_base.model_val('cubit-[yolo26x_dlkaatt]')

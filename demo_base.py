@@ -22,41 +22,11 @@ FREEZE_NUMS = {
 }
 
 # region meta tools
-class Tee:
-    def __init__(self, *streams):
-        self.streams = streams
-
-    def write(self, data):
-        for s in self.streams:
-            try:
-                s.write(data)
-            except Exception:
-                pass
-        return len(data)
-
-    def flush(self):
-        for s in self.streams:
-            try:
-                s.flush()
-            except Exception:
-                pass
-
-
-def tee_log_to_run_dir(trainer):
-    save_dir = trainer.save_dir
-    log_fp = open(os.path.join(save_dir, 'console.log'), 'w', buffering=1, encoding='utf-8')
-
-    stdout_orig = sys.__stdout__
-    stderr_orig = sys.__stderr__
-
-    sys.stdout = Tee(stdout_orig, log_fp)
-    sys.stderr = Tee(stderr_orig, log_fp)
-
 
 def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
     model = network(cfg_path, task=TASK)
-    model.load(pretrain_path)
-    model.add_callback("on_train_start", tee_log_to_run_dir)
+    if pretrain_path is not None:
+        model.load(pretrain_path)
     train_params = {
         'data': DATA,
         'device': DEVICE,
