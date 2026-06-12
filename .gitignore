@@ -119,6 +119,7 @@ celerybeat.pid
 .env
 .venv
 .idea
+.idea_backup
 env/
 venv/
 ENV/
@@ -199,6 +200,7 @@ calibration_*.npy
 *.heic
 *.ico
 *.raw
+*.cache
 
 # Training logs
 args.yaml
