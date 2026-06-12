@@ -1,0 +1,10 @@
+path: ${DATA_ROOT}/bdd/DReality_data/yolo_filter_v1 # dataset root dir
+train: train_rel.txt # train images (relative to 'path') 4 images
+val: val_rel.txt # val images (relative to 'path') 4 images
+test: test_rel.txt # test images (optional)
+
+# Classes
+names:
+  0: background
+  1: crack
+

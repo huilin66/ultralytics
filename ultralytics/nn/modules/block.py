@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad
-from .transformer import TransformerBlock
+from .transformer import TransformerBlock, TransformerLayer
 
 __all__ = (
     "C1",
@@ -233,10 +233,10 @@ class DeformConv(nn.Module):
 
 
 class Deformable_LKA(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim, stride=1):
         super().__init__()
         self.conv0 = DeformConv(dim, kernel_size=(5,5), padding=2, groups=dim)
-        self.conv_spatial = DeformConv(dim, kernel_size=(7,7), stride=1, padding=9, groups=dim, dilation=3)
+        self.conv_spatial = DeformConv(dim, kernel_size=(7,7), stride=stride, padding=9, groups=dim, dilation=3)
         self.conv1 = nn.Conv2d(dim, dim, 1)
 
     def forward(self, x):
@@ -265,11 +265,24 @@ class Deformable_LKA_Attention(nn.Module):
         x = x + shorcut
         return x
 
+class TF_Down(nn.Module):
+    def __init__(self, c, num_heads=4, stride=2):
+        super().__init__()
+
+        self.tf_layer = TransformerLayer(c, num_heads)
+        self.down_layer = nn.MaxPool2d(kernel_size=stride, stride=stride, padding=stride // 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.tf_layer(x)
+        x = self.down_layer(x)
+        return x
+
+
 class SPPF(nn.Module):
     """Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher."""
 
     def __init__(self, c1: int, c2: int, k: int = 5, n: int = 3, shortcut: bool = False,
-                 add_module=None, res_module=False, pos_module=None):
+                 add_module=None):
         """Initialize the SPPF layer with given input/output channels and kernel size.
 
         Args:
@@ -291,46 +304,27 @@ class SPPF(nn.Module):
         self.add = shortcut and c1 == c2
 
         self.add_module = add_module
-        self.res_module = res_module
-        self.pos_module = pos_module
-        if self.pos_module == 1:
-            self.c1_module, self.c2_module = c1, c1
-        elif self.pos_module == 2:
-            self.c1_module, self.c2_module = c_, c_
-        elif self.pos_module == 3:
-            self.c1_module, self.c2_module = c2, c2
-        elif self.pos_module is None:
-            self.c1_module, self.c2_module = None, None
-        else:
-            raise ValueError(self.pos_module, 'not support!')
-        if self.add_module == 'c3tr':
-            self.layer_module = C3TR(self.c1_module, self.c2_module)
-        elif self.add_module == 'dlka':
-            self.layer_module = Deformable_LKA(self.c1_module)
-        elif self.add_module == 'dlkaatt':
-            self.layer_module = Deformable_LKA_Attention(self.c1_module)
+        if getattr(self, "add_module") and 'tf_down' in self.add_module:
+            self.conv_tf = TF_Down(c2)
+        elif getattr(self, "add_module") and 'dlka' in self.add_module:
+            self.conv_dlka = Deformable_LKA(c2)
         else:
             self.layer_module = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply sequential pooling operations to input and return concatenated feature maps."""
-        if hasattr(self, 'pos_module') and self.pos_module==1:
-            memory = self.layer_module(x)
-            x = memory + x if self.res_module else memory
-
         y = [self.cv1(x)]
 
-        if hasattr(self, 'pos_module') and self.pos_module==2:
-            memory = self.layer_module(y[0])
-            y = [memory + y[0]] if self.res_module else [memory]
-
-        y.extend(self.m(y[-1]) for _ in range(getattr(self, "n", 3)))
+        if getattr(self, "add_module") and not self.add_module is None:
+            y.extend(self.m(y[-1]) for _ in range(getattr(self, "n", 3)))
+        elif getattr(self, "add_module") and len(self.add_module) > 0:
+            if 'tf_down' in self.add_module:
+                y.extend(self.conv_tf(y[-1]))
+            if 'dlka' in self.add_module:
+                y.extend(self.conv_dlka(y[-1]))
+            y.extend(self.m(y[-1]) for _ in range(getattr(self, "n", 3-len(self.add_module))))
         y = self.cv2(torch.cat(y, 1))
         z = y + x if getattr(self, "add", False) else y
-
-        if hasattr(self, 'pos_module') and self.pos_module==3:
-            memory = self.layer_module(z)
-            z = memory + z if self.res_module else memory
         return z
 
 

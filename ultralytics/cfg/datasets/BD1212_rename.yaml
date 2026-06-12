@@ -1,0 +1,20 @@
+path: /data/huilin/data/BDD/BD1212 # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names:
+  0: background
+  1: crack
+  2: hole
+  3: blister
+  4: delamination
+  5: peeling
+  6: spalling
+  7: leakage
+  8: corrosion
+  9: condensation
+  10: stain
+  11: vegetation
+
