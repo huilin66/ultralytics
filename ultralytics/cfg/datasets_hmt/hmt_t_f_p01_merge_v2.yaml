@@ -1,0 +1,11 @@
+path: /localnvme/data/bdd_hmt/sua_t_filter_p01_merge_v2 # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names:
+  0: Temperature Medium
+  1: Temperature High
+  2: Hollow
+  3: Leakage
