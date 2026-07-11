@@ -4,7 +4,7 @@ import os
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 demo_base.TASK = 'detect'
-demo_base.EPOCHS = 100
+demo_base.EPOCHS = 300
 demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device('cuda:0')
 demo_base.BATCH_SIZE = 16
@@ -74,4 +74,22 @@ if __name__ == '__main__':
 
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_t_f_p01_merge.yaml")
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_f_p01_merge.yaml")
-    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_t_f_p01_merge_v2.yaml", cls_pw=0.5)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_t.yaml", cls_pw=0.5)
+
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_f01.yaml", cls_pw=0.5)
+    # demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5)
+    
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_v2.yaml", cls_pw=0.5)
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5)
+    demo_base.yolo26('yolo26x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_v2.yaml", cls_pw=0.5)
+    demo_base.yolo26('yolo26x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5)
+
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_v2.yaml", cls_pw=0.5, imgsz=960)
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5, imgsz=960)
+    demo_base.yolo26('yolo26x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_v2.yaml", cls_pw=0.5, imgsz=960)
+    demo_base.yolo26('yolo26x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5, imgsz=960)
+
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_v2.yaml", cls_pw=0.5, imgsz=1280)
+    demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5, imgsz=1280)
+    demo_base.yolo26('yolo26x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge_v2.yaml", cls_pw=0.5, imgsz=1280)
+    demo_base.yolo26('yolo26x.yaml', auto_optim=False, name=NAME, data="hmt_rgb_merge.yaml", cls_pw=0.5, imgsz=1280)

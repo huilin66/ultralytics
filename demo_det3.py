@@ -17,10 +17,15 @@ if __name__ == '__main__':
     NAME = None
 
     csv_path = r'summary_conf_0.01.csv'
-    # demo_base.model_val('hmt_rgb_f_p01-[yolov8x]', save_conf=True, save_txt=True)
+    # demo_base.model_val('hmt_t-[yolov8x]-8', conf=0.001, iou=0.5)
+    # demo_base.model_val('hmt_rgb_merge_f01-[yolov8x]')
+    # demo_base.model_val('hmt_rgb_merge-[yolov8x]-2')
+
+    demo_base.model_val('hmt_rgb_merge-[yolov8x]-4', save_conf=True, save_txt=True)
+    # demo_base.model_val('hmt_t-[yolov8x]-6', save_conf=True, save_txt=True)
     # demo_base.model_val('hmt_bp_cube_f_p01-[yolov8x]', save_conf=True, save_txt=True)
 
-    demo_base.model_val('hmt_t_f_p01_merge-[yolov8x]', save_conf=True, save_txt=True)
+    # demo_base.model_val('hmt_t_f_p01_merge-[yolov8x]', save_conf=True, save_txt=True)
     # demo_base.model_val('hmt_t_f_p01_merge-[yolov8x]', save_conf=True, save_txt=True)
 
     # demo_base.model_val_summary('hmt_bp_cube-[yolov8x]2', csv_path=csv_path)
