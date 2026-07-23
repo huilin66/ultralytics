@@ -94,6 +94,7 @@ from .head import (
     YOLOESegment26,
     v10Detect,
 )
+from .multimodal import ModalSplit
 from .transformer import (
     AIFI,
     MLP,
@@ -166,6 +167,7 @@ __all__ = (
     "MLPBlock",
     "MSDeformAttn",
     "MaxSigmoidAttnBlock",
+    "ModalSplit",
     "Pose",
     "Pose26",
     "Proto",
