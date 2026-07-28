@@ -31,5 +31,8 @@ if __name__ == '__main__':
     # demo_base.model_val('debug7')
     # demo_base.model_val('debug8')
 
-    demo_base.model_val('hmt_rgb_0211_v1-[yolov8x]3')
-    demo_base.model_val('debug6')
+    demo_base.model_val('BP_HMT_1216-[yolov8x]2')
+    demo_base.model_val('BP_HMT_1216-[yolov9e]')
+    demo_base.model_val('BP_HMT_1216-[yolov10x]')
+    demo_base.model_val('BP_HMT_1216-[yolo11x]')
+    demo_base.model_val('BP_HMT_1216-[yolo12x]')
