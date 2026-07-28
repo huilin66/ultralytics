@@ -2,6 +2,10 @@ import os
 import sys
 import yaml
 import torch
+import csv
+import json
+from datetime import datetime
+from pathlib import Path
 from ultralytics import YOLO
 
 BATCH_SIZE = 32
@@ -22,6 +26,96 @@ FREEZE_NUMS = {
 }
 
 # region meta tools
+def read_yaml_safely(path):
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return yaml.load(f, Loader=yaml.FullLoader) or {}
+    except Exception as e:
+        print(f'[WARN] failed to read yaml: {path}, error: {e}')
+        return {}
+
+
+def append_dict_to_csv(row, csv_path):
+    """
+    Append one dict row to CSV.
+    If new keys appear, rewrite CSV with expanded header.
+    """
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    row = {k: _to_scalar(v) for k, v in row.items()}
+
+    if not csv_path.exists():
+        with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+            writer.writeheader()
+            writer.writerow(row)
+        return
+
+    with open(csv_path, 'r', newline='', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        old_rows = list(reader)
+        old_fields = reader.fieldnames or []
+
+    new_fields = list(old_fields)
+    for k in row.keys():
+        if k not in new_fields:
+            new_fields.append(k)
+
+    with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
+        writer = csv.DictWriter(f, fieldnames=new_fields)
+        writer.writeheader()
+        writer.writerows(old_rows)
+        writer.writerow(row)
+
+
+def _to_scalar(v):
+    """
+    Make values CSV-safe.
+    """
+    if v is None:
+        return ''
+
+    if isinstance(v, (str, int, float, bool)):
+        return v
+
+    try:
+        if hasattr(v, 'item'):
+            return v.item()
+    except Exception:
+        pass
+
+    try:
+        return json.dumps(v, ensure_ascii=False)
+    except Exception:
+        return str(v)
+
+
+def collect_val_metrics(result):
+    """
+    Collect scalar metrics from Ultralytics val result.
+    """
+    row = {}
+
+    if hasattr(result, 'results_dict'):
+        row.update(result.results_dict)
+
+    if hasattr(result, 'speed') and isinstance(result.speed, dict):
+        for k, v in result.speed.items():
+            row[f'speed/{k}'] = v
+
+    # Optional common attributes, depending on Ultralytics version/task.
+    for attr in ['fitness']:
+        if hasattr(result, attr):
+            try:
+                row[attr] = getattr(result, attr)
+            except Exception:
+                pass
+
+    return row
+
 class Tee:
     def __init__(self, *streams):
         self.streams = streams
@@ -119,6 +213,102 @@ def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwa
         print(data)
     print('============FINISH=============')
     return result
+
+def model_val_summary(
+    weight_path,
+    weight_name=True,
+    network=YOLO,
+    save_txt=False,
+    save_csv=True,
+    csv_path=None,
+    save_console_log=True,
+    **kwargs
+):
+    if weight_name:
+        weight_path = os.path.join('runs', TASK, weight_path, 'weights', 'best.pt')
+
+    weight_path = os.path.normpath(weight_path)
+    run_dir = os.path.dirname(os.path.dirname(weight_path))  # runs/TASK/exp_name
+    exp_name = os.path.basename(run_dir)
+
+    print(f'val with {weight_path}')
+
+    model = network(weight_path, task=TASK)
+
+    val_params = {
+        'device': DEVICE,
+        'batch': BATCH_SIZE,
+        'conf': CONF_VAL,
+        'save_txt': save_txt,
+        'imgsz': IMGSZ,
+    }
+    val_params.update(kwargs)
+
+    # Optional: write val console output to run_dir/val_console.log
+    stdout_orig = sys.stdout
+    stderr_orig = sys.stderr
+    log_fp = None
+
+    if save_console_log:
+        os.makedirs(run_dir, exist_ok=True)
+        log_path = os.path.join(run_dir, 'val_console.log')
+        log_fp = open(log_path, 'a', buffering=1, encoding='utf-8')
+        sys.stdout = Tee(stdout_orig, log_fp)
+        sys.stderr = Tee(stderr_orig, log_fp)
+
+    try:
+        result = model.val(**val_params)
+
+        args_path = os.path.join(run_dir, 'args.yaml')
+        train_args = read_yaml_safely(args_path)
+
+        print('project information:')
+        print(train_args)
+
+        row = {
+            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'exp_name': exp_name,
+            'weight_path': weight_path,
+            'data': val_params.get('data', ''),
+            'imgsz': val_params.get('imgsz', ''),
+            'batch': val_params.get('batch', ''),
+            'device': str(val_params.get('device', '')),
+            'conf': val_params.get('conf', ''),
+            'iou': val_params.get('iou', ''),
+            'split': val_params.get('split', 'val'),
+            'save_txt': val_params.get('save_txt', ''),
+        }
+
+        # Add useful train args from args.yaml
+        for k in [
+            'model', 'epochs', 'patience', 'optimizer', 'lr0', 'lrf',
+            'box', 'cls', 'dfl', 'seg', 'mdet', 'freeze', 'name'
+        ]:
+            if k in train_args:
+                row[f'train/{k}'] = train_args[k]
+
+        # Add Ultralytics validation metrics
+        row.update(collect_val_metrics(result))
+
+        if save_csv:
+            if csv_path is None:
+                csv_path = os.path.join(run_dir, 'val_results.csv')
+
+            append_dict_to_csv(row, csv_path)
+            append_dict_to_csv(row, os.path.join('runs', TASK, 'all_val_results.csv'))
+
+            print(f'[CSV] saved val metrics to: {csv_path}')
+            print(f'[CSV] appended global metrics to: {os.path.join("runs", TASK, "all_val_results.csv")}')
+
+        print('============FINISH=============')
+        return result
+
+    finally:
+        if save_console_log:
+            sys.stdout = stdout_orig
+            sys.stderr = stderr_orig
+            if log_fp is not None:
+                log_fp.close()
 
 def model_predict(weight_path, img_dir, weight_name=True, network=YOLO, save=True, save_txt=True, stream=True, **kwargs):
     if weight_name:

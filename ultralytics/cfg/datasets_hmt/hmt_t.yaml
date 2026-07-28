@@ -1,0 +1,15 @@
+path: /localnvme/data/bdd_hmt/sua_t # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names:
+  0: background
+  1: Hollow Low Risk
+  2: Hollow High Risk
+  3: Hollow High Risk Line
+  4: Leakage High Risk
+  5: Temperature Medium Risk
+  6: Temperature High Risk
+

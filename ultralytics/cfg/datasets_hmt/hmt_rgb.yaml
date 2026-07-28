@@ -1,0 +1,19 @@
+path: /localnvme/data/bdd_hmt/sua_rgb # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names:
+  0: background
+  1: Broken Low Risk
+  2: Broken High Risk
+  3: Corrosion
+  4: Cracked Tile
+  5: Delaminated Tile Low Risk
+  6: Delaminate Tile High Risk
+  7: Efforescene Low Gray
+  8: Efflorescene Low Risk
+  9: Efflorescene High Risk
+  10: Spalling
+
