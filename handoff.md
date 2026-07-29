@@ -92,8 +92,7 @@ model = SegmentationModel("models/segment/yolov9-c-dseg2.yaml", ch=6, nc=nc)
 最终层定义为：
 
 ```yaml
-[[A3, A4, A5, P3, P4, P5, proto_A_feature, proto_P_feature],
- 1, DualDSegment, [nc, 32, 256]]
+[[A3, A4, A5, P3, P4, P5, proto_A_feature, proto_P_feature], 1, DualDSegment, [nc, 32, 256]]
 ```
 
 `DualDSegment` 包含：
@@ -203,16 +202,16 @@ YOLO 规则读取，因而两个模态必须同名、像素对齐并共享标注
 `ultralytics/cfg/models/11-RGBT/` 提供多个网络 YAML。通用切分算子是
 `SilenceChannel(c_start, c_end)`，它对 NCHW 张量做通道切片。
 
-| 方案 | 代码中的拓扑 | 适用含义 |
-| --- | --- | --- |
-| earlyfusion | `SilenceChannel[0,4]` 后直接送入一个常规 YOLO11 骨干 | 首层直接学习 RGB 与 IR 的联合卷积。 |
-| midfusion（基础 RGBT 方案） | RGB 与 IR 各自完整 C3k2 骨干；P3/P4/P5 concat 后共享 SPPF、C2PSA、PAN 和一个 `Detect`/`Segment` 头 | 先模态专用编码，再多尺度特征融合。 |
-| mid-to-late | 两支先各自到 P3，再在 P3/P4/P5 融合并共享后续下采样/检测颈部 | 融合发生在中后段。 |
-| latefusion | 两支各自跑完整骨干和 PAN；最终 concat 同尺度检测特征，再接一个检测头 | 融合最晚，计算量最大。 |
-| scorefusion | 两支各自跑完整网络，六张尺度特征同时送入通用 `Detect` | 实际代码是把六组 anchors/predictions一起 decode，再由后处理 NMS 汇总；没有额外的显式分数加权模块。 |
-| share | `ChannelToNumber` 把 RGB 与 IR 扩到 batch 维，经过同一套共享权重的骨干，再由 `NumberToChannel` 合回通道维 | 参数最省，但假设两模态可共享表征。 |
-| midfusion-P3-PGI | 融合主分支之外，用 CBLinear/CBFuse 生成辅助分支并接 `DetectAux` | 可逆辅助监督的检测版。 |
-| midfusion-MCF | 可见光侧通过零初始化 `ZeroConv2d` 注入红外主分支，并以 ADD 逐尺度相加 | ControlNet 风格的可控跨模态注入，需要专门的预训练/权重转换流程。 |
+| 方案                        | 代码中的拓扑                                                                                              | 适用含义                                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| earlyfusion                 | `SilenceChannel[0,4]` 后直接送入一个常规 YOLO11 骨干                                                      | 首层直接学习 RGB 与 IR 的联合卷积。                                                                |
+| midfusion（基础 RGBT 方案） | RGB 与 IR 各自完整 C3k2 骨干；P3/P4/P5 concat 后共享 SPPF、C2PSA、PAN 和一个 `Detect`/`Segment` 头        | 先模态专用编码，再多尺度特征融合。                                                                 |
+| mid-to-late                 | 两支先各自到 P3，再在 P3/P4/P5 融合并共享后续下采样/检测颈部                                              | 融合发生在中后段。                                                                                 |
+| latefusion                  | 两支各自跑完整骨干和 PAN；最终 concat 同尺度检测特征，再接一个检测头                                      | 融合最晚，计算量最大。                                                                             |
+| scorefusion                 | 两支各自跑完整网络，六张尺度特征同时送入通用 `Detect`                                                     | 实际代码是把六组 anchors/predictions一起 decode，再由后处理 NMS 汇总；没有额外的显式分数加权模块。 |
+| share                       | `ChannelToNumber` 把 RGB 与 IR 扩到 batch 维，经过同一套共享权重的骨干，再由 `NumberToChannel` 合回通道维 | 参数最省，但假设两模态可共享表征。                                                                 |
+| midfusion-P3-PGI            | 融合主分支之外，用 CBLinear/CBFuse 生成辅助分支并接 `DetectAux`                                           | 可逆辅助监督的检测版。                                                                             |
+| midfusion-MCF               | 可见光侧通过零初始化 `ZeroConv2d` 注入红外主分支，并以 ADD 逐尺度相加                                     | ControlNet 风格的可控跨模态注入，需要专门的预训练/权重转换流程。                                   |
 
 基础 `yolo11-RGBT-midfusion.yaml` 的 RGBT 通道划分是 `[0:3]` 的 visible 和 `[3:4]` 的 IR，
 两支各自产生 P3/P4/P5 后 concat；融合后只有一个标准 YOLO11 检测头。分割版
@@ -225,22 +224,117 @@ PGI 变体 `yolo11-RGBT-midfusion-P3-PGI.yaml` 才使用双输出 `DetectAux`：
 
 ### 与原 YOLOv9 多模态实例分割实现的区别
 
-| 维度 | 原 YOLOv9 `yolov9-c-dseg2` | YOLOv11-RGBT 基础 midfusion | 影响 |
-| --- | --- | --- | --- |
-| 默认输入 | 一个预合成的 H×W×6 文件，两个三通道模态 | 两个文件在运行时配对；默认是 RGB(3)+IR(gray,1)=4C，也可选 RGBRGB6C | YOLO11 更易复用常见 RGBT 数据集；YOLOv9 适合已打包的多通道传感器样本。 |
-| 样本配对 | 没有运行时配对，固定按 `:3` / `3:` 切分 | 由 `visible→infrared` 的字符串替换配对，名称可配置 | YOLO11 更灵活，但依赖目录/文件命名严格一致。 |
-| 空间增强 | 两张数组分别处理；letterbox、透视和翻转显式同步 | 合并后走统一增广；6C 透视时仍确保两半共用同一矩阵 | YOLO11 的几何同步更集中，且避免了 YOLOv9 Mosaic 中两次独立 `copy_paste` 随机抽样造成的潜在错位。 |
-| 缓存 | 基础缓存未保存第二模态，不能可靠开启 `--cache` | 缓存合成后的 4C/6C NPY，支持 RAM/disk cache | YOLO11 的大规模训练数据管线更完整。 |
-| 主网络 | 自定义 `Conv2B/1/2` 双流 GELAN；P3/P4/P5 concat 后为主颈部 | 标准 YOLO11 双 C3k2 流，融合后走 SPPF、C2PSA 和 PAN | 两者都是中期多尺度 concat，但骨干与颈部世代不同。 |
-| PGI/辅助分支 | `dseg2` 固定包含辅助 A3/A4/A5；训练即双头 | 基础 midfusion 无辅助支路；仅选用 `*-PGI.yaml` 才有 `DetectAux` | YOLOv9 的辅助监督是该实例分割结构的一部分；YOLO11 将其作为可选实验拓扑。 |
-| 分割头 | `DualDSegment` 有两套检测头、两套 32D coefficients、两张 prototype；两支都算 mask loss | `midfusion-seg` 是一套标准 `Segment`，仅使用融合特征与一张 prototype | YOLOv9 直接对辅助分支施加实例分割深监督；YOLO11 基础方案只有融合主头的分割监督。 |
-| 部署输出 | `DualDSegment` 显式只返回主 P 分支结果 | 基础 midfusion 从始至终只有一个头；PGI 的 `DetectAux` 推理时只返回主头 | 两者部署模型都是单输出，但 YOLO11 基础结构更简单。 |
-| 损失 | 自定义双 TaskAlignedAssigner；辅助 box/DFL/seg 先乘 0.25，主支全量监督 | 标准 YOLO11 TAL + BCE/box/DFL；只有 `DetectAux` 才增加 0.25 辅助检测损失 | YOLOv9 的辅助分支覆盖检测和分割；YOLO11 PGI 变体的辅助监督是检测级。 |
-| 任务与推理闭环 | 训练内验证支持六通道，但独立 `predict.py` / `val_dual.py` 仍沿用三通道路径 | detect、segment、pose 的 trainer/validator/predictor 都透传多模态参数；图像和视频均支持配对加载 | YOLO11 的工程闭环更适合直接训练、验证、部署。 |
-| 从头训练 | `train_dual2.py` 的无权重分支错误地按 `ch=3` 建模 | `DetectionModel` 从 YAML 的 `ch` 建模，4C/6C 配置可直接从头初始化 | YOLO11 对输入通道所有权更清晰。 |
+| 维度           | 原 YOLOv9 `yolov9-c-dseg2`                                                             | YOLOv11-RGBT 基础 midfusion                                                                     | 影响                                                                                             |
+| -------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 默认输入       | 一个预合成的 H×W×6 文件，两个三通道模态                                                | 两个文件在运行时配对；默认是 RGB(3)+IR(gray,1)=4C，也可选 RGBRGB6C                              | YOLO11 更易复用常见 RGBT 数据集；YOLOv9 适合已打包的多通道传感器样本。                           |
+| 样本配对       | 没有运行时配对，固定按 `:3` / `3:` 切分                                                | 由 `visible→infrared` 的字符串替换配对，名称可配置                                              | YOLO11 更灵活，但依赖目录/文件命名严格一致。                                                     |
+| 空间增强       | 两张数组分别处理；letterbox、透视和翻转显式同步                                        | 合并后走统一增广；6C 透视时仍确保两半共用同一矩阵                                               | YOLO11 的几何同步更集中，且避免了 YOLOv9 Mosaic 中两次独立 `copy_paste` 随机抽样造成的潜在错位。 |
+| 缓存           | 基础缓存未保存第二模态，不能可靠开启 `--cache`                                         | 缓存合成后的 4C/6C NPY，支持 RAM/disk cache                                                     | YOLO11 的大规模训练数据管线更完整。                                                              |
+| 主网络         | 自定义 `Conv2B/1/2` 双流 GELAN；P3/P4/P5 concat 后为主颈部                             | 标准 YOLO11 双 C3k2 流，融合后走 SPPF、C2PSA 和 PAN                                             | 两者都是中期多尺度 concat，但骨干与颈部世代不同。                                                |
+| PGI/辅助分支   | `dseg2` 固定包含辅助 A3/A4/A5；训练即双头                                              | 基础 midfusion 无辅助支路；仅选用 `*-PGI.yaml` 才有 `DetectAux`                                 | YOLOv9 的辅助监督是该实例分割结构的一部分；YOLO11 将其作为可选实验拓扑。                         |
+| 分割头         | `DualDSegment` 有两套检测头、两套 32D coefficients、两张 prototype；两支都算 mask loss | `midfusion-seg` 是一套标准 `Segment`，仅使用融合特征与一张 prototype                            | YOLOv9 直接对辅助分支施加实例分割深监督；YOLO11 基础方案只有融合主头的分割监督。                 |
+| 部署输出       | `DualDSegment` 显式只返回主 P 分支结果                                                 | 基础 midfusion 从始至终只有一个头；PGI 的 `DetectAux` 推理时只返回主头                          | 两者部署模型都是单输出，但 YOLO11 基础结构更简单。                                               |
+| 损失           | 自定义双 TaskAlignedAssigner；辅助 box/DFL/seg 先乘 0.25，主支全量监督                 | 标准 YOLO11 TAL + BCE/box/DFL；只有 `DetectAux` 才增加 0.25 辅助检测损失                        | YOLOv9 的辅助分支覆盖检测和分割；YOLO11 PGI 变体的辅助监督是检测级。                             |
+| 任务与推理闭环 | 训练内验证支持六通道，但独立 `predict.py` / `val_dual.py` 仍沿用三通道路径             | detect、segment、pose 的 trainer/validator/predictor 都透传多模态参数；图像和视频均支持配对加载 | YOLO11 的工程闭环更适合直接训练、验证、部署。                                                    |
+| 从头训练       | `train_dual2.py` 的无权重分支错误地按 `ch=3` 建模                                      | `DetectionModel` 从 YAML 的 `ch` 建模，4C/6C 配置可直接从头初始化                               | YOLO11 对输入通道所有权更清晰。                                                                  |
 
 结论：两者的共同核心是“模态专用编码后，在多尺度特征层融合”。原 YOLOv9 实现更强调
 PGI 双头和双分割监督；YOLOv11-RGBT 更强调把配对读取、通道模式、缓存、训练/验证/推理与多种融合
 YAML 统一为可配置框架。若迁移你的任务，优先保留 YOLO11 的运行时配对与统一增广/推理管线；若要保留
 YOLOv9 的训练优势，则需要在 YOLO11 的 `Segment` 路径中扩展 `DetectAux` 对应的双 mask coefficient、双 prototype
 和辅助 segmentation loss，而不能只套用检测版 `DetectAux`。
+
+## 下一阶段：统一多模态融合框架设计
+
+### 可行性与现状
+
+该设计可行。`E:\repository\YOLOv11-RGBT` 已分别用 YAML 分支实现 early、mid、mid-to-late、late、score 和
+weight sharing；其中 `ChannelToNumber` / `NumberToChannel` 通过把两路样本折叠到 batch 维后复用同一套模块，证明
+“同一模块实例被多模态重复调用”的共享权重路线可行。
+
+本项目当前已具备任意路像素对齐模态的读取、`ModalSplit`、YAML 分支和标准检测/实例分割训练闭环；现有的
+三路 YOLO11 示例属于 backbone 输出处的 `Concat` 融合。下面的六种策略、`Add`、融合模块注册、阶段化共享和
+score fusion 均是后续实现范围，不能误称为当前已经支持的功能。
+
+### 统一阶段定义
+
+为避免不同 YOLO 世代把同一层称作 backbone 或 neck，融合 YAML 必须显式声明边界，而不是在代码中根据模型名
+猜测层号。本文采用如下术语：
+
+```text
+input → encoder → nape → (backbone 输出) → neck → head feature → Detect / Segment
+```
+
+- `nape` 是 **backbone 尾部** 的语义提炼部分；它不同于 head 中的 `neck`。这一命名沿用本设计，避免把两个
+  位置混为一谈。
+- 模板的默认划分是：YOLOv8、YOLOv9、YOLO26 的最后一个 backbone 层为 `nape`；YOLOv10、YOLO11 的最后两个
+  backbone 层为 `nape`；YOLOv12 没有 `nape`，整个 backbone 都是 encoder。
+- P2/P6 等变体可以改变层数和多尺度输出，因此上述只是模板约定。每个 YAML 都必须提供自己的
+  `encoder_end`、`nape_end` 和各尺度输出锚点，不能把该约定写死为版本判断。
+- 本文中的 `neck` 仅指 head 中 `Detect` / `Segment` 等最终预测层之前的 PAN/FPN 路径。
+
+所有融合点的多路特征必须具有相同 batch、空间尺度和语义 stride。`Concat` 在通道维拼接后需要显式投影层
+（通常为 `1×1 Conv`）；`Add` 在相加前必须用 adapter 将通道数对齐。框架不应静默 resize、截断或广播特征。
+
+### 六种训练期融合策略
+
+| 代码  | 名称              | 拓扑与融合位置                                                                                      | 基线算子与训练含义                                                 |
+| ----- | ----------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `IF`  | `input_fusion`    | 各模态通道直接堆叠，送入一条 encoder。                                                              | 只有一个分支；首层联合学习全部传感器，复用原生损失。               |
+| `EF`  | `encoder_fusion`  | 每模态独立运行 encoder；在 encoder 输出处逐尺度融合，再进入共享 nape、neck 和预测头。               | `Concat + 1×1 Conv` 或对齐后的 `Add`；适合较早交换模态信息。       |
+| `NIF` | `nape_in_fusion`  | 独立 encoder 将特征送入 nape；融合模块插入 nape 的内部结点，而不是只在其输入/输出处融合。           | 需要专用 `NapeFusionBlock`；适合注意力、门控、交叉调制等复杂融合。 |
+| `BF`  | `backbone_fusion` | 每模态完整运行 encoder+nape；在 backbone 的 P3/P4/P5 等输出处逐尺度融合，再进入共享 neck 和预测头。 | 当前三路示例的扩展形式，是首个应稳定的双/多模态基线。              |
+| `NF`  | `neck_fusion`     | 每模态独立运行完整 backbone 和 neck；在 Detect 前的同尺度 neck 输出处融合。                         | 模态专用表征最深、算力最高；融合后使用一个共享预测头。             |
+| `HF`  | `head_fusion`     | 每模态独立运行到 head 的原始预测特征或 logits；在 decode/NMS 前融合。                               | 必须定义与融合输出相容的预测投影和损失；不能直接融合 `Results`。   |
+
+`HF` 不等同于 score fusion。score fusion 保留多个独立预测头，分别 decode 和 NMS 后再合并候选框/类别分数；
+它是部署期后处理策略，默认不参与反向传播、不能复用单头训练损失，也需要单独的导出和评估路径。若希望把
+多头 raw logits 在训练期融合，应归入 `HF`，并实现相应的 loss contract。
+
+### 融合模块接口
+
+第一阶段只提供 `concat` 与 `add` 两种稳定基线；融合点的 YAML 不应散落手写 `Concat` 和通道投影，而应通过
+统一配置解析为对应模块。例如：
+
+```yaml
+multimodal:
+  fusion: BF
+  operator: concat # concat 或 add
+  fusion_points: [P3, P4, P5]
+  share_weight: false
+```
+
+自定义融合模块通过注册表暴露，统一满足 `forward(features: list[Tensor]) -> Tensor`。注册项必须声明支持的模态数、
+输入/输出通道、每尺度独立还是跨尺度处理、是否可导出，以及是否需要额外损失。`NIF` 使用同一注册机制，但其模块
+应接收 nape 内部指定结点的特征；不得在通用 dataloader 或训练循环中增加针对某个模型的特殊分支。
+
+### `share_weight` 语义
+
+增加 YAML 参数 `share_weight: bool`。当其为 `true` 时，融合点之前由 `shared_stages` 指定的完整阶段复用**同一
+模块实例**，不是复制权重后周期性同步：
+
+```yaml
+multimodal:
+  fusion: BF
+  operator: concat
+  share_weight: true
+  shared_stages: [encoder, nape] # 省略时默认共享融合点之前的全部完整阶段
+```
+
+- 实现应泛化参考仓库的固定 RGB(3)+IR(1) `ChannelToNumber`：先由每模态 `input_adapter` 投影至共同通道数，
+  将 `(B, M, C, H, W)` 折叠为 `(B×M, C, H, W)`，经过共享模块后再按原模态顺序展开。这样可支持任意模态数与
+  不等输入通道数；adapter 本身只有在形状兼容时才能共享。
+- `share_weight: true` 对 `IF` 无意义，应在配置校验时拒绝，不能静默忽略。对于 `EF`/`NIF`/`BF`/`NF`/`HF`，共享范围
+  只能是融合点之前的完整阶段；跨过融合点共享会改变该策略的语义。
+- 带 BatchNorm 的共享模块必须在折叠后的 `B×M` batch 上更新统计量。这会混合模态分布，应作为明确的实验选择；
+  如需模态独立统计量，应使用独立归一化层或冻结统计量，而不是伪造“部分共享”。
+
+### 训练、部署与验证边界
+
+- `IF`、`EF`、`NIF`、`BF`、`NF` 在融合后接一个标准预测头时可以复用现有检测/分割损失。`HF` 和 score fusion
+  需要各自的 loss 或后处理实现，不能仅靠 YAML 改线。
+- 所有特征级融合都要求同尺度特征严格对齐；数据侧仍以前述像素对齐和统一几何增强为前提。
+- 每个新增模板至少验证：模型构建、`(B, total_channels, H, W)` 前向、P3/P4/P5 stride、concat/add 通道检查、
+  单 batch loss、独立 val/predict 和导出。score fusion 另需验证多头 NMS/类别合并与每模态预测的可追溯性。
+- 实现顺序应为：`IF`/`BF` 的 concat 基线 → add 与通用融合注册表 → `EF`/`NF` → 泛化权重共享 → `NIF` → `HF` 和
+  部署期 score fusion。这样先固定所有权和特征边界，再引入需要自定义训练/导出契约的复杂策略。
