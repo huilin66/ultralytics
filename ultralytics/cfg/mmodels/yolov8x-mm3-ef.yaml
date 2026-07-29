@@ -10,6 +10,21 @@ multimodal:
   operator: concat
   fusion_points: [encoder_P3, encoder_P4, encoder_P5]
   share_weight: false
+  pretrained:
+    source: yolov8
+    copies:
+      - source: [0, 8]
+        target: [2, 10]
+        input_init: copy
+      - source: [0, 8]
+        target: [12, 20]
+        input_init: mean
+      - source: [0, 8]
+        target: [22, 30]
+        input_init: mean
+      - source: [9, 22]
+        target: [37, 50]
+    fusion_projections: [32, 34, 36]
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.50, 1024]

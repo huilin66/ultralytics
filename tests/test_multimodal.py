@@ -12,7 +12,9 @@ from ultralytics.data.multimodal import Modalities, MultiModalDataset
 from ultralytics.models.multimodal import MultiModalYOLO
 from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
+from ultralytics.models.multimodal.pretrained import load_coco_pretrained
 from ultralytics.models.multimodal.tasks import MultiModalDetectionModel
+from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 from ultralytics.utils import DEFAULT_CFG
 
 
@@ -212,3 +214,41 @@ def test_shared_weight_yaml_runs_one_stage_on_folded_modalities():
         prediction = model(torch.zeros(1, 2, 64, 64))
     assert model.model[6].conv.weight.shape[1] == 8
     assert prediction[0].shape[0] == 1
+
+
+def test_if_coco_transfer_expands_the_first_convolution():
+    """IF should retain YOLOv8 weights while copying RGB channels into the expanded first convolution."""
+    source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
+    cfg = yaml_model_load("ultralytics/cfg/mmodels/yolov8x-mm3-if.yaml")
+    cfg["scale"] = "n"
+    target = MultiModalDetectionModel(cfg, verbose=False)
+    report = load_coco_pretrained(target, source, verbose=False)
+
+    assert torch.equal(target.model[0].conv.weight[:, :3], source.model[0].conv.weight)
+    assert torch.count_nonzero(target.model[0].conv.weight[:, 3:]) == 0
+    assert report.transformed_tensors == 1
+    assert report.skipped_tensors == 0
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "yolov8x-mm3-ef.yaml",
+        "yolov8x-mm3-nif.yaml",
+        "yolov8x-mm3-bf.yaml",
+        "yolov8x-mm3-nf.yaml",
+        "yolov8x-mm3-hf.yaml",
+    ],
+)
+def test_multibranch_coco_transfer_uses_explicit_yaml_mappings(filename):
+    """Every non-IF template should copy only declared layers and initialize its new fusion projections."""
+    source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
+    cfg = yaml_model_load(f"ultralytics/cfg/mmodels/{filename}")
+    cfg["scale"] = "n"
+    target = MultiModalDetectionModel(cfg, verbose=False)
+    report = load_coco_pretrained(target, source, verbose=False)
+
+    assert report.copied_tensors > 300
+    assert report.transformed_tensors == 2
+    assert report.initialized_layers
+    assert report.skipped_tensors == 0

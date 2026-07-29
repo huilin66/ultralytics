@@ -11,6 +11,22 @@ multimodal:
   operator: concat
   fusion_points: [head_P3, head_P4, head_P5]
   share_weight: false
+  pretrained:
+    source: yolov8
+    copies:
+      - source: [[0, 9], [10, 21]]
+        target: [[2, 11], [34, 45]]
+        input_init: copy
+      - source: [[0, 9], [10, 21]]
+        target: [[13, 22], [46, 57]]
+        input_init: mean
+      - source: [[0, 9], [10, 21]]
+        target: [[24, 33], [58, 69]]
+        input_init: mean
+      - source: [22, 22]
+        target: [85, 85]
+    identity_projections: [70, 71, 72, 73, 74, 75, 76, 77, 78]
+    fusion_projections: [80, 82, 84]
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.50, 1024]
