@@ -1,0 +1,86 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8x nape-in fusion. P3/P4 are fused at encoder exits; P5 is fused inside the expanded SPPF/C2f nape.
+# Replace the marked MultiModalFusion node with a registered attention/gating module for a complex NIF experiment.
+nc: 80
+channels: 5
+scale: x
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: NIF
+  operator: concat
+  fusion_points: [encoder_P3, encoder_P4, nape_P5]
+  share_weight: false
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]]
+
+  # RGB encoder: P3=6, P4=8, P5=10.
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+
+  # Thermal encoder: P3=16, P4=18, P5=20.
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+
+  # Depth encoder: P3=26, P4=28, P5=30.
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+
+  - [[6, 16, 26], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [256, 1, 1]] # 32-fused P3
+  - [[8, 18, 28], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]] # 34-fused P4
+
+  # Expanded nape: modality-specific SPPF -> in-nape fusion -> shared projection/refinement.
+  - [10, 1, SPPF, [1024, 5]]
+  - [20, 1, SPPF, [1024, 5]]
+  - [30, 1, SPPF, [1024, 5]]
+  - [[35, 36, 37], 1, MultiModalFusion, [concat]] # Replace with a registered complex NIF module if required.
+  - [-1, 1, Conv, [1024, 1, 1]]
+  - [-1, 3, C2f, [1024, true]] # 40-fused nape P5
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 34], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]] # 43-P4
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 32], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]] # 46-P3
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 43], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]] # 49-P4
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 40], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]] # 52-P5
+  - [[46, 49, 52], 1, Detect, [nc]]

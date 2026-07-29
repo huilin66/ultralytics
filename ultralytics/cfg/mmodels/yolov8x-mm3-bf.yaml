@@ -1,0 +1,82 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8x backbone fusion: three complete modality-specific backbones, then fused P3/P4/P5 enter one shared neck/head.
+nc: 80
+channels: 5
+scale: x
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: BF
+  operator: concat
+  fusion_points: [backbone_P3, backbone_P4, backbone_P5]
+  share_weight: false
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]]
+
+  # RGB backbone: P3=6, P4=8, P5=11.
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+
+  # Thermal backbone: P3=17, P4=19, P5=22.
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+
+  # Depth backbone: P3=28, P4=30, P5=33.
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+
+  - [[6, 17, 28], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [256, 1, 1]] # 35-fused P3
+  - [[8, 19, 30], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]] # 37-fused P4
+  - [[11, 22, 33], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [1024, 1, 1]] # 39-fused P5
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 37], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]] # 42-P4
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 35], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]] # 45-P3
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 42], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]] # 48-P4
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 39], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]] # 51-P5
+  - [[45, 48, 51], 1, Detect, [nc]]

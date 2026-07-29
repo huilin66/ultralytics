@@ -1,0 +1,124 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8x head-feature fusion: modality-specific backbones/necks and per-scale head projections fuse before one Detect.
+# This is differentiable feature fusion, not deployment-time score fusion or independent decoded-box fusion.
+nc: 80
+channels: 5
+scale: x
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: HF
+  operator: concat
+  fusion_points: [head_P3, head_P4, head_P5]
+  share_weight: false
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]]
+
+  # RGB backbone: P3=6, P4=8, P5=11.
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+
+  # Thermal backbone: P3=17, P4=19, P5=22.
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+
+  # Depth backbone: P3=28, P4=30, P5=33.
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+
+head:
+  # RGB neck: P3=39, P4=42, P5=45.
+  - [11, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 8], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 36], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 11], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]]
+
+  # Thermal neck: P3=51, P4=54, P5=57.
+  - [22, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 19], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 17], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 48], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 22], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]]
+
+  # Depth neck: P3=63, P4=66, P5=69.
+  - [33, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 30], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 28], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 60], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 33], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]]
+
+  # Per-modality head-feature projections.
+  - [39, 1, Conv, [256, 1, 1]]
+  - [42, 1, Conv, [512, 1, 1]]
+  - [45, 1, Conv, [1024, 1, 1]]
+  - [51, 1, Conv, [256, 1, 1]]
+  - [54, 1, Conv, [512, 1, 1]]
+  - [57, 1, Conv, [1024, 1, 1]]
+  - [63, 1, Conv, [256, 1, 1]]
+  - [66, 1, Conv, [512, 1, 1]]
+  - [69, 1, Conv, [1024, 1, 1]]
+
+  # Fuse head features; the stock Detect remains the single training/export contract.
+  - [[70, 73, 76], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [256, 1, 1]] # 80-fused P3
+  - [[71, 74, 77], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]] # 82-fused P4
+  - [[72, 75, 78], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [1024, 1, 1]] # 84-fused P5
+  - [[80, 82, 84], 1, Detect, [nc]]
