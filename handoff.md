@@ -61,7 +61,7 @@ ultralytics/
 │   ├── train.py / val.py / predict.py  # 仅重写数据集/输入边界
 │   ├── graph.py                        # 阶段清单、YAML 校验和模板构造
 │   └── fusion.py                       # 算子注册、adapter 与共享权重路由
-├── nn/modules/multimodal.py            # ModalSplit、融合叶子模块、fold/unfold
+│   └── modules.py                       # ModalSplit、融合叶子模块、fold/unfold
 ├── cfg/models/multimodal/              # 新增的多模态模型模板，不改原始模型 YAML
 └── tests/test_multimodal.py             # 独立回归矩阵
 ```
@@ -151,6 +151,9 @@ multimodal:
 - 任意通道布局不能直接共享首层。每模态先经过独立 `input_adapter` 到共同通道数，再将
   `(B, M, C, H, W)` 折叠为 `(B×M, C, H, W)`，运行一次共享模块后按原顺序展开。这是对参考仓库固定两路
   `ChannelToNumber` / `NumberToChannel` 的泛化。
+- YAML 必须以 `ModalFold` 和 `ModalUnfold: [M]` 显式包围共享阶段；`share_weight: true` 但图中缺少任意一个
+  模块时，扩展层必须拒绝建模。框架不根据任意 YAML 的层号猜测 encoder/nape 范围；`shared_stages` 是语义声明，
+  fold/unfold 才是实际共享边界。
 - `IF` 不存在融合前的多分支，设置 `share_weight: true` 必须校验报错，不能静默忽略。
 - 共享范围不能跨过指定融合点，否则会改变 `EF`、`BF`、`NF` 或 `HF` 的语义。需要不同共享范围时使用
   `shared_stages`，而不是新增一组几乎重复的 YAML。
@@ -169,14 +172,19 @@ multimodal:
 - 每次合入 Ultralytics 更新后，先运行原生相关任务的测试，再运行独立多模态矩阵。审查时检查
   `git diff <upstream-base> -- ultralytics/`：除扩展目录和通用注册 hook 外的改动都应被视为回归风险。
 
-## 实施顺序
+## 当前实现与后续顺序
 
-1. 固定数据契约、扩展层边界和模块注册 hook；为任意 `M`、任意通道和错误布局建立测试。
-2. 实现 `IF` 与 `BF` 的 `concat` 基线，并只使用标准单头检测/分割路径。
-3. 添加 `add`、adapter、阶段校验和 `EF`/`NF` 模板。
-4. 实现泛化的 fold/unfold 和 `share_weight`，覆盖异构输入通道和 BatchNorm 行为。
-5. 通过注册表实现 `NIF`，每个复杂融合模块各自提供测试和导出声明。
-6. 最后实现 `HF` 与部署期 score fusion；在训练/导出契约明确前不得作为普通 YAML 选项暴露。
+当前扩展已实现任意 `M`/正整数通道的配对输入、通用 YAML 模块注册、`ModalSplit`、`MultiModalFusion` 的
+`concat`/`add`、融合元数据校验和 `ModalFold`/`ModalUnfold` 的真实共享阶段。基础模板包括
+`yolo11-mm3-bf-seg.yaml`（BF）和 `yolov8x-mm3-pre-sppf.yaml`（EF，P5 在 SPPF 前融合）。它们均复用标准单头
+Detect/Segment 路径。
+
+下一步依次为：
+
+1. 为 IF、NF 增加覆盖检测/分割的模板和完整训练、验证、导出回归；
+2. 通过融合注册表增加 NIF 自定义模块及其独立导出声明；
+3. 为 HF 定义 raw feature/logit 投影和 loss 契约；
+4. 最后单独实现 score fusion 的后处理、指标和 exporter，不能将其伪装成普通可训练 YAML 模式。
 
 这份设计将参考实现的融合思想转化为本仓库的独立、可测试、可上游追踪的扩展架构，而不是迁移任何特定 YOLOv9 或
 YOLO11-RGBT 网络。

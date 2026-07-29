@@ -5,6 +5,11 @@ from __future__ import annotations
 
 from ultralytics.nn.tasks import DetectionModel, SegmentationModel, yaml_model_load
 
+from .fusion import parse_fusion_spec
+from .modules import ModalFold, ModalUnfold, register_multimodal_modules
+
+register_multimodal_modules()
+
 
 class MultiModalModelMixin:
     """Resolve YAML input channels before the standard model performs its stride-inference forward pass."""
@@ -19,7 +24,14 @@ class MultiModalModelMixin:
             ch = configured_channels
         elif ch != configured_channels:
             raise ValueError(f"Model YAML declares {configured_channels} channels, but received {ch}.")
+        self.fusion_spec = parse_fusion_spec(config)
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        if self.fusion_spec and self.fusion_spec.share_weight:
+            modules = tuple(self.model.modules())
+            if not any(isinstance(module, ModalFold) for module in modules) or not any(
+                isinstance(module, ModalUnfold) for module in modules
+            ):
+                raise ValueError("share_weight=true requires ModalFold and ModalUnfold around the shared YAML stage.")
 
 
 class MultiModalDetectionModel(MultiModalModelMixin, DetectionModel):

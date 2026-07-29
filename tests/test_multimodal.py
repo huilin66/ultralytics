@@ -10,8 +10,9 @@ import torch
 
 from ultralytics.data.multimodal import Modalities, MultiModalDataset
 from ultralytics.models.multimodal import MultiModalYOLO
+from ultralytics.models.multimodal.fusion import parse_fusion_spec
+from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
 from ultralytics.models.multimodal.tasks import MultiModalDetectionModel
-from ultralytics.nn.modules import ModalSplit
 from ultralytics.utils import DEFAULT_CFG
 
 
@@ -104,17 +105,66 @@ def test_modal_split_supports_any_branch_count():
         split(torch.zeros(1, 9, 8, 8))
 
 
-def test_modal_split_yaml_builds_a_multi_branch_model():
-    """ModalSplit and stock Index/Concat modules build a model without parser special cases."""
+def test_multimodal_fusion_operators_validate_feature_geometry():
+    """Concatenation and addition should enforce their documented channel and geometry contracts."""
+    features = [torch.ones(1, 2, 8, 8), torch.full((1, 2, 8, 8), 2.0)]
+    assert MultiModalFusion([2, 2], "concat")(features).shape == (1, 4, 8, 8)
+    assert torch.equal(MultiModalFusion([2, 2], "add")(features), torch.full((1, 2, 8, 8), 3.0))
+    with pytest.raises(ValueError, match="equal input channel"):
+        MultiModalFusion([2, 3], "add")
+    with pytest.raises(ValueError, match="matching batch and spatial"):
+        MultiModalFusion([2, 2], "concat")([features[0], torch.ones(1, 2, 4, 8)])
+
+
+def test_modal_fold_unfold_uses_one_shared_batch():
+    """Fold and unfold should preserve modality order while giving a stage one larger batch."""
+    features = [torch.ones(2, 2, 8, 8), torch.full((2, 2, 8, 8), 2.0), torch.full((2, 2, 8, 8), 3.0)]
+    folded = ModalFold([2, 2, 2])(features)
+    assert folded.shape == (6, 2, 8, 8)
+    unfolded = ModalUnfold(3)(folded)
+    assert all(torch.equal(actual, expected) for actual, expected in zip(unfolded, features))
+
+
+def test_fusion_spec_validates_modes_channels_and_weight_sharing():
+    """Fusion metadata should reject inconsistent channel layouts and impossible sharing requests."""
+    config = {
+        "channels": 5,
+        "multimodal": {
+            "input_sections": [3, 1, 1],
+            "fusion": "BF",
+            "operator": "concat",
+            "fusion_points": ["P3", "P4", "P5"],
+            "share_weight": True,
+        },
+    }
+    spec = parse_fusion_spec(config)
+    assert spec.input_sections == (3, 1, 1)
+    assert spec.shared_stages == ("encoder", "nape")
+
+    config["multimodal"]["fusion"] = "IF"
+    config["multimodal"]["fusion_points"] = []
+    with pytest.raises(ValueError, match="share_weight"):
+        parse_fusion_spec(config)
+
+
+def test_multimodal_fusion_yaml_builds_a_multi_branch_model():
+    """A registered multi-input YAML module should preserve the standard parser and model lifecycle."""
     cfg = {
         "nc": 2,
-        "channels": 5,
+        "channels": 3,
+        "multimodal": {
+            "input_sections": [1, 1, 1],
+            "fusion": "BF",
+            "operator": "add",
+            "fusion_points": ["P3"],
+            "share_weight": False,
+        },
         "backbone": [
-            [-1, 1, "ModalSplit", [[3, 1, 1]]],
-            [0, 1, "Index", [3, 0]],
+            [-1, 1, "ModalSplit", [[1, 1, 1]]],
+            [0, 1, "Index", [1, 0]],
             [0, 1, "Index", [1, 1]],
             [0, 1, "Index", [1, 2]],
-            [[1, 2, 3], 1, "Concat", [1]],
+            [[1, 2, 3], 1, "MultiModalFusion", ["add"]],
             [-1, 1, "Conv", [16, 3, 2]],
         ],
         "head": [[[5], 1, "Detect", ["nc"]]],
@@ -122,6 +172,43 @@ def test_modal_split_yaml_builds_a_multi_branch_model():
     model = MultiModalDetectionModel(cfg, verbose=False)
     model.eval()
     with torch.inference_mode():
-        prediction = model(torch.zeros(1, 5, 64, 64))
+        prediction = model(torch.zeros(1, 3, 64, 64))
     assert prediction[0].shape[0] == 1
-    assert MultiModalYOLO("ultralytics/cfg/models/11/yolo11-mm3-seg.yaml", verbose=False).task == "segment"
+    assert MultiModalYOLO("ultralytics/cfg/models/multimodal/yolo11-mm3-bf-seg.yaml", verbose=False).task == "segment"
+    cfg["multimodal"]["share_weight"] = True
+    with pytest.raises(ValueError, match="ModalFold and ModalUnfold"):
+        MultiModalDetectionModel(cfg, verbose=False)
+
+
+def test_shared_weight_yaml_runs_one_stage_on_folded_modalities():
+    """A shared stage should run once on the folded batch rather than duplicate branch weights."""
+    cfg = {
+        "nc": 2,
+        "channels": 2,
+        "multimodal": {
+            "input_sections": [1, 1],
+            "fusion": "BF",
+            "operator": "add",
+            "fusion_points": ["P3"],
+            "share_weight": True,
+        },
+        "backbone": [
+            [-1, 1, "ModalSplit", [[1, 1]]],
+            [0, 1, "Index", [1, 0]],
+            [-1, 1, "Conv", [8, 3, 1]],
+            [0, 1, "Index", [1, 1]],
+            [-1, 1, "Conv", [8, 3, 1]],
+            [[2, 4], 1, "ModalFold", []],
+            [-1, 1, "Conv", [16, 3, 2]],
+            [-1, 1, "ModalUnfold", [2]],
+            [7, 1, "Index", [16, 0]],
+            [7, 1, "Index", [16, 1]],
+            [[8, 9], 1, "MultiModalFusion", ["add"]],
+        ],
+        "head": [[[10], 1, "Detect", ["nc"]]],
+    }
+    model = MultiModalDetectionModel(cfg, verbose=False).eval()
+    with torch.inference_mode():
+        prediction = model(torch.zeros(1, 2, 64, 64))
+    assert model.model[6].conv.weight.shape[1] == 8
+    assert prediction[0].shape[0] == 1

@@ -55,7 +55,6 @@ from ultralytics.nn.modules import (
     ImagePoolingAttn,
     Index,
     LRPCHead,
-    ModalSplit,
     Pose,
     Pose26,
     RepC3,
@@ -75,6 +74,7 @@ from ultralytics.nn.modules import (
     YOLOESegment26,
     v10Detect,
 )
+from ultralytics.nn.modules.registry import get_module
 from ultralytics.utils import (
     DEFAULT_CFG_DICT,
     LOGGER,
@@ -1940,7 +1940,7 @@ def parse_model(d, ch, verbose=True):
             if m.startswith("nn.")
             else getattr(__import__("torchvision").ops, m[16:])
             if m.startswith("torchvision.ops.")
-            else globals()[m]
+            else globals().get(m) or get_module(m)
         )  # get module
         if restricted and not (isinstance(m, type) and issubclass(m, torch.nn.Module)):
             # Under restricted loading, only known model layers may be named here.
@@ -1986,6 +1986,12 @@ def parse_model(d, ch, verbose=True):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
+        elif getattr(m, "multi_input", False):
+            if not isinstance(f, list):
+                raise TypeError(f"{m.__name__} requires a list of input layers.")
+            c1 = [ch[x] for x in f]
+            c2 = m.output_channels(c1, args)
+            args = [c1, *args]
         elif m in frozenset(
             {
                 Detect,
