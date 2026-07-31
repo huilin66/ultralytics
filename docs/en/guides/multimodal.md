@@ -83,6 +83,10 @@ encoder branch, and include its P3/P4/P5 outputs in each fusion module.
 P3/P4/pre-nape-P5 branch outputs, projects them, then runs one shared `SPPF` on P5. This is the configuration to use
 when fusion must happen before SPPF rather than after each branch has its own SPPF.
 
+For two 3-channel image modalities, use the separate static `yolov8x-mm2-*.yaml` model family. Its six configurations
+have exactly two branches and a `[3, 3]` input split; see [YOLOv8x MM2 Model Configurations](mm2-models.md) for the
+fusion-point matrix and data contract. MM2 does not dynamically prune an MM3 graph at training time.
+
 ## Shared stages
 
 Set `share_weight: true` only for a YAML that explicitly surrounds every shared stage with `ModalFold` and

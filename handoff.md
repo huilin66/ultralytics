@@ -177,7 +177,8 @@ multimodal:
 当前扩展已实现任意 `M`/正整数通道的配对输入、通用 YAML 模块注册、`ModalSplit`、`MultiModalFusion` 的
 `concat`/`add`、融合元数据校验和 `ModalFold`/`ModalUnfold` 的真实共享阶段。基础模板包括
 `yolo11-mm3-bf-seg.yaml`（BF）和 `yolov8x-mm3-pre-sppf.yaml`（EF，P5 在 SPPF 前融合）。它们均复用标准单头
-Detect/Segment 路径。
+Detect/Segment 路径。面向成对训练的 `yolov8x-mm2-{if,ef,nif,bf,nf,hf}.yaml` 是独立的双分支系列，固定使用
+`[3, 3]` 通道分段；不得在运行时从 mm3 图中裁剪第三分支。
 
 下一步依次为：
 
