@@ -2,6 +2,7 @@
 """Tests for the pixel-aligned multi-modal extension."""
 
 from copy import deepcopy
+import os
 
 import cv2
 import numpy as np
@@ -80,6 +81,39 @@ def test_modalities_reject_unaligned_images(tmp_path):
     modalities = Modalities(_data(tmp_path))
     with pytest.raises(ValueError, match="not pixel-aligned"):
         modalities.load(tmp_path / "images" / "rgb" / "train" / "sample_0.jpg")
+
+
+def test_modalities_keep_the_staged_path_when_primary_is_a_symbolic_link(tmp_path):
+    """Companion lookup must use the data-YAML layout rather than resolve a linked primary image to its source."""
+    source = tmp_path / "source" / "visible"
+    primary_root = tmp_path / "staged" / "images" / "primary"
+    auxiliary_root = tmp_path / "staged" / "images" / "auxiliary"
+    source.mkdir(parents=True)
+    (primary_root / "train").mkdir(parents=True)
+    (auxiliary_root / "train").mkdir(parents=True)
+    source_image = source / "sample.png"
+    primary_image = primary_root / "train" / "sample.png"
+    auxiliary_image = auxiliary_root / "train" / "sample.png"
+    assert cv2.imwrite(str(source_image), np.full((12, 20, 3), 10, dtype=np.uint8))
+    assert cv2.imwrite(str(auxiliary_image), np.full((12, 20, 3), 20, dtype=np.uint8))
+    try:
+        os.symlink(source_image, primary_image)
+    except OSError as error:
+        pytest.skip(f"Symbolic links are unavailable in this test environment: {error}")
+
+    modalities = Modalities(
+        {
+            "path": tmp_path / "staged",
+            "channels": 6,
+            "modalities": [
+                {"name": "primary", "path": "images/primary", "channels": 3, "suffix": ".png"},
+                {"name": "auxiliary", "path": "images/auxiliary", "channels": 3, "suffix": ".png"},
+            ],
+        }
+    )
+
+    assert modalities.paths(primary_image) == (primary_image, auxiliary_image)
+    assert modalities.load(primary_image).shape == (12, 20, 6)
 
 
 def test_multimodal_augmentations_keep_the_channel_stack(tmp_path):

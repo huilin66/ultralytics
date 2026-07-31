@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import os
 import random
 from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool
@@ -17,6 +18,16 @@ from ultralytics.data.augment import Albumentations, Format, RandomHSV
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.utils import LOCAL_RANK, LOGGER, NUM_THREADS, TQDM
 from ultralytics.utils.patches import imread
+
+
+def _logical_absolute_path(path: str | Path) -> Path:
+    """Make a path absolute without resolving its symbolic links.
+
+    Paired layouts may stage primary images as links to a source dataset.  Modalities are addressed relative to the
+    staged directory declared in data YAML, so resolving such a link before calculating that relative path would lose
+    the layout information.
+    """
+    return Path(os.path.abspath(path))
 
 
 @dataclass(frozen=True)
@@ -43,7 +54,7 @@ class Modalities:
         if not isinstance(specs, list) or len(specs) < 2:
             raise ValueError("Multi-modal data requires a 'modalities' list with at least two entries.")
 
-        dataset_root = Path(data.get("path", "")).resolve()
+        dataset_root = _logical_absolute_path(data.get("path", ""))
         modalities = []
         names = set()
         for spec in specs:
@@ -66,7 +77,7 @@ class Modalities:
             color = spec.get("color")
             if color not in {None, "bgr"}:
                 raise ValueError(f"Modality '{name}' color must be 'bgr' when specified.")
-            modalities.append(Modality(name, root.resolve(), channels, suffix, color))
+            modalities.append(Modality(name, _logical_absolute_path(root), channels, suffix, color))
             names.add(name)
 
         self.items = tuple(modalities)
@@ -100,7 +111,7 @@ class Modalities:
         The primary path must be nested under the first modality's ``path``. All other modalities preserve the relative
         path below their own root, optionally replacing the file extension with their configured ``suffix``.
         """
-        primary_path = Path(primary_path).resolve()
+        primary_path = _logical_absolute_path(primary_path)
         try:
             relative = primary_path.relative_to(self.primary_root)
         except ValueError as e:
