@@ -1,0 +1,7 @@
+path: /scrinvme/huilin/traffic_sign/defect/detection/data_seg_1_damaged-guardrails # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names: ['damaged guardrail', 'guardrails']
