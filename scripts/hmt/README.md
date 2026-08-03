@@ -54,7 +54,7 @@ SKIP_PREPARE=1 HMT_DATASET=rgb bash scripts/hmt/train_hmt.sh
 HMT_EPOCHS_RGB=300 HMT_IMGSZ_RGB=768 HMT_DEVICE=0 bash scripts/hmt/train_hmt.sh
 ```
 
-训练结果默认写入 `.../0803_hmt_data_check/hmt_update_runs`。
+训练时不再读取 `HMT_UPDATE_ROOT`；脚本从你修改后的 YAML `path` 找到清单，并在运行目录生成绝对路径清单。训练结果默认写入仓库下的 `runs/hmt_update_runs`，可用 `HMT_RUN_ROOT` 覆盖。
 
 ## 处理约定
 

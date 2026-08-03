@@ -56,6 +56,8 @@ for spec in t rgb cube; do
         --max-repeat "${HMT_MAX_REPEAT:-4}" \
         "${FORCE_ARGS[@]}"
 
+    run_python "${REPO_ROOT}/tools/hmt_absolute_lists.py" --dataset-root "${output_dir}"
+
     # yolo_data_manager owns standard validation and statistics. Explicitly
     # select flat layout so absolute source split-list paths cannot confuse
     # local validation on the Windows share.

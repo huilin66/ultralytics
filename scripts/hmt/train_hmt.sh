@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Train the three HMT models in yolov8_deploy. Run from Git Bash.
+# Train the three HMT models in yolov8_deploy. Dataset paths come from the
+# edited YAML files; image-list entries are normalized to absolute paths by
+# tools/hmt_train.py at runtime.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -20,14 +22,12 @@ else
 fi
 
 MODEL="${MODEL:-${REPO_ROOT}/yolov8x.pt}"
-DATA_ROOT="${HMT_UPDATE_ROOT:-//158.132.186.40/isds/huilin/tp/0803_hmt_data_check/bdd_hmt_update}"
-RUN_ROOT="${HMT_RUN_ROOT:-//158.132.186.40/isds/huilin/tp/0803_hmt_data_check/hmt_update_runs}"
+RUN_ROOT="${HMT_RUN_ROOT:-${REPO_ROOT}/runs/hmt_update_runs}"
 DATASET="${HMT_DATASET:-all}"
 
 run_python "${REPO_ROOT}/tools/hmt_train.py" \
     --repo-root "${REPO_ROOT}" \
     --model "${MODEL}" \
-    --data-root "${DATA_ROOT}" \
     --run-root "${RUN_ROOT}" \
     --dataset "${DATASET}" \
     --seed "${HMT_SEED:-233}" \
