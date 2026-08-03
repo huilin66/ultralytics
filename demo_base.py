@@ -231,7 +231,11 @@ def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwa
     if weight_name:
         weight_path = os.path.join("runs", TASK, weight_path, "weights", "best.pt")
 
-    print(f"val with {weight_path}")
+    if os.path.exists(weight_path):
+        print(f"[VAL] val with {weight_path}")
+    else:
+        print(f"[ERROR] {weight_path} not exists")
+        return
     model = network(weight_path, task=TASK)
 
     val_params = {
