@@ -228,6 +228,10 @@ def model_train_resume(
 
 
 def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwargs):
+    if isinstance(weight_path, list):
+        for w_path in weight_path:
+            model_val(w_path, weight_name=weight_name, network=network, save_txt=save_txt, **kwargs)
+        return
     if weight_name:
         weight_path = os.path.join("runs", TASK, weight_path, "weights", "best.pt")
 
@@ -266,6 +270,19 @@ def model_val_summary(
     save_console_log=True,
     **kwargs,
 ):
+    if isinstance(weight_path, list):
+        for w_path in weight_path:
+            model_val_summary(
+                w_path,
+                weight_name=weight_name,
+                network=network,
+                save_txt=save_txt,
+                save_csv=save_csv,
+                csv_path=csv_path,
+                save_console_log=save_console_log,
+                **kwargs,
+            )
+        return
     if weight_name:
         weight_path = os.path.join("runs", TASK, weight_path, "weights", "best.pt")
 
