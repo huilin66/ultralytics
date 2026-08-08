@@ -1,5 +1,34 @@
-# 广告牌缺陷检测与重识别论文实验计划
+# 广告牌缺陷检测与重识别项目 Handoff
 
+## Handoff summary
+
+- 目标：基于实验室自有移动测量数据，完成广告牌分割、缺陷属性识别、重识别和端到端部署评估。
+- 当前代码：本仓库是 Ultralytics 的 `mseg` 分支，包含自定义 `mdetect/msegment` 属性检测/分割任务。
+- 已完成：数据索引、SAM3 批处理包装、广告牌 crop、分类数据准备、缺陷伪标签和 YOLO 分割数据集骨架脚本。
+- 尚未完成：真实数据闭环、人工审核、属性标签转换、模型训练结果、FastReID、ONNX pipeline 和论文结果。
+- 当前分支：`mseg`，HEAD 为 `1f1045e2`（新增 annotation pipeline 及相关脚本）。
+- 工作区：保留原有未跟踪目录 `third_party/`，不要删除或覆盖。
+
+## 当前代码入口
+
+- `ultralytics/models/yolo/mdetect`：读取 `nc/na/nal/names/attributes`，训练和验证使用 `mdet_attributes`。
+- `ultralytics/models/yolo/msegment`：在属性检测输出上增加实例 mask，复用属性指标和结果对象。
+- `scripts/annotation_pipeline.py`：安全脚手架；默认只建立索引、manifest 和命令清单，不执行重任务。
+- 其他流水线脚本：`sam3_batch_segment.py`、`extract_billboard_crops.py`、`prepare_defect_cls_dataset.py`、`pseudo_label_defects.py`、`export_billboard_yolo_labels.py`。
+- 外部依赖：`E:\repository\fast-reid`、SAM3 脚本/权重、实验室新数据、历史缺陷数据和旧 ONNX 推理脚本。
+
+## Handoff next actions
+
+1. 先用默认 20 张图做 pilot smoke test，再固定 300–500 张 pilot 的索引、路线级 train/val/test 划分和授权记录。
+2. 完成缺陷 taxonomy、伪标签分层抽检，并实现 `pseudo_labels.csv` 到 `mdetect/msegment` 属性标签的转换器。
+3. 依次验证 baseline、`mdetect`、`msegment`、FastReID 和 ONNX 的最小闭环，再固定指标、失败案例和论文表格。
+
+## Known gaps
+
+- `export_billboard_yolo_labels.py` 当前只把伪标签 CSV 作为 YAML 元数据，尚未写入属性训练标签。
+- 仓库中尚无真实实验产物、ReID 标注、`onnx_deployment_new.py`、metrics 或论文图表；外部数据和网络路径需接手者重新验证。
+
+以下保留原实验计划，作为交接后的执行上下文。
 ## 1. 项目目标
 
 本项目目标是构建一套可用于论文发表的广告牌缺陷识别与重识别实验流程，替换此前因版权限制无法公开或复用的数据。新的实验应基于实验室自有数据完成数据整理、标注、伪标签生成、模型训练、推理部署和论文实验分析。
@@ -422,7 +451,7 @@ Experiment E：完整 pipeline 评估
 - 失败案例图。
 - 伪标签抽检记录。
 
-## 10. 阶段计划
+## 10. 交接后的阶段计划
 
 ### Phase 0：项目整理
 
@@ -585,7 +614,7 @@ paper_project/
     references.bib
 ```
 
-## 12. 当前待确认事项
+## 12. 交接待确认事项
 
 - 实验室数据是否允许在论文中展示原图或局部 crop。
 - SAM3 的具体可用版本、运行环境和授权条件。
