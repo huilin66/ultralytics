@@ -6,7 +6,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.models.yolo.detect.train import DetectionTrainer
+from ultralytics.data.augment import BaseMixTransform, CopyPaste, Mosaic
 from ultralytics.utils.loss import v8DetectionLoss
 
 
@@ -25,6 +25,102 @@ class DummyDetectionModel(nn.Module):
         self.model = nn.ModuleList([nn.Identity(), DummyDetectHead()])
         self.args = SimpleNamespace(box=1.0, cls=1.0, dfl=1.0)
         self._leakage_only_dataset_records = records
+
+
+class DummyAugmentDataset:
+    def __init__(self):
+        self.im_files = ["normal_a.jpg", "leak.jpg", "normal_b.jpg"]
+        self.leakage_only_files = frozenset({"leak.jpg"})
+        self.mixing_indices = [0, 2]
+        self.mixing_indices_set = set(self.mixing_indices)
+        self.buffer = [1]
+        self.cache = None
+        self.mix_calls = []
+
+    def is_leakage_only(self, im_file):
+        return im_file in self.leakage_only_files
+
+    def get_mixing_indices(self):
+        return self.mixing_indices
+
+    def get_image_and_label(self, index):
+        self.mix_calls.append(index)
+        return {"im_file": self.im_files[index]}
+
+
+class RecordingMixTransform(BaseMixTransform):
+    def apply_image(self, labels, params=None):
+        labels["mixed_files"] = [item["im_file"] for item in labels["mix_labels"]]
+        return labels
+
+    def apply_instances(self, labels, params=None):
+        return labels
+
+    def apply_semantic(self, labels, params=None):
+        return labels
+
+
+class DummyInstances:
+    segments = [object()]
+
+
+def test_leakage_only_images_are_skipped_and_excluded_from_mixing_sources():
+    dataset = DummyAugmentDataset()
+    transform = RecordingMixTransform(dataset, p=1.0)
+
+    normal = transform({"im_file": "normal_a.jpg"})
+    assert normal["mixed_files"] in (["normal_a.jpg"], ["normal_b.jpg"])
+    assert all(not dataset.is_leakage_only(path) for path in normal["mixed_files"])
+
+    calls_before = len(dataset.mix_calls)
+    leakage = {"im_file": "leak.jpg"}
+    assert transform(leakage) is leakage
+    assert "mixed_files" not in leakage
+    assert len(dataset.mix_calls) == calls_before
+
+    mosaic = Mosaic(dataset, p=1.0, n=4)
+    assert all(index in dataset.mixing_indices for index in mosaic.get_indexes())
+
+    copy_paste = CopyPaste(dataset, p=1.0, mode="flip")
+    copy_paste_labels = {"im_file": "leak.jpg", "instances": DummyInstances()}
+    assert copy_paste(copy_paste_labels) is copy_paste_labels
+
+
+def test_leakage_only_does_not_override_augmentation_probabilities(monkeypatch):
+    import demo_base
+
+    monkeypatch.setenv("LEAKAGE_ONLY_LIST", "configured.txt")
+    captured = {}
+
+    class DummyModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def load(self, *args, **kwargs):
+            pass
+
+        def add_callback(self, *args, **kwargs):
+            pass
+
+        def train(self, **kwargs):
+            captured.update(kwargs)
+
+    demo_base.model_train(
+        "yolov8x.yaml",
+        "weights.pt",
+        network=DummyModel,
+        mosaic=0.7,
+        mixup=0.2,
+        cutmix=0.1,
+        copy_paste=0.3,
+    )
+
+    assert {key: captured[key] for key in ("mosaic", "mixup", "cutmix", "copy_paste")} == {
+        "mosaic": 0.7,
+        "mixup": 0.2,
+        "cutmix": 0.1,
+        "copy_paste": 0.3,
+    }
 
 
 def make_criterion(monkeypatch, tmp_path, records, contents="leak.jpg\n", tal_topk=10):
@@ -163,15 +259,3 @@ def test_leakage_only_list_is_loaded_once(monkeypatch, tmp_path):
     (tmp_path / "leakage_only.txt").write_text("different.jpg\n", encoding="utf-8")
     mask = criterion._get_leakage_only_loss_mask(["C:/dataset/leak/leak.jpg"], 1, torch.device("cpu"), torch.float32)
     assert torch.equal(mask[0, 0, :2], torch.zeros(2))
-
-
-def test_leakage_only_augmentation_check(monkeypatch):
-    monkeypatch.setenv("LEAKAGE_ONLY_LIST", "unused")
-    trainer = SimpleNamespace(
-        args=SimpleNamespace(mosaic=1.0, mixup=0.0, cutmix=0.0, copy_paste=0.0)
-    )
-    with pytest.raises(ValueError, match="requires mosaic=0.0"):
-        DetectionTrainer._check_leakage_only_augmentations(trainer)
-
-    trainer.args.mosaic = trainer.args.mixup = trainer.args.cutmix = trainer.args.copy_paste = 0.0
-    DetectionTrainer._check_leakage_only_augmentations(trainer)

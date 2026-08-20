@@ -62,25 +62,6 @@ class DetectionTrainer(BaseTrainer):
             _callbacks (dict, optional): Dictionary of callback functions to be executed during training.
         """
         super().__init__(cfg, overrides, _callbacks)
-        self._check_leakage_only_augmentations()
-
-    def _check_leakage_only_augmentations(self) -> None:
-        """Reject image-mixing augmentations when image-level loss masking is enabled."""
-        if "LEAKAGE_ONLY_LIST" not in os.environ:
-            return
-
-        augmentation_names = ("mosaic", "mixup", "cutmix", "copy_paste")
-        enabled = {
-            name: getattr(self.args, name)
-            for name in augmentation_names
-            if float(getattr(self.args, name)) != 0.0
-        }
-        if enabled:
-            raise ValueError(
-                "LEAKAGE_ONLY_LIST requires mosaic=0.0, mixup=0.0, cutmix=0.0, and copy_paste=0.0; "
-                f"non-zero values: {enabled}"
-            )
-
     @staticmethod
     def _leakage_only_dataset_records(dataset) -> list[tuple[str, list[int]]]:
         """Collect image filenames and class IDs without re-reading image or label files."""

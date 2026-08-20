@@ -309,6 +309,20 @@ class BaseMixTransform(BaseTransform):
         self.pre_transform = pre_transform
         self.p = p
 
+    def _is_leakage_only(self, labels: dict[str, Any]) -> bool:
+        """Return whether the primary image must bypass image-mixing augmentations."""
+        return (
+            self.dataset is not None
+            and hasattr(self.dataset, "is_leakage_only")
+            and self.dataset.is_leakage_only(labels.get("im_file", ""))
+        )
+
+    def _get_mixing_indices(self) -> list[int]:
+        """Return eligible mixing indices while preserving support for custom datasets."""
+        if hasattr(self.dataset, "get_mixing_indices"):
+            return self.dataset.get_mixing_indices()
+        return list(range(len(self.dataset)))
+
     def __call__(self, labels: dict[str, Any]) -> dict[str, Any]:
         """Apply pre-processing transforms and cutmix/mixup/mosaic transforms to labels data.
 
@@ -325,7 +339,7 @@ class BaseMixTransform(BaseTransform):
             >>> transform = BaseMixTransform(dataset, pre_transform=None, p=0.5)
             >>> result = transform({"image": img, "bboxes": boxes, "cls": classes})
         """
-        if random.uniform(0, 1) > self.p:
+        if self._is_leakage_only(labels) or random.uniform(0, 1) > self.p:
             return labels
 
         params = self.get_params(labels)
@@ -372,7 +386,12 @@ class BaseMixTransform(BaseTransform):
             >>> index = transform.get_indexes()
             >>> print(index)  # 7
         """
-        return random.randint(0, len(self.dataset) - 1)
+        indexes = self._get_mixing_indices()
+        if not getattr(self.dataset, "leakage_only_files", None):
+            return random.randint(0, len(self.dataset) - 1)
+        if not indexes:
+            raise ValueError("No non-leakage images are available for image-mixing augmentation.")
+        return random.choice(indexes)
 
     @staticmethod
     def _update_label_text(labels: dict[str, Any]) -> dict[str, Any]:
@@ -482,10 +501,19 @@ class Mosaic(BaseMixTransform):
             >>> indexes = mosaic.get_indexes()
             >>> print(len(indexes))  # Output: 3
         """
-        if self.buffer_enabled:  # select images from buffer
-            return random.choices(list(self.dataset.buffer), k=self.n - 1)
-        else:  # select any images
+        indexes = self._get_mixing_indices()
+        if not getattr(self.dataset, "leakage_only_files", None):
+            if self.buffer_enabled:  # select images from buffer
+                return random.choices(list(self.dataset.buffer), k=self.n - 1)
             return [random.randint(0, len(self.dataset) - 1) for _ in range(self.n - 1)]
+        if not indexes:
+            raise ValueError("No non-leakage images are available for mosaic augmentation.")
+        if self.buffer_enabled:  # select images from buffer
+            mixing_indices_set = getattr(self.dataset, "mixing_indices_set", set(indexes))
+            buffer = [i for i in self.dataset.buffer if i in mixing_indices_set]
+            if buffer:
+                return random.choices(buffer, k=self.n - 1)
+        return random.choices(indexes, k=self.n - 1)
 
     def get_params(self, labels: dict[str, Any]) -> dict[str, Any]:
         """Compute mosaic layout parameters.
@@ -1885,7 +1913,7 @@ class CopyPaste(BaseMixTransform):
 
     def __call__(self, labels: dict[str, Any]) -> dict[str, Any]:
         """Apply Copy-Paste augmentation to an image and its labels."""
-        if len(labels["instances"].segments) == 0 or self.p == 0:
+        if self._is_leakage_only(labels) or len(labels["instances"].segments) == 0 or self.p == 0:
             return labels
         if self.mode == "flip":
             params = self.get_params(labels)

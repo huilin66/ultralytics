@@ -4,7 +4,7 @@
 
 - Branch: `det_loss_mask`
 - Baseline: `main_demo`
-- Latest commit: `e0fa581f Fix leakage mask validation initialization`
+- Feature baseline: `e0fa581f Fix leakage mask validation initialization`
 - Scope: Ultralytics 8.4.91 three-class YOLO Detect training
 - Classes: `0 Hollow Confirmed`, `1 Hollow Suspected`, `2 Leakage`
 
@@ -15,10 +15,13 @@
 | `ultralytics/utils/loss.py` | Adds `LEAKAGE_ONLY_LIST` loading during training loss initialization, accepts full paths by matching `Path(im_file).name`, validates missing files, empty lists, duplicate basenames, and non-class-2 labels, and logs the matched image count and masked IDs `[0, 1]`. |
 | `ultralytics/utils/loss.py` | Keeps BCE unreduced, applies a broadcastable `batch_size x 1 x num_classes` mask by multiplication, and leaves class weights, Box loss, DFL loss, and TaskAlignedAssigner unchanged. |
 | `ultralytics/utils/loss.py` | Does not load or validate the leakage-only list for evaluation models, so validation keeps the normal three-class loss and metrics. |
-| `ultralytics/models/yolo/detect/train.py` | Rejects non-zero `mosaic`, `mixup`, `cutmix`, or `copy_paste` when leakage-only masking is enabled, and attaches complete training image/class metadata before criterion initialization. |
-| `demo_base.py` | Adds `load_as_model` for direct checkpoint initialization and forces all image-mixing augmentations to zero when `LEAKAGE_ONLY_LIST` is configured. |
+| `ultralytics/utils/leakage.py` | Provides one cached reader for the normalized leakage-only filename set, shared by the training dataset and loss criterion. |
+| `ultralytics/data/base.py` | Caches leakage-only filenames on training datasets and exposes eligible indices for image-mixing sources. |
+| `ultralytics/data/augment.py` | Skips Mosaic, MixUp, CutMix, and CopyPaste for listed primary images and excludes listed images from all multi-image augmentation sources. |
+| `ultralytics/models/yolo/detect/train.py` | Keeps the configured augmentation probabilities and attaches complete training image/class metadata before criterion initialization. |
+| `demo_base.py` | Adds `load_as_model` for direct checkpoint initialization and leaves caller-provided image-mixing probabilities unchanged. |
 | `demo_det_hmt.py` | Sets the leakage-only list path in Python, supports v2 and official `yolov8x.pt` weight sources, and provides default run names. |
-| `tests/test_leakage_only_loss.py` | Adds tests for normal and leakage-only classification gradients, Box/DFL gradients, mixed batches, full POSIX and Windows-style paths, list validation, single-read behavior, augmentation checks, and validation initialization. |
+| `tests/test_leakage_only_loss.py` | Adds tests for normal and leakage-only classification gradients, Box/DFL gradients, mixed batches, full POSIX and Windows-style paths, list validation, single-read behavior, per-image augmentation exclusion, and validation initialization. |
 
 ## Configuration
 
@@ -47,16 +50,13 @@ The script also contains Python defaults, so it can run without setting environm
 
 ## Training Requirements
 
-Leakage-only masking depends on one `im_file` per original image. The following must all be zero:
+Leakage-only masking depends on one `im_file` per original image. Normal images retain the configured augmentation probabilities. For every image in `LEAKAGE_ONLY_LIST`:
 
-```text
-mosaic=0.0
-mixup=0.0
-cutmix=0.0
-copy_paste=0.0
-```
+- `Mosaic`, `MixUp`, `CutMix`, and `CopyPaste` are skipped when the listed image is the primary sample.
+- Listed images are excluded from the candidate sources used by those multi-image augmentations for normal samples.
+- Other configured augmentations, such as affine and color transforms, remain active.
 
-If any is non-zero, training raises an error. No pixel masking, label modification, class-count change, or model-structure change is performed.
+No pixel masking, label modification, class-count change, or model-structure change is performed. The original `close_mosaic` schedule remains active.
 
 ## Validation and Tests
 
@@ -67,7 +67,7 @@ If any is non-zero, training raises an error. No pixel masking, label modificati
 C:\ProgramData\anaconda3\python.exe -m pytest tests/test_leakage_only_loss.py -q
 ```
 
-- Result at handoff: `11 passed`
+- Result at handoff: `12 passed`
 - `compileall` and `git diff --check` passed.
 - Full training was not started during implementation.
 

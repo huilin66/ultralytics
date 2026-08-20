@@ -13,6 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ultralytics.utils import LOGGER
+from ultralytics.utils.leakage import load_leakage_only_files
 from ultralytics.utils.metrics import CITYSCAPES_WEIGHT, OKS_SIGMA, RLE_WEIGHT
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
@@ -383,24 +384,7 @@ class v8DetectionLoss:
     @classmethod
     def _load_leakage_only_files(cls) -> frozenset[str] | None:
         """Read the leakage-only image list once when the loss criterion is initialized."""
-        list_path_value = os.environ.get(cls.leakage_only_list_env)
-        if list_path_value is None:
-            return None
-        if not list_path_value.strip():
-            raise ValueError(f"{cls.leakage_only_list_env} must point to a non-empty list file.")
-
-        list_path = Path(list_path_value).expanduser()
-        if not list_path.is_file():
-            raise FileNotFoundError(f"Leakage-only list file does not exist: {list_path}")
-
-        names = frozenset(
-            Path(line).name
-            for raw_line in list_path.read_text(encoding="utf-8-sig").splitlines()
-            if (line := raw_line.strip()) and not line.startswith("#")
-        )
-        if not names:
-            raise ValueError(f"Leakage-only list file is empty: {list_path}")
-        return names
+        return load_leakage_only_files(os.environ.get(cls.leakage_only_list_env))
 
     def _validate_leakage_only_dataset(self, model: torch.nn.Module) -> None:
         """Validate list names against the complete training dataset metadata."""

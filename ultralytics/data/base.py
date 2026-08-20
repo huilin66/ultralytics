@@ -17,6 +17,7 @@ from torch.utils.data import Dataset
 
 from ultralytics.data.utils import FORMATS_HELP_MSG, HELP_URL, IMG_FORMATS, check_file_speeds
 from ultralytics.utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, TQDM
+from ultralytics.utils.leakage import load_leakage_only_files
 from ultralytics.utils.patches import imread
 
 
@@ -125,6 +126,15 @@ class BaseDataset(Dataset):
         if self.rect:
             assert self.batch_size is not None
             self.set_rectangle()
+        self.leakage_only_files = (
+            load_leakage_only_files(os.environ.get("LEAKAGE_ONLY_LIST")) if self.augment else None
+        )
+        self.mixing_indices = [
+            i
+            for i, im_file in enumerate(self.im_files)
+            if self.leakage_only_files is None or Path(im_file).name not in self.leakage_only_files
+        ]
+        self.mixing_indices_set = set(self.mixing_indices)
 
         # Buffer thread for mosaic images
         self.buffer = []  # buffer size = batch size
@@ -391,6 +401,14 @@ class BaseDataset(Dataset):
 
         self.batch_shapes = np.ceil(np.array(shapes) * self.imgsz / self.stride + self.pad).astype(int) * self.stride
         self.batch = bi  # batch index of image
+
+    def is_leakage_only(self, im_file: str) -> bool:
+        """Return whether an image belongs to the leakage-only list."""
+        return self.leakage_only_files is not None and Path(im_file).name in self.leakage_only_files
+
+    def get_mixing_indices(self) -> list[int]:
+        """Return dataset indices that may be used as sources for image-mixing augmentations."""
+        return self.mixing_indices
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         """Return transformed label information for given index."""

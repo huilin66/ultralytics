@@ -169,8 +169,6 @@ def model_train(
         "plots": False,
     }
 
-    if "LEAKAGE_ONLY_LIST" in os.environ:
-        train_params.update({key: 0.0 for key in ("mosaic", "mixup", "cutmix", "copy_paste")})
     if not auto_optim:
         train_params.update({"optimizer": "AdamW", "lr0": 0.0001})
     if retrain:
