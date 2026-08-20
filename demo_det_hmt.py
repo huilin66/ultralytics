@@ -11,13 +11,20 @@ demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device("cuda:1")
 demo_base.BATCH_SIZE = 16
 demo_base.CONF_VAL = 0.001
-V2_WEIGHTS = os.environ.get(
-    "HMT_V2_WEIGHTS",
-    r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt",
-)
+DEFAULT_V2_WEIGHTS = r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt"
+WEIGHT_SOURCE = os.environ.get("HMT_WEIGHT_SOURCE", "v2").strip().lower()
+if WEIGHT_SOURCE == "v2":
+    INITIAL_WEIGHTS = os.environ.get("HMT_V2_WEIGHTS", DEFAULT_V2_WEIGHTS)
+    LOAD_AS_MODEL = True
+elif WEIGHT_SOURCE == "v8":
+    INITIAL_WEIGHTS = os.environ.get("HMT_V8_WEIGHTS", "yolov8x.pt")
+    LOAD_AS_MODEL = False
+else:
+    raise ValueError("HMT_WEIGHT_SOURCE must be 'v2' or 'v8'.")
+DEFAULT_RUN_NAME = f"hmt_t_update_v3-[yolov8x]-from-{WEIGHT_SOURCE}"
 
 if __name__ == "__main__":
-    NAME = None
+    NAME = os.environ.get("HMT_RUN_NAME", DEFAULT_RUN_NAME)
 
     # demo_base.model_val("hmt_t-[yolov8x]-8")
     # demo_base.model_val("hmt_rgb_merge-[yolov8x]-4")
@@ -273,8 +280,8 @@ if __name__ == "__main__":
 
     demo_base.yolo8(
         "yolov8x.yaml",
-        weight_path=V2_WEIGHTS,
-        load_as_model=True,
+        weight_path=INITIAL_WEIGHTS,
+        load_as_model=LOAD_AS_MODEL,
         auto_optim=False,
         name=NAME,
         data="hmt_t_update_v3.yaml",
