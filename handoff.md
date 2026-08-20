@@ -20,7 +20,7 @@
 | `ultralytics/data/augment.py` | Skips Mosaic, MixUp, CutMix, and CopyPaste for listed primary images and excludes listed images from all multi-image augmentation sources. |
 | `ultralytics/models/yolo/detect/train.py` | Keeps the configured augmentation probabilities and attaches complete training image/class metadata before criterion initialization. |
 | `demo_base.py` | Adds `load_as_model` for direct checkpoint initialization and leaves caller-provided image-mixing probabilities unchanged. |
-| `demo_det_hmt.py` | Sets the leakage-only list path in Python, supports v2 and official `yolov8x.pt` weight sources, and provides default run names. |
+| `demo_det_hmt.py` | Sets the leakage-only list path in Python and currently invokes one official-weight run and one v2-weight run sequentially. |
 | `tests/test_leakage_only_loss.py` | Adds tests for normal and leakage-only classification gradients, Box/DFL gradients, mixed batches, full POSIX and Windows-style paths, list validation, single-read behavior, per-image augmentation exclusion, and validation initialization. |
 
 ## Configuration
@@ -37,16 +37,14 @@ Leakage-only images must contain only class `2` labels. Images not in the list r
 
 ## Weight Sources
 
-`demo_det_hmt.py` defaults to the v2 checkpoint configured in `DEFAULT_V2_WEIGHTS`.
+The current working-tree version of `demo_det_hmt.py` does not read `HMT_WEIGHT_SOURCE`, `HMT_V2_WEIGHTS`, `HMT_V8_WEIGHTS`, or `HMT_RUN_NAME`. It hard-codes the leakage list path and runs two experiments sequentially:
 
-To use the official `yolov8x.pt` source instead, set:
+1. Official `yolov8x.pt`: `yolov8x.yaml` plus the default `load_as_model=False` path. This builds the YAML model and transfers the official weights.
+2. The v2 `best.pt` at `DEFAULT_V2_WEIGHTS`: this must use `load_as_model=True` so the existing three-class v2 classification head is preserved when the checkpoint is loaded directly.
 
-```powershell
-$env:HMT_WEIGHT_SOURCE = "v8"
-python demo_det_hmt.py
-```
+The second call currently omits `load_as_model=True`; add it before running the v2 experiment. Give the two calls distinct `name` values so their output directories and logs cannot be confused.
 
-The script also contains Python defaults, so it can run without setting environment variables. `HMT_V2_WEIGHTS`, `HMT_V8_WEIGHTS`, and `HMT_RUN_NAME` can override the defaults when needed.
+`load_as_model` changes only the checkpoint initialization path. It does not change the dataset class count, leakage mask, augmentation policy, or model architecture. For official COCO `yolov8x.pt`, `load_as_model=False` is the intended path; its 80-class classification head is not directly transferred to the three-class HMT head.
 
 ## Training Requirements
 
@@ -74,17 +72,10 @@ C:\ProgramData\anaconda3\python.exe -m pytest tests/test_leakage_only_loss.py -q
 
 ## Typical Start
 
-Run with the Python defaults:
+Run the current two-experiment script without environment variables after applying the v2 loading fix above:
 
 ```powershell
 python demo_det_hmt.py
 ```
 
-The default path starts from the configured v2 `best.pt`. To run the official-weight experiment:
-
-```powershell
-$env:HMT_WEIGHT_SOURCE = "v8"
-python demo_det_hmt.py
-```
-
-Before a real run, verify that the configured `DEFAULT_V2_WEIGHTS`, dataset YAML, and `LEAKAGE_ONLY_LIST` paths exist on the machine running the training.
+The first call uses official `yolov8x.pt`; the second uses `DEFAULT_V2_WEIGHTS`. Before a real run, verify that the configured v2 checkpoint, dataset YAML, and `LEAKAGE_ONLY_LIST` paths exist on the machine running the training.
