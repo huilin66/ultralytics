@@ -143,6 +143,17 @@ def test_leakage_only_list_must_exist_and_contain_a_name(monkeypatch, tmp_path):
         v8DetectionLoss(DummyDetectionModel([]))
 
 
+def test_leakage_only_validation_criterion_does_not_require_training_metadata(monkeypatch, tmp_path):
+    list_path = tmp_path / "leakage_only.txt"
+    list_path.write_text("/dataset/leak/leak.jpg\n", encoding="utf-8")
+    monkeypatch.setenv("LEAKAGE_ONLY_LIST", str(list_path))
+    model = DummyDetectionModel([])
+    model.eval()
+
+    criterion = v8DetectionLoss(model)
+    assert criterion.leakage_only_files is None
+
+
 def test_leakage_only_list_is_loaded_once(monkeypatch, tmp_path):
     criterion = make_criterion(
         monkeypatch,

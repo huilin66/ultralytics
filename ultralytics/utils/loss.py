@@ -365,7 +365,7 @@ class v8DetectionLoss:
         self.class_weights = getattr(model, "class_weights", None)
         if self.class_weights is not None:
             self.class_weights = self.class_weights.to(device).view(1, 1, -1)
-        self.leakage_only_files = self._load_leakage_only_files()
+        self.leakage_only_files = self._load_leakage_only_files() if model.training else None
         if self.leakage_only_files is not None:
             self._validate_leakage_only_dataset(model)
 
