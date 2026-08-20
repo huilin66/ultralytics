@@ -457,6 +457,46 @@ class v8DetectionLoss:
         )
         return torch.where(is_leakage_only, leakage_only_class_mask, normal_mask)
 
+    def _get_leakage_only_spatial_loss_mask(
+        self,
+        spatial_mask: torch.Tensor,
+        anchor_points: torch.Tensor,
+        stride_tensor: torch.Tensor,
+        image_shape: tuple[int, int],
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        """Map the per-pixel source mask to anchor centers and create a per-class loss mask."""
+        if spatial_mask.ndim == 4 and spatial_mask.shape[1] == 1:
+            spatial_mask = spatial_mask[:, 0]
+        if spatial_mask.ndim != 3:
+            raise ValueError(
+                f"Expected cls_loss_spatial_mask with shape (batch, height, width), got {spatial_mask.shape}."
+            )
+        spatial_mask = spatial_mask.to(device=anchor_points.device)
+        batch_size, mask_height, mask_width = spatial_mask.shape
+        image_height, image_width = image_shape
+        points = anchor_points * stride_tensor
+        x = (points[:, 0] * mask_width / max(float(image_width), 1.0)).floor().long().clamp(0, mask_width - 1)
+        y = (points[:, 1] * mask_height / max(float(image_height), 1.0)).floor().long().clamp(0, mask_height - 1)
+        normal_region = spatial_mask[:, y, x] > 0
+        class_mask = torch.ones(
+            (batch_size, anchor_points.shape[0], self.nc), device=anchor_points.device, dtype=dtype
+        )
+        masked_class_ids = torch.as_tensor(
+            self.leakage_only_masked_class_ids, device=anchor_points.device, dtype=torch.long
+        )
+        masked_values = torch.where(
+            normal_region.unsqueeze(-1),
+            torch.ones(
+                (batch_size, anchor_points.shape[0], masked_class_ids.numel()), device=class_mask.device, dtype=dtype
+            ),
+            torch.zeros(
+                (batch_size, anchor_points.shape[0], masked_class_ids.numel()), device=class_mask.device, dtype=dtype
+            ),
+        )
+        class_mask[..., masked_class_ids] = masked_values
+        return class_mask
+
     def preprocess(self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor) -> torch.Tensor:
         """Preprocess targets by converting to tensor format and scaling coordinates."""
         nl, ne = targets.shape
@@ -525,11 +565,18 @@ class v8DetectionLoss:
             bce_loss = bce_loss * self.class_weights
         # Validation calls model.loss under inference mode; leave its three-class loss untouched.
         if self.leakage_only_files is not None and torch.is_grad_enabled():
-            if "im_file" not in batch:
-                raise KeyError("Leakage-only masking requires batch['im_file'] during training.")
-            bce_loss = bce_loss * self._get_leakage_only_loss_mask(
-                batch["im_file"], batch_size, pred_scores.device, bce_loss.dtype
-            )
+            if "cls_loss_spatial_mask" in batch:
+                image_shape = batch["img"].shape[-2:] if "img" in batch else batch["cls_loss_spatial_mask"].shape[-2:]
+                leakage_mask = self._get_leakage_only_spatial_loss_mask(
+                    batch["cls_loss_spatial_mask"], anchor_points, stride_tensor, image_shape, bce_loss.dtype
+                )
+            else:
+                if "im_file" not in batch:
+                    raise KeyError("Leakage-only masking requires batch['im_file'] or batch['cls_loss_spatial_mask'].")
+                leakage_mask = self._get_leakage_only_loss_mask(
+                    batch["im_file"], batch_size, pred_scores.device, bce_loss.dtype
+                )
+            bce_loss = bce_loss * leakage_mask
         loss[1] = bce_loss.sum() / target_scores_sum  # BCE
 
         # Bbox loss

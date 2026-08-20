@@ -129,12 +129,6 @@ class BaseDataset(Dataset):
         self.leakage_only_files = (
             load_leakage_only_files(os.environ.get("LEAKAGE_ONLY_LIST")) if self.augment else None
         )
-        self.mixing_indices = [
-            i
-            for i, im_file in enumerate(self.im_files)
-            if self.leakage_only_files is None or Path(im_file).name not in self.leakage_only_files
-        ]
-        self.mixing_indices_set = set(self.mixing_indices)
 
         # Buffer thread for mosaic images
         self.buffer = []  # buffer size = batch size
@@ -406,10 +400,6 @@ class BaseDataset(Dataset):
         """Return whether an image belongs to the leakage-only list."""
         return self.leakage_only_files is not None and Path(im_file).name in self.leakage_only_files
 
-    def get_mixing_indices(self) -> list[int]:
-        """Return dataset indices that may be used as sources for image-mixing augmentations."""
-        return self.mixing_indices
-
     def __getitem__(self, index: int) -> dict[str, Any]:
         """Return transformed label information for given index."""
         return self.transforms(self.get_image_and_label(index))
@@ -430,6 +420,12 @@ class BaseDataset(Dataset):
             label["resized_shape"][0] / label["ori_shape"][0],
             label["resized_shape"][1] / label["ori_shape"][1],
         )  # for evaluation
+        if self.leakage_only_files is not None:
+            label["cls_loss_spatial_mask"] = np.full(
+                label["img"].shape[:2],
+                0 if self.is_leakage_only(label["im_file"]) else 1,
+                dtype=np.uint8,
+            )
         if self.rect:
             label["rect_shape"] = self.batch_shapes[self.batch[index]]
         return self.update_labels_info(label)

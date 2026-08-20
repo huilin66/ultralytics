@@ -308,9 +308,10 @@ class BaseMixTransform(BaseTransform):
         self.dataset = dataset
         self.pre_transform = pre_transform
         self.p = p
+        self.allow_leakage_only_primary = False
 
     def _is_leakage_only(self, labels: dict[str, Any]) -> bool:
-        """Return whether the primary image must bypass image-mixing augmentations."""
+        """Return whether the primary image belongs to the leakage-only list."""
         return (
             self.dataset is not None
             and hasattr(self.dataset, "is_leakage_only")
@@ -321,6 +322,8 @@ class BaseMixTransform(BaseTransform):
         """Return eligible mixing indices while preserving support for custom datasets."""
         if hasattr(self.dataset, "get_mixing_indices"):
             return self.dataset.get_mixing_indices()
+        if getattr(self.dataset, "leakage_only_files", None) and hasattr(self.dataset, "is_leakage_only"):
+            return [i for i, im_file in enumerate(self.dataset.im_files) if not self.dataset.is_leakage_only(im_file)]
         return list(range(len(self.dataset)))
 
     def __call__(self, labels: dict[str, Any]) -> dict[str, Any]:
@@ -339,7 +342,10 @@ class BaseMixTransform(BaseTransform):
             >>> transform = BaseMixTransform(dataset, pre_transform=None, p=0.5)
             >>> result = transform({"image": img, "bboxes": boxes, "cls": classes})
         """
-        if self._is_leakage_only(labels) or random.uniform(0, 1) > self.p:
+        if (
+            (self._is_leakage_only(labels) and not self.allow_leakage_only_primary)
+            or random.uniform(0, 1) > self.p
+        ):
             return labels
 
         params = self.get_params(labels)
@@ -485,6 +491,11 @@ class Mosaic(BaseMixTransform):
         self.border = (-imgsz // 2, -imgsz // 2)  # width, height
         self.n = n
         self.buffer_enabled = self.dataset.cache != "ram"
+        self.allow_leakage_only_primary = True
+
+    leakage_context_range = (1.5, 3.0)
+    leakage_min_crop_fraction = 0.25
+    leakage_min_visible_ratio = 0.25
 
     def get_indexes(self):
         """Return a list of random indexes from the dataset for mosaic augmentation.
@@ -501,19 +512,71 @@ class Mosaic(BaseMixTransform):
             >>> indexes = mosaic.get_indexes()
             >>> print(len(indexes))  # Output: 3
         """
-        indexes = self._get_mixing_indices()
-        if not getattr(self.dataset, "leakage_only_files", None):
-            if self.buffer_enabled:  # select images from buffer
-                return random.choices(list(self.dataset.buffer), k=self.n - 1)
-            return [random.randint(0, len(self.dataset) - 1) for _ in range(self.n - 1)]
-        if not indexes:
-            raise ValueError("No non-leakage images are available for mosaic augmentation.")
         if self.buffer_enabled:  # select images from buffer
-            mixing_indices_set = getattr(self.dataset, "mixing_indices_set", set(indexes))
-            buffer = [i for i in self.dataset.buffer if i in mixing_indices_set]
-            if buffer:
-                return random.choices(buffer, k=self.n - 1)
-        return random.choices(indexes, k=self.n - 1)
+            return random.choices(list(self.dataset.buffer), k=self.n - 1)
+        return [random.randint(0, len(self.dataset) - 1) for _ in range(self.n - 1)]
+
+    def _crop_leakage_source(self, labels: dict[str, Any]) -> None:
+        """Crop a leakage-only Mosaic source around one Leakage box while retaining useful context."""
+        if not self._is_leakage_only(labels):
+            return
+
+        image = labels["img"]
+        height, width = image.shape[:2]
+        classes = np.asarray(labels["cls"]).reshape(-1).astype(np.int64)
+        leakage_indices = np.flatnonzero(classes == 2)
+        if not len(leakage_indices):
+            raise ValueError(f"Leakage-only image has no class-2 box: {labels.get('im_file', '<unknown>')}")
+
+        instances = labels["instances"]
+        instances.convert_bbox(format="xyxy")
+        instances.denormalize(width, height)
+        boxes = instances.bboxes.copy()
+        target_index = random.choice(leakage_indices.tolist())
+        x1, y1, x2, y2 = boxes[target_index]
+        box_width = max(float(x2 - x1), 1.0)
+        box_height = max(float(y2 - y1), 1.0)
+        context = random.uniform(*self.leakage_context_range)
+        crop_width = min(
+            width, max(int(round(box_width * context)), int(round(width * self.leakage_min_crop_fraction)))
+        )
+        crop_height = min(
+            height, max(int(round(box_height * context)), int(round(height * self.leakage_min_crop_fraction)))
+        )
+
+        x0_min = max(0, int(np.ceil(x2 - crop_width)))
+        x0_max = min(int(np.floor(x1)), width - crop_width)
+        y0_min = max(0, int(np.ceil(y2 - crop_height)))
+        y0_max = min(int(np.floor(y1)), height - crop_height)
+        if x0_min > x0_max or y0_min > y0_max:
+            raise RuntimeError(f"Unable to crop around Leakage box in {labels.get('im_file', '<unknown>')}.")
+        x0 = random.randint(x0_min, x0_max)
+        y0 = random.randint(y0_min, y0_max)
+        x_end, y_end = x0 + crop_width, y0 + crop_height
+
+        clipped = boxes.copy()
+        clipped[:, [0, 2]] = clipped[:, [0, 2]].clip(x0, x_end) - x0
+        clipped[:, [1, 3]] = clipped[:, [1, 3]].clip(y0, y_end) - y0
+        original_area = np.maximum(boxes[:, 2] - boxes[:, 0], 0) * np.maximum(boxes[:, 3] - boxes[:, 1], 0)
+        visible_area = np.maximum(clipped[:, 2] - clipped[:, 0], 0) * np.maximum(clipped[:, 3] - clipped[:, 1], 0)
+        visible_ratio = visible_area / np.maximum(original_area, 1e-6)
+        keep = visible_ratio >= self.leakage_min_visible_ratio
+        keep[target_index] = True
+
+        instances = instances[keep]
+        instances.add_padding(-x0, -y0)
+        instances.clip(crop_width, crop_height)
+        good = instances.remove_zero_area_boxes()
+        kept_classes = labels["cls"][keep][good]
+        if not np.any(kept_classes.reshape(-1).astype(np.int64) == 2):
+            raise RuntimeError(f"Leakage crop removed every class-2 box from {labels.get('im_file', '<unknown>')}.")
+
+        labels["img"] = image[y0:y_end, x0:x_end].copy()
+        labels["instances"] = instances
+        labels["cls"] = kept_classes
+        labels["resized_shape"] = labels["img"].shape[:2]
+        if "cls_loss_spatial_mask" in labels:
+            labels["cls_loss_spatial_mask"] = labels["cls_loss_spatial_mask"][y0:y_end, x0:x_end].copy()
 
     def get_params(self, labels: dict[str, Any]) -> dict[str, Any]:
         """Compute mosaic layout parameters.
@@ -527,6 +590,9 @@ class Mosaic(BaseMixTransform):
         params = super().get_params(labels)
         assert labels.get("rect_shape") is None, "rect and mosaic are mutually exclusive."
         assert len(labels.get("mix_labels", [])), "There are no other images for mosaic augment."
+
+        for labels_patch in [labels, *labels["mix_labels"]]:
+            self._crop_leakage_source(labels_patch)
 
         s = self.imgsz
         layout = []
@@ -621,17 +687,31 @@ class Mosaic(BaseMixTransform):
             (dict): Updated labels with mosaic image.
         """
         layout = params["layout"]
+        has_spatial_mask = any("cls_loss_spatial_mask" in item["labels_patch"] for item in layout)
         if self.n == 4:
             img4 = np.full((self.imgsz * 2, self.imgsz * 2, labels["img"].shape[2]), 114, dtype=np.uint8)
+            spatial_mask4 = (
+                np.ones((self.imgsz * 2, self.imgsz * 2), dtype=np.uint8) if has_spatial_mask else None
+            )
             for item in layout:
                 labels_patch = item["labels_patch"]
                 img = labels_patch["img"]
                 x1a, y1a, x2a, y2a = item["x1a"], item["y1a"], item["x2a"], item["y2a"]
                 x1b, y1b, x2b, y2b = item["x1b"], item["y1b"], item["x2b"], item["y2b"]
                 img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:x2b]
+                if spatial_mask4 is not None:
+                    source_mask = labels_patch.get("cls_loss_spatial_mask")
+                    if source_mask is None:
+                        source_mask = np.ones(img.shape[:2], dtype=np.uint8)
+                    spatial_mask4[y1a:y2a, x1a:x2a] = source_mask[y1b:y2b, x1b:x2b]
             labels["img"] = img4
+            if spatial_mask4 is not None:
+                labels["cls_loss_spatial_mask"] = spatial_mask4
         elif self.n == 9:
             img9 = np.full((self.imgsz * 3, self.imgsz * 3, labels["img"].shape[2]), 114, dtype=np.uint8)
+            spatial_mask9 = (
+                np.ones((self.imgsz * 3, self.imgsz * 3), dtype=np.uint8) if has_spatial_mask else None
+            )
             for item in layout:
                 labels_patch = item["labels_patch"]
                 img = labels_patch["img"]
@@ -640,7 +720,16 @@ class Mosaic(BaseMixTransform):
                 x1b, y1b = x1 - padw, y1 - padh
                 x2b, y2b = x1b + (x2 - x1), y1b + (y2 - y1)
                 img9[y1:y2, x1:x2] = img[y1b:y2b, x1b:x2b]
+                if spatial_mask9 is not None:
+                    source_mask = labels_patch.get("cls_loss_spatial_mask")
+                    if source_mask is None:
+                        source_mask = np.ones(img.shape[:2], dtype=np.uint8)
+                    spatial_mask9[y1:y2, x1:x2] = source_mask[y1b:y2b, x1b:x2b]
             labels["img"] = img9[-self.border[0] : self.border[0], -self.border[1] : self.border[1]]
+            if spatial_mask9 is not None:
+                labels["cls_loss_spatial_mask"] = spatial_mask9[
+                    -self.border[0] : self.border[0], -self.border[1] : self.border[1]
+                ]
         return labels
 
     def apply_instances(self, labels: dict[str, Any], params: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1370,17 +1459,28 @@ class RandomPerspective(BaseTransform):
         Returns:
             (dict): Updated labels with transformed semantic mask.
         """
-        if "semantic_mask" not in labels or labels["semantic_mask"] is None:
-            return labels
-        mask = labels["semantic_mask"]
         M = params["M"]
         size = params["size"]
-        if (size[0] != mask.shape[1] or size[1] != mask.shape[0]) or (M != np.eye(3)).any():
-            if self.perspective:
-                mask = cv2.warpPerspective(mask, M, dsize=size, flags=cv2.INTER_NEAREST, borderValue=255)
-            else:
-                mask = cv2.warpAffine(mask, M[:2], dsize=size, flags=cv2.INTER_NEAREST, borderValue=255)
-        labels["semantic_mask"] = mask
+        if "semantic_mask" in labels and labels["semantic_mask"] is not None:
+            mask = labels["semantic_mask"]
+            if (size[0] != mask.shape[1] or size[1] != mask.shape[0]) or (M != np.eye(3)).any():
+                if self.perspective:
+                    mask = cv2.warpPerspective(mask, M, dsize=size, flags=cv2.INTER_NEAREST, borderValue=255)
+                else:
+                    mask = cv2.warpAffine(mask, M[:2], dsize=size, flags=cv2.INTER_NEAREST, borderValue=255)
+            labels["semantic_mask"] = mask
+        source_mask = labels.get("cls_loss_spatial_mask")
+        if source_mask is not None:
+            if (size[0] != source_mask.shape[1] or size[1] != source_mask.shape[0]) or (M != np.eye(3)).any():
+                if self.perspective:
+                    source_mask = cv2.warpPerspective(
+                        source_mask, M, dsize=size, flags=cv2.INTER_NEAREST, borderValue=1
+                    )
+                else:
+                    source_mask = cv2.warpAffine(
+                        source_mask, M[:2], dsize=size, flags=cv2.INTER_NEAREST, borderValue=1
+                    )
+            labels["cls_loss_spatial_mask"] = source_mask
         return labels
 
     @staticmethod
@@ -1620,13 +1720,21 @@ class RandomFlip(BaseTransform):
         Returns:
             (dict): Updated labels with flipped (or unchanged) semantic mask.
         """
-        if "semantic_mask" not in labels or labels["semantic_mask"] is None:
-            return labels
         if params["flip"]:
             if params["direction"] == "vertical":
-                labels["semantic_mask"] = np.ascontiguousarray(np.flipud(labels["semantic_mask"]))
+                if labels.get("semantic_mask") is not None:
+                    labels["semantic_mask"] = np.ascontiguousarray(np.flipud(labels["semantic_mask"]))
+                if labels.get("cls_loss_spatial_mask") is not None:
+                    labels["cls_loss_spatial_mask"] = np.ascontiguousarray(
+                        np.flipud(labels["cls_loss_spatial_mask"])
+                    )
             elif params["direction"] == "horizontal":
-                labels["semantic_mask"] = np.ascontiguousarray(np.fliplr(labels["semantic_mask"]))
+                if labels.get("semantic_mask") is not None:
+                    labels["semantic_mask"] = np.ascontiguousarray(np.fliplr(labels["semantic_mask"]))
+                if labels.get("cls_loss_spatial_mask") is not None:
+                    labels["cls_loss_spatial_mask"] = np.ascontiguousarray(
+                        np.fliplr(labels["cls_loss_spatial_mask"])
+                    )
         return labels
 
 
@@ -2316,6 +2424,9 @@ class Format(BaseTransform):
         img = labels.pop("img", None)
         if img is not None:
             labels["img"] = self._format_img(img)
+        source_mask = labels.get("cls_loss_spatial_mask")
+        if source_mask is not None and not isinstance(source_mask, torch.Tensor):
+            labels["cls_loss_spatial_mask"] = torch.from_numpy(np.ascontiguousarray(source_mask))
         return labels
 
     def apply_instances(self, labels: dict[str, Any], params: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -1,12 +1,18 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import copy
+import random
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.data.augment import BaseMixTransform, CopyPaste, Mosaic
+from ultralytics.data.augment import BaseMixTransform, CopyPaste, Format, Mosaic, RandomFlip, RandomPerspective
+from ultralytics.data.dataset import YOLODataset
+from ultralytics.utils.instance import Instances
+from ultralytics.utils.tal import make_anchors
 from ultralytics.utils.loss import v8DetectionLoss
 
 
@@ -64,7 +70,7 @@ class DummyInstances:
     segments = [object()]
 
 
-def test_leakage_only_images_are_skipped_and_excluded_from_mixing_sources():
+def test_mosaic_allows_leakage_sources_but_other_mix_transforms_keep_existing_filtering():
     dataset = DummyAugmentDataset()
     transform = RecordingMixTransform(dataset, p=1.0)
 
@@ -79,11 +85,172 @@ def test_leakage_only_images_are_skipped_and_excluded_from_mixing_sources():
     assert len(dataset.mix_calls) == calls_before
 
     mosaic = Mosaic(dataset, p=1.0, n=4)
-    assert all(index in dataset.mixing_indices for index in mosaic.get_indexes())
+    assert mosaic.get_indexes() == [1, 1, 1]
 
     copy_paste = CopyPaste(dataset, p=1.0, mode="flip")
     copy_paste_labels = {"im_file": "leak.jpg", "instances": DummyInstances()}
     assert copy_paste(copy_paste_labels) is copy_paste_labels
+
+
+def make_mosaic_label(im_file, classes, boxes, spatial_value):
+    boxes = np.asarray(boxes, dtype=np.float32)
+    instances = Instances(
+        boxes.copy(),
+        segments=np.zeros((0, 0, 2), dtype=np.float32),
+        bbox_format="xyxy",
+        normalized=False,
+    )
+    return {
+        "im_file": im_file,
+        "img": np.zeros((100, 100, 3), dtype=np.uint8),
+        "ori_shape": (100, 100),
+        "resized_shape": (100, 100),
+        "ratio_pad": (1.0, 1.0),
+        "cls": np.asarray(classes, dtype=np.float32).reshape(-1, 1),
+        "instances": instances,
+        "cls_loss_spatial_mask": np.full((100, 100), spatial_value, dtype=np.uint8),
+    }
+
+
+class DummyMosaicDataset:
+    def __init__(self):
+        self.cache = None
+        self.buffer = [0, 1, 2, 3]
+        self.im_files = ["normal_a.jpg", "leak.jpg", "normal_b.jpg", "normal_c.jpg"]
+        self.leakage_only_files = frozenset({"leak.jpg"})
+        self.labels = [
+            make_mosaic_label(
+                path,
+                [2] if path == "leak.jpg" else [0],
+                [[20, 20, 40, 40]],
+                0 if path == "leak.jpg" else 1,
+            )
+            for path in self.im_files
+        ]
+        self.mix_calls = []
+
+    def __len__(self):
+        return len(self.labels)
+
+    def is_leakage_only(self, im_file):
+        return im_file in self.leakage_only_files
+
+    def get_image_and_label(self, index):
+        self.mix_calls.append(index)
+        return copy.deepcopy(self.labels[index])
+
+
+def test_mosaic_mixes_normal_and_leakage_sources_with_spatial_mask(monkeypatch):
+    dataset = DummyMosaicDataset()
+    mosaic = Mosaic(dataset, imgsz=100, p=1.0, n=4)
+    monkeypatch.setattr(random, "choices", lambda population, k: [1, 2, 3])
+    result = mosaic(copy.deepcopy(dataset.labels[0]))
+
+    assert 1 in dataset.mix_calls
+    assert result["img"].shape == (200, 200, 3)
+    assert result["cls_loss_spatial_mask"].shape == result["img"].shape[:2]
+    assert set(np.unique(result["cls_loss_spatial_mask"])) == {0, 1}
+
+    formatted = Format()(copy.deepcopy(result))
+    collated = YOLODataset.collate_fn([formatted, Format()(copy.deepcopy(result))])
+    assert collated["cls_loss_spatial_mask"].shape == (2, 200, 200)
+
+    dataset.mix_calls.clear()
+    monkeypatch.setattr(random, "choices", lambda population, k: [0, 2, 3])
+    result = mosaic(copy.deepcopy(dataset.labels[1]))
+    assert result["img"].shape == (200, 200, 3)
+    assert 0 in dataset.mix_calls
+
+
+def test_leakage_source_crop_keeps_context_and_removes_severe_truncation(monkeypatch):
+    dataset = DummyMosaicDataset()
+    mosaic = Mosaic(dataset, imgsz=100, p=1.0, n=4)
+    labels = make_mosaic_label(
+        "leak.jpg",
+        [2, 2, 2],
+        [[40, 40, 50, 50], [42, 42, 46, 46], [0, 0, 100, 100]],
+        0,
+    )
+    monkeypatch.setattr(random, "choice", lambda values: 0)
+    monkeypatch.setattr(random, "uniform", lambda low, high: 1.5)
+    monkeypatch.setattr(random, "randint", lambda low, high: low)
+    mosaic._crop_leakage_source(labels)
+
+    assert labels["img"].shape[:2] == (25, 25)
+    assert len(labels["cls"]) == 2
+    assert np.all(labels["instances"].bboxes[:, 0] >= 0)
+    assert np.all(labels["instances"].bboxes[:, 1] >= 0)
+    assert np.all(labels["instances"].bboxes[:, 2] <= 25)
+    assert np.all(labels["instances"].bboxes[:, 3] <= 25)
+    assert np.any(labels["cls"].reshape(-1) == 2)
+
+
+def test_spatial_mask_follows_affine_and_flip():
+    labels = make_mosaic_label("normal.jpg", [0], [[10, 10, 20, 20]], 1)
+    labels["cls_loss_spatial_mask"][:, :50] = 0
+    perspective = RandomPerspective(
+        degrees=0, translate=0, scale=(1.2, 1.2), shear=0, perspective=0, size=(80, 80)
+    )
+    transformed = perspective(labels)
+    assert transformed["cls_loss_spatial_mask"].shape == (80, 80)
+
+    expected = np.fliplr(transformed["cls_loss_spatial_mask"])
+    flipped = RandomFlip(p=1.0, direction="horizontal")(transformed)
+    assert np.array_equal(flipped["cls_loss_spatial_mask"], expected)
+
+
+def test_spatial_loss_mask_maps_mixed_mosaic_regions_to_anchor_gradients(monkeypatch, tmp_path):
+    criterion = make_criterion(
+        monkeypatch,
+        tmp_path,
+        [("/dataset/normal/normal.jpg", [0]), ("C:/dataset/leak/leak.jpg", [2])],
+        tal_topk=1,
+    )
+    feats = [
+        torch.zeros((2, 1, 8, 8)),
+        torch.zeros((2, 1, 4, 4)),
+        torch.zeros((2, 1, 2, 2)),
+    ]
+    num_anchors = sum(feature.shape[2] * feature.shape[3] for feature in feats)
+    preds = {
+        "boxes": torch.zeros((2, 8, num_anchors), requires_grad=True),
+        "scores": torch.zeros((2, 3, num_anchors), requires_grad=True),
+        "feats": feats,
+    }
+    spatial_mask = torch.ones((2, 64, 64), dtype=torch.uint8)
+    spatial_mask[1, :, :32] = 0
+    batch = {
+        "img": torch.zeros((2, 3, 64, 64)),
+        "cls_loss_spatial_mask": spatial_mask,
+        "batch_idx": torch.tensor([0, 1]),
+        "cls": torch.tensor([[0], [2]]),
+        "bboxes": torch.tensor([[0.25, 0.5, 0.25, 0.25], [0.75, 0.5, 0.25, 0.25]]),
+        "im_file": ["/dataset/normal/normal.jpg", "C:/dataset/leak/leak.jpg"],
+    }
+
+    anchor_points, stride_tensor = make_anchors(feats, criterion.stride, 0.5)
+    anchor_x = (anchor_points * stride_tensor)[:, 0]
+    left_anchors = anchor_x < 32
+    right_anchors = ~left_anchors
+    spatial_loss_mask = criterion._get_leakage_only_spatial_loss_mask(
+        spatial_mask, anchor_points, stride_tensor, (64, 64), torch.float32
+    )
+    assert spatial_loss_mask[0].eq(1).all()
+    assert spatial_loss_mask[1, left_anchors, :2].eq(0).all()
+    assert spatial_loss_mask[1, left_anchors, 2].eq(1).all()
+    assert spatial_loss_mask[1, right_anchors].eq(1).all()
+
+    _, loss, _ = criterion.get_assigned_targets_and_loss(preds, batch)
+    loss.sum().backward()
+    score_grad = preds["scores"].grad
+    assert score_grad[0, 0].abs().sum() > 0
+    assert score_grad[0, 1].abs().sum() > 0
+    assert score_grad[0, 2].abs().sum() > 0
+    assert score_grad[1, :2, left_anchors].eq(0).all()
+    assert score_grad[1, 2, left_anchors].abs().sum() > 0
+    assert score_grad[1, :2, right_anchors].abs().sum() > 0
+    assert preds["boxes"].grad is not None
+    assert preds["boxes"].grad.abs().sum() > 0
 
 
 def test_leakage_only_does_not_override_augmentation_probabilities(monkeypatch):
