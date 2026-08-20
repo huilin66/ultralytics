@@ -69,6 +69,7 @@ C:\ProgramData\anaconda3\python.exe -m pytest tests/test_leakage_only_loss.py -q
 
 - Result at handoff: `12 passed`
 - `compileall` and `git diff --check` passed.
+- The shared list utility uses postponed annotations for Python 3.8 import compatibility.
 - Full training was not started during implementation.
 
 ## Typical Start
