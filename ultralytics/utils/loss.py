@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ultralytics.utils import LOGGER
 from ultralytics.utils.metrics import CITYSCAPES_WEIGHT, OKS_SIGMA, RLE_WEIGHT
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
@@ -336,6 +339,10 @@ class KeypointLoss(nn.Module):
 class v8DetectionLoss:
     """Criterion class for computing training losses for YOLOv8 object detection."""
 
+    leakage_only_list_env = "LEAKAGE_ONLY_LIST"
+    leakage_only_class_id = 2
+    leakage_only_masked_class_ids = (0, 1)
+
     def __init__(
         self, model: torch.nn.Module, tal_topk: int = 10, tal_topk2: int | None = None
     ):  # model must be de-paralleled
@@ -358,6 +365,9 @@ class v8DetectionLoss:
         self.class_weights = getattr(model, "class_weights", None)
         if self.class_weights is not None:
             self.class_weights = self.class_weights.to(device).view(1, 1, -1)
+        self.leakage_only_files = self._load_leakage_only_files()
+        if self.leakage_only_files is not None:
+            self._validate_leakage_only_dataset(model)
 
         self.assigner = TaskAlignedAssigner(
             topk=tal_topk,
@@ -369,6 +379,99 @@ class v8DetectionLoss:
         )
         self.bbox_loss = BboxLoss(m.reg_max).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+
+    @classmethod
+    def _load_leakage_only_files(cls) -> frozenset[str] | None:
+        """Read the leakage-only image list once when the loss criterion is initialized."""
+        list_path_value = os.environ.get(cls.leakage_only_list_env)
+        if list_path_value is None:
+            return None
+        if not list_path_value.strip():
+            raise ValueError(f"{cls.leakage_only_list_env} must point to a non-empty list file.")
+
+        list_path = Path(list_path_value).expanduser()
+        if not list_path.is_file():
+            raise FileNotFoundError(f"Leakage-only list file does not exist: {list_path}")
+
+        names = frozenset(
+            line
+            for raw_line in list_path.read_text(encoding="utf-8-sig").splitlines()
+            if (line := raw_line.strip()) and not line.startswith("#")
+        )
+        if not names:
+            raise ValueError(f"Leakage-only list file is empty: {list_path}")
+        return names
+
+    def _validate_leakage_only_dataset(self, model: torch.nn.Module) -> None:
+        """Validate list names against the complete training dataset metadata."""
+        if self.nc <= self.leakage_only_class_id:
+            raise ValueError(
+                f"Leakage-only masking requires class {self.leakage_only_class_id}, but the model has nc={self.nc}."
+            )
+
+        records = getattr(model, "_leakage_only_dataset_records", None)
+        if records is None:
+            raise RuntimeError(
+                "Leakage-only masking requires training dataset metadata on the model before v8DetectionLoss "
+                "initialization."
+            )
+
+        names_to_paths = defaultdict(set)
+        names_to_classes = defaultdict(set)
+        for im_file, classes in records:
+            name = Path(im_file).name
+            names_to_paths[name].add(os.path.normcase(os.path.abspath(os.fspath(im_file))))
+            names_to_classes[name].update(int(cls) for cls in classes)
+
+        duplicate_names = {
+            name: sorted(paths) for name, paths in names_to_paths.items() if len(paths) > 1
+        }
+        if duplicate_names:
+            details = "; ".join(f"{name}: {paths}" for name, paths in sorted(duplicate_names.items()))
+            raise ValueError(f"Duplicate training image filenames found in different directories: {details}")
+
+        missing = sorted(self.leakage_only_files.difference(names_to_paths))
+        if missing:
+            raise ValueError(f"Leakage-only images are not present in the training dataset: {missing}")
+
+        invalid_labels = {
+            name: sorted(names_to_classes[name].difference({self.leakage_only_class_id}))
+            for name in self.leakage_only_files
+            if names_to_classes[name].difference({self.leakage_only_class_id})
+        }
+        if invalid_labels:
+            raise ValueError(
+                "Leakage-only images contain labels outside class "
+                f"{self.leakage_only_class_id}: {invalid_labels}"
+            )
+
+        LOGGER.info(
+            f"Leakage-only classification mask enabled for {len(self.leakage_only_files)} training images; "
+            f"masked class IDs {list(self.leakage_only_masked_class_ids)}."
+        )
+        delattr(model, "_leakage_only_dataset_records")
+
+    def _get_leakage_only_loss_mask(
+        self, im_files: list[str], batch_size: int, device: torch.device, dtype: torch.dtype
+    ) -> torch.Tensor:
+        """Return a per-image, per-class mask for leakage-only classification loss."""
+        if len(im_files) != batch_size:
+            raise ValueError(f"Expected {batch_size} image filenames in batch, got {len(im_files)}.")
+
+        is_leakage_only = torch.tensor(
+            [Path(im_file).name in self.leakage_only_files for im_file in im_files],
+            device=device,
+            dtype=torch.bool,
+        ).view(batch_size, 1, 1)
+        normal_mask = torch.ones((batch_size, 1, self.nc), device=device, dtype=dtype)
+        leakage_only_class_mask = torch.ones((1, 1, self.nc), device=device, dtype=dtype)
+        masked_class_ids = torch.tensor(
+            self.leakage_only_masked_class_ids, device=device, dtype=torch.long
+        ).view(1, 1, -1)
+        leakage_only_class_mask = leakage_only_class_mask.scatter(
+            2, masked_class_ids, torch.zeros_like(masked_class_ids, dtype=dtype)
+        )
+        return torch.where(is_leakage_only, leakage_only_class_mask, normal_mask)
 
     def preprocess(self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor) -> torch.Tensor:
         """Preprocess targets by converting to tensor format and scaling coordinates."""
@@ -435,7 +538,14 @@ class v8DetectionLoss:
         # Cls loss with optional class weighting
         bce_loss = self.bce(pred_scores, target_scores.to(dtype))  # (bs, num_anchors, nc)
         if self.class_weights is not None:
-            bce_loss *= self.class_weights
+            bce_loss = bce_loss * self.class_weights
+        # Validation calls model.loss under inference mode; leave its three-class loss untouched.
+        if self.leakage_only_files is not None and torch.is_grad_enabled():
+            if "im_file" not in batch:
+                raise KeyError("Leakage-only masking requires batch['im_file'] during training.")
+            bce_loss = bce_loss * self._get_leakage_only_loss_mask(
+                batch["im_file"], batch_size, pred_scores.device, bce_loss.dtype
+            )
         loss[1] = bce_loss.sum() / target_scores_sum  # BCE
 
         # Bbox loss

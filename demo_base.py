@@ -151,9 +151,12 @@ def tee_log_to_run_dir(trainer):
     sys.stderr = Tee(stderr_orig, log_fp)
 
 
-def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, **kwargs):
-    model = network(cfg_path, task=TASK)
-    model.load(pretrain_path)
+def model_train(
+    cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, load_as_model=False, **kwargs
+):
+    model = network(pretrain_path if load_as_model else cfg_path, task=TASK)
+    if not load_as_model:
+        model.load(pretrain_path)
     model.add_callback("on_train_start", tee_log_to_run_dir)
     train_params = {
         "data": DATA,
@@ -166,6 +169,8 @@ def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=
         "plots": False,
     }
 
+    if "LEAKAGE_ONLY_LIST" in os.environ:
+        train_params.update({key: 0.0 for key in ("mosaic", "mixup", "cutmix", "copy_paste")})
     if not auto_optim:
         train_params.update({"optimizer": "AdamW", "lr0": 0.0001})
     if retrain:
@@ -466,9 +471,18 @@ def get_freeze_num(cfg_path):
 # region run tools
 
 
-def yolo8(cfg_path, weight_path="yolov8x.pt", auto_optim=True, retrain=False, **kwargs):
+def yolo8(
+    cfg_path, weight_path="yolov8x.pt", auto_optim=True, retrain=False, load_as_model=False, **kwargs
+):
     assert "yolov8" in cfg_path or "yolo8" in cfg_path, ValueError(cfg_path, "is not yolov8 config!")
-    model_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    model_train(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        retrain=retrain,
+        load_as_model=load_as_model,
+        **kwargs,
+    )
 
 
 def yolo9(cfg_path, weight_path="yolov9e.pt", auto_optim=True, retrain=False, **kwargs):

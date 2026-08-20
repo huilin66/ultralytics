@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import random
 from copy import copy
 from typing import Any
@@ -61,6 +62,51 @@ class DetectionTrainer(BaseTrainer):
             _callbacks (dict, optional): Dictionary of callback functions to be executed during training.
         """
         super().__init__(cfg, overrides, _callbacks)
+        self._check_leakage_only_augmentations()
+
+    def _check_leakage_only_augmentations(self) -> None:
+        """Reject image-mixing augmentations when image-level loss masking is enabled."""
+        if "LEAKAGE_ONLY_LIST" not in os.environ:
+            return
+
+        augmentation_names = ("mosaic", "mixup", "cutmix", "copy_paste")
+        enabled = {
+            name: getattr(self.args, name)
+            for name in augmentation_names
+            if float(getattr(self.args, name)) != 0.0
+        }
+        if enabled:
+            raise ValueError(
+                "LEAKAGE_ONLY_LIST requires mosaic=0.0, mixup=0.0, cutmix=0.0, and copy_paste=0.0; "
+                f"non-zero values: {enabled}"
+            )
+
+    @staticmethod
+    def _leakage_only_dataset_records(dataset) -> list[tuple[str, list[int]]]:
+        """Collect image filenames and class IDs without re-reading image or label files."""
+        if hasattr(dataset, "datasets"):
+            records = []
+            for child in dataset.datasets:
+                records.extend(DetectionTrainer._leakage_only_dataset_records(child))
+            return records
+
+        records = []
+        for label in dataset.labels:
+            classes = label["cls"]
+            if isinstance(classes, torch.Tensor):
+                classes = classes.detach().cpu().numpy()
+            records.append((str(label["im_file"]), np.asarray(classes).reshape(-1).astype(int).tolist()))
+        return records
+
+    def _set_leakage_only_dataset_records(self) -> None:
+        """Attach training dataset metadata for one-time validation by v8DetectionLoss."""
+        if "LEAKAGE_ONLY_LIST" not in os.environ:
+            return
+
+        model = unwrap_model(self.model)
+        if hasattr(model, "student_model"):
+            model = model.student_model
+        model._leakage_only_dataset_records = self._leakage_only_dataset_records(self.train_loader.dataset)
 
     def build_dataset(self, img_path: str, mode: str = "train", batch: int | None = None):
         """Build YOLO Dataset for training or validation.
@@ -171,6 +217,7 @@ class DetectionTrainer(BaseTrainer):
         raised to the power of cls_pw (0 < cls_pw <= 1 dampens; values are restricted to the range [0, 1]).
         Final weights are normalized so their mean equals 1.0.
         """
+        self._set_leakage_only_dataset_records()
         assert 0 <= self.args.cls_pw <= 1.0, "cls_pw must be in the range [0, 1]"
         if self.args.cls_pw == 0.0:
             return
