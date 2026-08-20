@@ -11,7 +11,9 @@ demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device("cuda:1")
 demo_base.BATCH_SIZE = 16
 demo_base.CONF_VAL = 0.001
-DEFAULT_V2_WEIGHTS = r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt"
+DEFAULT_V2_WEIGHTS = (
+    r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt"
+)
 WEIGHT_SOURCE = os.environ.get("HMT_WEIGHT_SOURCE", "v2").strip().lower()
 if WEIGHT_SOURCE == "v2":
     INITIAL_WEIGHTS = os.environ.get("HMT_V2_WEIGHTS", DEFAULT_V2_WEIGHTS)
@@ -278,6 +280,13 @@ if __name__ == "__main__":
     # demo_base.model_val("hmt_bp_cube-[yolo12x]", data="hmt_bp_cube.yaml", save_txt=True, save_conf=True)
     # demo_base.model_val("hmt_bp_cube-[yolo26x]", data="hmt_bp_cube.yaml", save_txt=True, save_conf=True)
 
+    demo_base.yolo8(
+        "yolov8x.yaml",
+        load_as_model=LOAD_AS_MODEL,
+        auto_optim=False,
+        name=NAME,
+        data="hmt_t_update_v3.yaml",
+    )
     demo_base.yolo8(
         "yolov8x.yaml",
         weight_path=INITIAL_WEIGHTS,
