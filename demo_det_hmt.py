@@ -14,6 +14,7 @@ demo_base.CONF_VAL = 0.001
 DEFAULT_V2_WEIGHTS = (
     r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt"
 )
+LEAKAGE_ONLY_LIST = "/localnvme/data/bdd_hmt/hmt_t_update_v3/train_leakage_loss_mask.txt"
 WEIGHT_SOURCE = os.environ.get("HMT_WEIGHT_SOURCE", "v2").strip().lower()
 if WEIGHT_SOURCE == "v2":
     INITIAL_WEIGHTS = os.environ.get("HMT_V2_WEIGHTS", DEFAULT_V2_WEIGHTS)
