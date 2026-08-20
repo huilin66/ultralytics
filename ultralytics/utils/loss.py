@@ -394,7 +394,7 @@ class v8DetectionLoss:
             raise FileNotFoundError(f"Leakage-only list file does not exist: {list_path}")
 
         names = frozenset(
-            line
+            Path(line).name
             for raw_line in list_path.read_text(encoding="utf-8-sig").splitlines()
             if (line := raw_line.strip()) and not line.startswith("#")
         )

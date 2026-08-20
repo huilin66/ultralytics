@@ -119,6 +119,17 @@ def test_leakage_only_dataset_validation(monkeypatch, tmp_path, records, content
         make_criterion(monkeypatch, tmp_path, records, contents)
 
 
+@pytest.mark.parametrize("image_path", ["/dataset/leak/leak.jpg", "C:/dataset/leak/leak.jpg"])
+def test_leakage_only_list_accepts_full_training_paths(monkeypatch, tmp_path, image_path):
+    criterion = make_criterion(
+        monkeypatch,
+        tmp_path,
+        [(image_path, [2])],
+        contents=f"{image_path}\n",
+    )
+    mask = criterion._get_leakage_only_loss_mask([image_path], 1, torch.device("cpu"), torch.float32)
+    assert torch.equal(mask[0, 0, :2], torch.zeros(2))
+
 def test_leakage_only_list_must_exist_and_contain_a_name(monkeypatch, tmp_path):
     missing = tmp_path / "missing.txt"
     monkeypatch.setenv("LEAKAGE_ONLY_LIST", str(missing))
