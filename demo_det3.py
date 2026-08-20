@@ -18,4 +18,30 @@ if __name__ == "__main__":
     NAME = "debug"
 
     csv_path = r"summary_conf_0.01.csv"
-    demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME, data="hmt_rgb.yaml", cls_pw=0.5)
+    # demo_base.model_val(
+    #     [
+    #         # "tf_det_1-[yolov8x]-2",
+    #         # "tf_det_1-[yolov8x]-3",
+    #         "tf_det_1-[yolov9e]",
+    #         # "tf_det_1-[yolov9e]-2",
+    #         "tf_defect_3-[yolov8x]",
+    #         # "tf_defect_3-[yolov8x]-2",
+    #         # "tf_defect_3-[yolo26x]",
+    #         # "tf_defect_3-[yolo26x]-2",
+    #         # "f_defect_1-[yolov8x]-3",
+    #         "f_defect_1-[yolov8x]-4",
+    #         # "f_defect_1-[yolov9e]",
+    #         # "f_defect_1-[yolov9e]-2",
+    #     ],
+    #     save_txt=True,
+    #     save_conf=True,
+    # )
+    demo_base.model_val(
+        [
+            r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt",
+            r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v3-[yolov8x]/weights/best.pt",
+        ],
+        weight_name=False,
+        save_txt=True,
+        save_conf=True,
+    )
