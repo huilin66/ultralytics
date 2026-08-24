@@ -151,9 +151,7 @@ def tee_log_to_run_dir(trainer):
     sys.stderr = Tee(stderr_orig, log_fp)
 
 
-def model_train(
-    cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, load_as_model=False, **kwargs
-):
+def model_train(cfg_path, pretrain_path, network=YOLO, auto_optim=True, retrain=False, load_as_model=False, **kwargs):
     model = network(pretrain_path if load_as_model else cfg_path, task=TASK)
     if not load_as_model:
         model.load(pretrain_path)
@@ -387,6 +385,18 @@ def model_val_summary(
 def model_predict(
     weight_path, img_dir, weight_name=True, network=YOLO, save=True, save_txt=True, stream=True, **kwargs
 ):
+    if isinstance(weight_path, list):
+        for w_path in weight_path:
+            model_predict(
+                w_path,
+                img_dir=img_dir,
+                weight_name=weight_name,
+                network=network,
+                save_txt=save_txt,
+                stream=stream,
+                **kwargs,
+            )
+        return
     if weight_name:
         weight_path = os.path.join("runs", TASK, weight_path, "weights", "best.pt")
     model = network(weight_path, task=TASK)
@@ -469,9 +479,7 @@ def get_freeze_num(cfg_path):
 # region run tools
 
 
-def yolo8(
-    cfg_path, weight_path="yolov8x.pt", auto_optim=True, retrain=False, load_as_model=False, **kwargs
-):
+def yolo8(cfg_path, weight_path="yolov8x.pt", auto_optim=True, retrain=False, load_as_model=False, **kwargs):
     assert "yolov8" in cfg_path or "yolo8" in cfg_path, ValueError(cfg_path, "is not yolov8 config!")
     model_train(
         cfg_path,
