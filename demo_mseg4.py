@@ -1,30 +1,31 @@
-import demo_base
 import torch
 
-demo_base.TASK = 'msegment'
+import demo_base
+
+demo_base.TASK = "msegment"
 demo_base.EPOCHS = 100
 demo_base.IMGSZ = 960
 demo_base.BATCH_SIZE = 64
-demo_base.DEVICE = torch.device('cuda:0')
+demo_base.DEVICE = torch.device("cuda:1")
 demo_base.DATA = "fusedata2419_mseg_c5_0730.yaml"
 # demo_base.CONF_VAL = 0.5
 # demo_base.CONF_PREDICT = 0.5
 
-MODEL1 = 'yolov8x-mseg-7.yaml'
-MODEL2 = 'yolov8x-mseg-dlka3res-7.yaml'
-MODEL3 = 'yolov10x-mseg-dlka3res-7.yaml'
-MODEL4 = 'yolov10x-mseg-dlka3res-7-unet.yaml'
-MODEL4_S = 'yolov10x-mseg-dlka3res-7-unet-single.yaml'
-MODEL5 = 'yolov10x-mseg-dlka3res-7-c3str.yaml'
-MODEL6 = 'yolov10x-mseg-dlka3res-7-unet-sep.yaml'
-MODEL7 = 'yolov10x-mseg-dlka3res-7-c3str-unet1.yaml'
-MODEL8 = 'yolov10x-mseg-dlka3res-7-c3str-unet2.yaml'
-MODEL9 = 'yolov10x-mseg-dlka3res-7-dfl.yaml'
-MODEL07 = 'yolov10x-mseg-dlka3res-7-dlka.yaml'
-MODEL08 = 'yolov10x-mseg-dlka3res-7-dlkaatt.yaml'
+MODEL1 = "yolov8x-mseg-7.yaml"
+MODEL2 = "yolov8x-mseg-dlka3res-7.yaml"
+MODEL3 = "yolov10x-mseg-dlka3res-7.yaml"
+MODEL4 = "yolov10x-mseg-dlka3res-7-unet.yaml"
+MODEL4_S = "yolov10x-mseg-dlka3res-7-unet-single.yaml"
+MODEL5 = "yolov10x-mseg-dlka3res-7-c3str.yaml"
+MODEL6 = "yolov10x-mseg-dlka3res-7-unet-sep.yaml"
+MODEL7 = "yolov10x-mseg-dlka3res-7-c3str-unet1.yaml"
+MODEL8 = "yolov10x-mseg-dlka3res-7-c3str-unet2.yaml"
+MODEL9 = "yolov10x-mseg-dlka3res-7-dfl.yaml"
+MODEL07 = "yolov10x-mseg-dlka3res-7-dlka.yaml"
+MODEL08 = "yolov10x-mseg-dlka3res-7-dlkaatt.yaml"
 SEG_WEIGHT = "runs/segment/fusedata5894_seg_c5_0822_80p-[yolov8x-seg-dlka3res]2/weights/best.pt"
 SEG_WEIGHT10 = "/localnvme/project/ultralytics/runs/segment/fusedata7961_seg_c5_l2_1022_re_80p_ref-[yolov10x-seg-dlka3res]8/weights/best.pt"
-SEG_WEIGHT10_v12 = r'runs/segment/fusedata7961_seg_c5_1106_v12_src-[yolov10x-seg-dlka3res]/weights/best.pt'
+SEG_WEIGHT10_v12 = r"runs/segment/fusedata7961_seg_c5_1106_v12_src-[yolov10x-seg-dlka3res]/weights/best.pt"
 DATA0 = "fusedata7961_mseg_c5_l2_1104_v5_test.yaml"
 DATA1 = "fusedata7961_mseg_c5_l2_1106_v10_test.yaml"
 
@@ -33,10 +34,9 @@ DATA_SB = "fusedata7961_mseg_c5_l2_1112_v16_sb_test.yaml"
 DATA_SC = "fusedata7961_mseg_c5_l2_1112_v16_sc_test.yaml"
 DATA_SD = "fusedata7961_mseg_c5_l2_1112_v16_sd_test.yaml"
 
-DATA_Test = 'defect_test_1021.yaml'
+DATA_Test = "defect_test_1021.yaml"
 
-if __name__ == '__main__':
-    pass
+if __name__ == "__main__":
     # demo_base.yolo10(
     #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_Test, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=20, name='debug'
@@ -74,7 +74,6 @@ if __name__ == '__main__':
     #     MODEL4_S, weight_path=SEG_WEIGHT10, data=DATA_SB, auto_optim=False, retrain=True,
     #     mloss_mask=False, mloss_weight=0, mloss_enlarge=10,
     # )
-
 
     # val_name = 'fusedata7961_mseg_c5_l2_1029_abandonment_refine_80p_ref_src-[yolov10x-mseg-dlka3res-7-unet]2'
     # demo_base.model_val(val_name, save_txt=True, save_conf=True)
@@ -164,7 +163,6 @@ if __name__ == '__main__':
     # val_name = 'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # demo_base.model_val(val_name, save_conf=True, save_txt=True)
 
-
     # img_dir = r'/localnvme/data/added_data/test_data1121/images'
     # save_dir = r'/localnvme/data/added_data/test_data1121/images_infer'
     # val_name = 'fusedata7961_mseg_c5_l2_1117_v19_sb_test_broken_syn_v1-[yolov10x-mseg-dlka3res-7-unet-single]'
@@ -179,14 +177,12 @@ if __name__ == '__main__':
     # demo_base.model_predict(val_name, img_dir = img_dir,name=save_dir, conf=0.4)
     # demo_base.model_predict(val_name, img_dir = img_dir,name=save_dir, conf=0.5)
 
-
     # val_name = 'fusedata7961_mseg_c5_l2_1023_src_80p_ref-[yolov10x-mseg-dlka3res-7]3'
     # # img_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine/images'
     # # save_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine/predicts/infer'
     # img_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref/images'
     # save_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src/val_80p_ref/images_infer'
     # demo_base.model_predict(val_name, img_dir = img_dir, conf=0.001, name=save_dir,)
-
 
     # demo_base.model_val('fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7-unet]',
     #                     data='fusedata7961_mseg_c5_l2_1023_src_all.yaml', save_txt=True, save_conf=True)
@@ -197,8 +193,8 @@ if __name__ == '__main__':
     # demo_base.model_export(r'fusedata7961_mseg_c5_l2_1023_80p_ref-[yolov10x-mseg-dlka3res-7]3',
     #                         imgsz=(608,960),batch=6)
 
-    val_name = r'fusedata7961_mseg_c5_l2_1113_v17_test-[yolov10x-mseg-dlka3res-7-unet-sep]2'
-    image_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17/val_80p/images'
+    val_name = r"fusedata7961_mseg_c5_l2_1113_v17_test-[yolov10x-mseg-dlka3res-7-unet-sep]2"
+    image_dir = r"/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17/val_80p/images"
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_test.yaml', save_txt=True, save_conf=True, conf=0.5)
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.001)
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.01)
@@ -208,15 +204,15 @@ if __name__ == '__main__':
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.4)
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.5)
 
-    # demo_base.model_predict(val_name, img_dir=image_dir, conf=0.1, name=image_dir+'_infer', save_conf=True)
-    brightness_list = [
-        0.5,
-        0.75,
-        1.25,
-        1.5,
-    ]
-    for brightness in brightness_list:
-        image_bright_dir = image_dir + f'_b{int(brightness*100)}'
-        demo_base.model_predict(val_name, img_dir=image_bright_dir, conf=0.1, name=image_bright_dir+'_infer', save_conf=True)
+    demo_base.model_predict(val_name, img_dir=image_dir, conf=0.1, name=image_dir + "_infer", save_conf=True)
+    # brightness_list = [
+    #     0.5,
+    #     0.75,
+    #     1.25,
+    #     1.5,
+    # ]
+    # for brightness in brightness_list:
+    #     image_bright_dir = image_dir + f'_b{int(brightness*100)}'
+    #     demo_base.model_predict(val_name, img_dir=image_bright_dir, conf=0.1, name=image_bright_dir+'_infer', save_conf=True)
 
     # demo_base.model_export(val_name, imgsz=(608,992),batch=1)
