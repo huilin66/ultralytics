@@ -50,6 +50,7 @@ dropout: 0.0 # (float) dropout for classification head (classify only)
 # Val/Test settings ----------------------------------------------------------------------------------------------------
 val: True # (bool) run validation/testing during training
 split: val # (str) dataset split to evaluate: 'val', 'test' or 'train'
+fitness_weights: [0.0, 0.0, 1.0, 0.0] # (list) weights for best.pt selection, applied to [P, R, mAP@0.5, mAP@0.5:0.95]; e.g. [0,0,1,0] picks best by mAP@0.5 only
 save_json: False # (bool) save results to COCO JSON (detect/segment/pose) or PNG masks (semantic) for external evaluation
 conf: # (float, optional) confidence threshold; defaults: predict=0.25, val=0.001
 iou: 0.7 # (float) IoU threshold used for NMS

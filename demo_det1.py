@@ -18,14 +18,14 @@ demo_base.DATA = "tf_det_1.yaml"
 
 if __name__ == "__main__":
     NAME = None
-    demo_base.model_train_resume(
-        r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/tf_det_1-[yolov8x]-2/weights/last.pt"
-    )
-    # demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME)
-    demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME, cls_pw=0.5)
+    # demo_base.model_train_resume(
+    #     r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/tf_det_1-[yolov8x]-2/weights/last.pt"
+    # )
+    # # demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME)
+    # demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME, cls_pw=0.5)
 
-    demo_base.yolo9("yolov9e.yaml", auto_optim=False, name=NAME)
-    demo_base.yolo9("yolov9e.yaml", auto_optim=False, name=NAME, cls_pw=0.5)
+    # demo_base.yolo9("yolov9e.yaml", auto_optim=False, name=NAME)
+    # demo_base.yolo9("yolov9e.yaml", auto_optim=False, name=NAME, cls_pw=0.5)
 
     # demo_base.yolo8('yolov8x.yaml', auto_optim=False, name=NAME, data="hmt_rgb.yaml")
     # demo_base.yolo9('yolov9e.yaml', auto_optim=False, name=NAME, data="hmt_rgb.yaml")
