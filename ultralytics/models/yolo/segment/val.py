@@ -46,7 +46,7 @@ class SegmentationValidator(DetectionValidator):
         super().__init__(dataloader, save_dir, args, _callbacks)
         self.process = None
         self.args.task = "segment"
-        self.metrics = SegmentMetrics()
+        self.metrics = SegmentMetrics(fitness_weights=self.args.fitness_weights)
 
     def preprocess(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Preprocess batch of images for YOLO segmentation validation.

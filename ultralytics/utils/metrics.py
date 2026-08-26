@@ -419,7 +419,7 @@ class ConfusionMatrix(DataExportMixin):
         """
         gt_cls, gt_bboxes = batch["cls"], batch["bboxes"]
         if self.matches is not None:  # only if visualization is enabled
-            self.matches = {k: defaultdict(list) for k in {"TP", "FP", "FN", "GT"}}
+            self.matches = {k: defaultdict(list) for k in ("TP", "FP", "FN", "GT")}
             for i in range(gt_cls.shape[0]):
                 self._append_matches("GT", batch, i)  # store GT
         is_obb = gt_bboxes.shape[1] == 5  # check if boxes contains angle for OBB
@@ -601,7 +601,7 @@ class ConfusionMatrix(DataExportMixin):
         if ticklabels != "auto":
             ax.set_xticklabels(ticklabels, fontsize=tick_fontsize, rotation=90, ha="center")
             ax.set_yticklabels(ticklabels, fontsize=tick_fontsize)
-        for s in {"left", "right", "bottom", "top", "outline"}:
+        for s in ("left", "right", "bottom", "top", "outline"):
             if s != "outline":
                 ax.spines[s].set_visible(False)  # Confusion matrix plot don't have outline
             cbar.ax.spines[s].set_visible(False)
@@ -917,7 +917,7 @@ class Metric(SimpleClass):
         curves_results: Provide a list of results for accessing specific metrics like precision, recall, F1, etc.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, fitness_weights: list | None = None) -> None:
         """Initialize a Metric instance for computing evaluation metrics for the YOLO model."""
         self.p = []  # (nc, )
         self.r = []  # (nc, )
@@ -926,6 +926,7 @@ class Metric(SimpleClass):
         self.ap_class_index = []  # (nc, )
         self.nc = 0
         self.image_metrics = {}
+        self.fitness_weights = [0.0, 0.0, 1.0, 1.0] if fitness_weights is None else fitness_weights
 
     @property
     def ap50(self) -> np.ndarray | list:
@@ -1007,8 +1008,14 @@ class Metric(SimpleClass):
         return maps
 
     def fitness(self) -> float:
-        """Return model fitness as a weighted combination of metrics."""
-        w = [0.0, 0.0, 0.0, 1.0]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
+        """Return model fitness as a weighted combination of metrics.
+
+        Weights apply to [P, R, mAP@0.5, mAP@0.5:0.95] and are configurable via the ``fitness_weights``
+        training/validation argument (see ``ultralytics/cfg/default.yaml``). For example ``[0, 0, 1, 1]``
+        weighs mAP@0.5 and mAP@0.5:0.95 equally, while ``[0, 0, 1, 0]`` selects the best checkpoint purely
+        by mAP@0.5. This value drives best.pt persistence (and early stopping) in the trainer.
+        """
+        w = self.fitness_weights  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
         return float((np.nan_to_num(np.array(self.mean_results())) * w).sum())
 
     def update(self, results: tuple):
@@ -1122,14 +1129,16 @@ class DetMetrics(SimpleClass, DataExportMixin):
         summary: Generate a summarized representation of per-class detection metrics as a list of dictionaries.
     """
 
-    def __init__(self, names: dict[int, str] | None = None) -> None:
+    def __init__(self, names: dict[int, str] | None = None, fitness_weights: list | None = None) -> None:
         """Initialize a DetMetrics instance with class names.
 
         Args:
             names (dict[int, str], optional): Dictionary of class names.
+            fitness_weights (list, optional): Weights for best model selection, applied to
+                [precision, recall, mAP@0.5, mAP@0.5:0.95].
         """
         self.names = names if names is not None else {}
-        self.box = Metric()
+        self.box = Metric(fitness_weights=fitness_weights)
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
         self.nt_per_class = None
@@ -1291,14 +1300,16 @@ class SegmentMetrics(DetMetrics):
         summary: Generate a summarized representation of per-class segmentation metrics as a list of dictionaries.
     """
 
-    def __init__(self, names: dict[int, str] | None = None) -> None:
+    def __init__(self, names: dict[int, str] | None = None, fitness_weights: list | None = None) -> None:
         """Initialize a SegmentMetrics instance with class names.
 
         Args:
             names (dict[int, str], optional): Dictionary of class names.
+            fitness_weights (list, optional): Weights for best model selection, applied to
+                [precision, recall, mAP@0.5, mAP@0.5:0.95].
         """
-        DetMetrics.__init__(self, names)
-        self.seg = Metric()
+        DetMetrics.__init__(self, names, fitness_weights)
+        self.seg = Metric(fitness_weights=fitness_weights)
         self.stats["tp_m"] = []  # add additional stats for masks
 
     def update_stats(self, stat: dict[str, Any]) -> None:
@@ -1442,14 +1453,16 @@ class PoseMetrics(DetMetrics):
         summary: Generate a summarized representation of per-class pose metrics as a list of dictionaries.
     """
 
-    def __init__(self, names: dict[int, str] | None = None) -> None:
+    def __init__(self, names: dict[int, str] | None = None, fitness_weights: list | None = None) -> None:
         """Initialize the PoseMetrics class with class names.
 
         Args:
             names (dict[int, str], optional): Dictionary of class names.
+            fitness_weights (list, optional): Weights for best model selection, applied to
+                [precision, recall, mAP@0.5, mAP@0.5:0.95].
         """
-        super().__init__(names)
-        self.pose = Metric()
+        super().__init__(names, fitness_weights)
+        self.pose = Metric(fitness_weights=fitness_weights)
         self.stats["tp_p"] = []  # add additional stats for pose
 
     def update_stats(self, stat: dict[str, Any]) -> None:
