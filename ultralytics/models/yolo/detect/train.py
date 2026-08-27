@@ -87,6 +87,7 @@ class DetectionTrainer(BaseTrainer):
         model = unwrap_model(self.model)
         if hasattr(model, "student_model"):
             model = model.student_model
+        model._leakage_only_dataset_validated_for = None
         model._leakage_only_dataset_records = self._leakage_only_dataset_records(self.train_loader.dataset)
 
     def build_dataset(self, img_path: str, mode: str = "train", batch: int | None = None):

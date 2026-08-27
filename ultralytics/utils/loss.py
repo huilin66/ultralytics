@@ -395,6 +395,8 @@ class v8DetectionLoss:
 
         records = getattr(model, "_leakage_only_dataset_records", None)
         if records is None:
+            if getattr(model, "_leakage_only_dataset_validated_for", None) == self.leakage_only_files:
+                return
             raise RuntimeError(
                 "Leakage-only masking requires training dataset metadata on the model before v8DetectionLoss "
                 "initialization."
@@ -433,6 +435,7 @@ class v8DetectionLoss:
             f"Leakage-only classification mask enabled for {len(self.leakage_only_files)} training images; "
             f"masked class IDs {list(self.leakage_only_masked_class_ids)}."
         )
+        model._leakage_only_dataset_validated_for = self.leakage_only_files
         delattr(model, "_leakage_only_dataset_records")
 
     def _get_leakage_only_loss_mask(

@@ -13,7 +13,7 @@ from ultralytics.data.augment import BaseMixTransform, CopyPaste, Format, Mosaic
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.utils.instance import Instances
 from ultralytics.utils.tal import make_anchors
-from ultralytics.utils.loss import v8DetectionLoss
+from ultralytics.utils.loss import E2ELoss, v8DetectionLoss
 
 
 class DummyDetectHead(nn.Module):
@@ -296,6 +296,19 @@ def make_criterion(monkeypatch, tmp_path, records, contents="leak.jpg\n", tal_to
     monkeypatch.setenv("LEAKAGE_ONLY_LIST", str(list_path))
     return v8DetectionLoss(DummyDetectionModel(records), tal_topk=tal_topk)
 
+
+def test_e2e_loss_initializes_both_leakage_criteria(monkeypatch, tmp_path):
+    list_path = tmp_path / "leakage_only.txt"
+    list_path.write_text("leak.jpg\n", encoding="utf-8")
+    monkeypatch.setenv("LEAKAGE_ONLY_LIST", str(list_path))
+    model = DummyDetectionModel([("/dataset/leak/leak.jpg", [2])])
+
+    criterion = E2ELoss(model)
+
+    assert criterion.one2many.leakage_only_files == frozenset({"leak.jpg"})
+    assert criterion.one2one.leakage_only_files == criterion.one2many.leakage_only_files
+    assert not hasattr(model, "_leakage_only_dataset_records")
+    assert model._leakage_only_dataset_validated_for == frozenset({"leak.jpg"})
 
 def test_leakage_only_masked_classification_and_box_dfl_gradients(monkeypatch, tmp_path):
     criterion = make_criterion(
