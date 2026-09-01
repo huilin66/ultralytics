@@ -853,11 +853,13 @@ class v8MDetectionLoss(v8DetectionLoss):
                 pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
             )
 
-        gt_attributes = gt_attributes * (1-self.mloss_enlarge) + self.mloss_enlarge
-
-        if fg_mask.sum() and self.mloss_mask:
+        # Attributes are object-level labels and are valid only for matched foreground anchors.
+        # Always apply the foreground mask here: when mloss_mask=False the previous all-anchor
+        # BCE used placeholder GT attributes for background anchors and polluted the gradients.
+        if fg_mask.sum():
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]
+            gt_attributes_fg = gt_attributes_fg * (1 - self.mloss_enlarge) + self.mloss_enlarge
 
             weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
 
@@ -867,10 +869,8 @@ class v8MDetectionLoss(v8DetectionLoss):
                 weight=weight
             )
         else:
-            loss[3] = F.binary_cross_entropy_with_logits(
-                                                         input=pred_attributes,
-                                                         target=gt_attributes,
-                                                         )
+            # Keep the loss connected to the prediction graph while contributing no gradient.
+            loss[3] = pred_attributes.sum() * 0.0
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain

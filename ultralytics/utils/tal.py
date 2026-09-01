@@ -362,6 +362,12 @@ class TaskAlignedAssignerMdet(TaskAlignedAssigner):
         target_bboxes = gt_bboxes.view(-1, gt_bboxes.shape[-1])[target_gt_idx]
 
         target_attributes = gt_attributes.view(-1, gt_attributes.shape[-1])[target_gt_idx]
+        # Attributes are defined only for matched foreground objects. The target_gt_idx of a
+        # background anchor is an implementation placeholder, so never expose that GT attribute
+        # to downstream losses.
+        target_attributes = torch.where(
+            fg_mask.unsqueeze(-1).bool(), target_attributes, torch.zeros_like(target_attributes)
+        )
 
         # Assigned target scores
         target_labels.clamp_(0)
@@ -412,6 +418,7 @@ class TaskAlignedAssignerMdet(TaskAlignedAssigner):
                 torch.full_like(pd_scores[..., 0], self.bg_idx).to(device),
                 torch.zeros_like(pd_bboxes).to(device),
                 torch.zeros_like(pd_scores).to(device),
+                torch.zeros_like(pd_attributes).to(device),
                 torch.zeros_like(pd_scores[..., 0]).to(device),
                 torch.zeros_like(pd_scores[..., 0]).to(device),
             )
