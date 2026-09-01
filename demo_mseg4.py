@@ -6,7 +6,7 @@ demo_base.TASK = "msegment"
 demo_base.EPOCHS = 100
 demo_base.IMGSZ = 960
 demo_base.BATCH_SIZE = 64
-demo_base.DEVICE = torch.device("cuda:1")
+demo_base.DEVICE = torch.device("cuda:0")
 demo_base.DATA = "fusedata2419_mseg_c5_0730.yaml"
 # demo_base.CONF_VAL = 0.5
 # demo_base.CONF_PREDICT = 0.5
@@ -194,7 +194,8 @@ if __name__ == "__main__":
     #                         imgsz=(608,960),batch=6)
 
     val_name = r"fusedata7961_mseg_c5_l2_1113_v17_test-[yolov10x-mseg-dlka3res-7-unet-sep]2"
-    image_dir = r"/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17/val_80p/images"
+    # image_dir = r"/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17/val_80p/images"
+    image_dir = r"/scrinvme/huilin/isds/copy/add_31_images"
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_test.yaml', save_txt=True, save_conf=True, conf=0.5)
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.001)
     # demo_base.model_val(val_name, data='fusedata7961_mseg_c5_l2_1113_v17_val.yaml', save_txt=True, save_conf=True, conf=0.01)
