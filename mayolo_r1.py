@@ -169,83 +169,90 @@ def get_freeze_num(cfg_path):
 
 def myolo8(cfg_path, weight_path="yolov8x.pt", auto_optim=False, **kwargs):
     assert "yolov8" in cfg_path, ValueError(cfg_path, "is not yolov8 config!")
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="myolo8_stage1",
-        stage2_name="myolo8_stage2",
+        stage1_name=f"myolo8{scale}_stage1",
+        stage2_name=f"myolo8{scale}_stage2",
         **kwargs,
     )
 
 
 def myolo9(cfg_path, weight_path="yolov9e.pt", auto_optim=False, **kwargs):
     assert "yolov9" in cfg_path, ValueError(cfg_path, "is not yolov9 config!")
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="myolo9_stage1",
-        stage2_name="myolo9_stage2",
+        stage1_name=f"myolo9{scale}_stage1",
+        stage2_name=f"myolo9{scale}_stage2",
         **kwargs,
     )
 
 
 def myolo10(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
     assert "yolov10" in cfg_path, ValueError(cfg_path, "is not yolov10 config!")
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="myolo10_stage1",
-        stage2_name="myolo10_stage2",
+        stage1_name=f"myolo10{scale}_stage1",
+        stage2_name=f"myolo10{scale}_stage2",
         **kwargs,
     )
 
 
 def myolo11(cfg_path, weight_path="yolo11x.pt", auto_optim=False, **kwargs):
     assert "yolo11" in cfg_path or "yolov11" in cfg_path, ValueError(cfg_path, "is not yolov11 config!")
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="yolo11_stage1",
-        stage2_name="yolo11_stage2",
+        stage1_name=f"yolo11{scale}_stage1",
+        stage2_name=f"yolo11{scale}_stage2",
         **kwargs,
     )
 
 
 def myolo12(cfg_path, weight_path="yolo12x.pt", auto_optim=False, **kwargs):
     assert "yolo12" in cfg_path or "yolov12" in cfg_path, ValueError(cfg_path, "is not yolov12 config!")
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="yolo12_stage1",
-        stage2_name="yolo12_stage2",
+        stage1_name=f"yolo12{scale}_stage1",
+        stage2_name=f"yolo12{scale}_stage2",
         **kwargs,
     )
 
 
 def myolo13(cfg_path, weight_path="yolov13x.pt", auto_optim=False, **kwargs):
     assert "yolo13" in cfg_path or "yolov13" in cfg_path, ValueError(cfg_path, "is not yolov13 config!")
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="yolov13_stage1",
-        stage2_name="yolov13_stage2",
+        stage1_name=f"yolov13{scale}_stage1",
+        stage2_name=f"yolov13{scale}_stage2",
         **kwargs,
     )
 
 
 def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
+    scale = weight_path[-4]
     myolo_train_full(
         cfg_path,
         pretrain_path=weight_path,
         auto_optim=auto_optim,
-        stage1_name="mayolo_stage1",
-        stage2_name="mayolo_stage2",
+        stage1_name=f"mayolo{scale}_stage1",
+        stage2_name=f"mayolo{scale}_stage2",
         **kwargs,
     )
 
