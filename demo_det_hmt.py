@@ -6,9 +6,9 @@ import demo_base
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 demo_base.TASK = "detect"
-demo_base.EPOCHS = 100
+demo_base.EPOCHS = 1
 demo_base.IMGSZ = 640
-demo_base.DEVICE = torch.device("cuda:1")
+demo_base.DEVICE = torch.device("cuda:0")
 demo_base.BATCH_SIZE = 16
 demo_base.CONF_VAL = 0.001
 DEFAULT_V2_WEIGHTS = (
@@ -286,12 +286,25 @@ if __name__ == "__main__":
     #     name="hmt_t_update_v3-[yolov8x]-from-v2",
     #     data="hmt_t_update_v3.yaml",
     # )
-    demo_base.yolo8(
-        "yolov8x.yaml",
-        weight_path="yolov8x.pt",
+    demo_base.yolo10(
+        "yolov10x.yaml",
+        weight_path="yolov10x.pt",
         load_as_model=False,
         auto_optim=False,
-        name="hmt_t_update_v6-[yolov8x]",
+        name="debug",
+        data="hmt_t_update_v6.yaml",
+        cls_pw=0.5,
+        hsv_h=0.0,
+        hsv_s=0.0,
+        hsv_v=0.0,
+        mosaic=0.25,
+    )
+    demo_base.yolo26(
+        "yolov26x.yaml",
+        weight_path="yolov26x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        name="debug",
         data="hmt_t_update_v6.yaml",
         cls_pw=0.5,
         hsv_h=0.0,
