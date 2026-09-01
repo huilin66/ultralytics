@@ -17,6 +17,12 @@ FREEZE_NUMS = {
     "yolov9e": 42,
     "yolov9": 22,
     "yolov10": 23,
+    "yolov11": 23,
+    "yolov12": 21,
+    "yolov13": 32,
+    "yolo11": 23,
+    "yolo12": 21,
+    "yolo13": 32,
     "mayolo": 23,
 }
 # MLOSS_ENLARGE = 0.3
@@ -193,6 +199,42 @@ def myolo10(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
         auto_optim=auto_optim,
         stage1_name="myolo10_stage1",
         stage2_name="myolo10_stage2",
+        **kwargs,
+    )
+
+
+def myolo11(cfg_path, weight_path="yolo11x.pt", auto_optim=False, **kwargs):
+    assert "yolo11" in cfg_path or "yolov11" in cfg_path, ValueError(cfg_path, "is not yolov11 config!")
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="yolo11_stage1",
+        stage2_name="yolo11_stage2",
+        **kwargs,
+    )
+
+
+def myolo12(cfg_path, weight_path="yolo12x.pt", auto_optim=False, **kwargs):
+    assert "yolo12" in cfg_path or "yolov12" in cfg_path, ValueError(cfg_path, "is not yolov12 config!")
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="yolo12_stage1",
+        stage2_name="yolo12_stage2",
+        **kwargs,
+    )
+
+
+def myolo13(cfg_path, weight_path="yolov13x.pt", auto_optim=False, **kwargs):
+    assert "yolo13" in cfg_path or "yolov13" in cfg_path, ValueError(cfg_path, "is not yolov13 config!")
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="yolov13_stage1",
+        stage2_name="yolov13_stage2",
         **kwargs,
     )
 

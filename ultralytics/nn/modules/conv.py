@@ -22,6 +22,7 @@ __all__ = (
     "Concat",
     "RepConv",
     "Index",
+    "DSConv",
 )
 
 
@@ -151,6 +152,23 @@ class Conv2(Conv):
         self.conv.weight.data += w
         self.__delattr__("cv2")
         self.forward = self.forward_fuse
+
+
+class DSConv(nn.Module):
+    """Depthwise-separable convolution used by YOLOv13."""
+
+    def __init__(self, c_in, c_out, k=3, s=1, p=None, d=1, bias=False):
+        super().__init__()
+        if p is None:
+            p = (d * (k - 1)) // 2
+        self.dw = nn.Conv2d(c_in, c_in, kernel_size=k, stride=s, padding=p, dilation=d, groups=c_in, bias=bias)
+        self.pw = nn.Conv2d(c_in, c_out, 1, 1, 0, bias=bias)
+        self.bn = nn.BatchNorm2d(c_out)
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        """Apply depthwise convolution, pointwise convolution, normalization and activation."""
+        return self.act(self.bn(self.pw(self.dw(x))))
 
 
 class LightConv(nn.Module):

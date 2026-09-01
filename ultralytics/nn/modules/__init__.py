@@ -68,6 +68,7 @@ from .conv import (
     ConvTranspose,
     DWConv,
     DWConvTranspose2d,
+    DSConv,
     Focus,
     GhostConv,
     Index,
@@ -75,6 +76,7 @@ from .conv import (
     RepConv,
     SpatialAttention,
 )
+from .v13 import DownsampleConv, DSC3k2, FullPAD_Tunnel, HyperACE
 from .head import OBB, Classify, Detect, MDetect, Pose, RTDETRDecoder, Segment, MSegment, WorldDetect, v10Detect, v10MDetect, v10Segment
 from .transformer import (
     AIFI,
@@ -96,6 +98,7 @@ __all__ = (
     "RepConv",
     "DWConv",
     "DWConvTranspose2d",
+    "DSConv",
     "ConvTranspose",
     "Focus",
     "GhostConv",
@@ -166,4 +169,8 @@ __all__ = (
     "TorchVision",
     "Index",
     "A2C2f",
+    "HyperACE",
+    "DownsampleConv",
+    "FullPAD_Tunnel",
+    "DSC3k2",
 )

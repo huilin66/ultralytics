@@ -43,6 +43,7 @@ from ultralytics.nn.modules import (
     ConvTranspose,
     Detect,
     MDetect,
+    DSConv,
     DWConv,
     DWConvTranspose2d,
     Focus,
@@ -67,6 +68,10 @@ from ultralytics.nn.modules import (
     WorldDetect,
     v10Detect,
     v10MDetect,
+    DSC3k2,
+    DownsampleConv,
+    FullPAD_Tunnel,
+    HyperACE,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1498,6 +1503,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             SCDown,
             C2fCIB,
             A2C2f,
+            DSC3k2,
+            DSConv,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1517,6 +1524,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             C2fCIB,
             C2PSA,
             A2C2f,
+            DSC3k2,
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
@@ -1544,7 +1552,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if m in repeat_modules:
                 args.insert(2, n)  # number of repeats
                 n = 1
-            if m is C3k2:  # for M/L/X sizes
+            if m in {C3k2, DSC3k2}:  # for M/L/X sizes
                 legacy = False
                 if scale in "mlx":
                     args[3] = True
@@ -1585,6 +1593,28 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [c1, c2, *args[1:]]
         elif m is CBFuse:
             c2 = ch[f[-1]]
+        elif m is HyperACE:
+            legacy = False
+            c1 = ch[f[1]]
+            c2 = make_divisible(min(args[0], max_channels) * width, 8)
+            num_hyperedges = args[1]
+            if scale == "n":
+                num_hyperedges = int(num_hyperedges * 0.5)
+            elif scale == "x":
+                num_hyperedges = int(num_hyperedges * 1.5)
+            args = [c1, c2, n, num_hyperedges, *args[2:]]
+            n = 1
+            if scale in "lx":
+                args.append(False)
+        elif m is DownsampleConv:
+            c1 = ch[f]
+            c2 = c1 * 2
+            args = [c1]
+            if scale in "lx":
+                args.append(False)
+                c2 = c1
+        elif m is FullPAD_Tunnel:
+            c2 = ch[f[0]]
         elif m in frozenset({TorchVision, Index}):
             c2 = args[0]
             c1 = ch[f]
@@ -1662,10 +1692,10 @@ def guess_model_task(model):
         m = cfg["head"][-1][-2].lower()  # output module name
         if m in {"classify", "classifier", "cls", "fc"}:
             return "classify"
-        if "detect" in m:
-            return "detect"
         if "mdetect" in m:
             return "mdetect"
+        if "detect" in m:
+            return "detect"
         if m == "segment":
             return "segment"
         if m == "msegment":
@@ -1716,7 +1746,7 @@ def guess_model_task(model):
             return "pose"
         elif "-obb" in model.stem or "obb" in model.parts:
             return "obb"
-        elif "mdetect" in model.parts:
+        elif "mdetect" in model.stem or "mdetect" in model.parts:
             return "mdetect"
         elif "detect" in model.parts:
             return "detect"
