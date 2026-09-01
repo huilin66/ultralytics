@@ -113,7 +113,7 @@ def model_val(weight_path, network=YOLO, **kwargs):
 
 def model_gat_val(weight_path, com_path, network=YOLO):
     model = network(weight_path, task=TASK)
-    model.model.model[23].added_gat_head(com_path)
+    model.model.model[-1].added_gat_head(com_path)
     print(weight_path)
     print(model.info(detailed=False))
     model.val(data=DATA, device=DEVICE)
@@ -121,7 +121,7 @@ def model_gat_val(weight_path, com_path, network=YOLO):
 
 def model_val_single(weight_path, network=YOLO):
     model = network(weight_path, task=TASK)
-    model.model.model[23].use_one2many_head()
+    model.model.model[-1].use_one2many_head()
     print(weight_path)
     print(model.info(detailed=False))
     model.val(data=DATA, device=DEVICE)
