@@ -23,6 +23,44 @@ FREEZE_NUMS = {
 # region meta tools
 
 
+def myolo_train_full(
+    cfg_path,
+    pretrain_path,
+    network=YOLO,
+    auto_optim=False,
+    stage1_epochs=100,
+    stage2_epochs=100,
+    project=r"runs\mdetect",
+    stage1_name="stage1",
+    stage2_name="stage2_attribute",
+    **kwargs,
+):
+    model_path_s1 = myolo_train(
+        cfg_path,
+        pretrain_path,
+        network=network,
+        auto_optim=auto_optim,
+        retrain=False,
+        epochs=stage1_epochs,
+        project=project,
+        name=stage1_name,
+        **kwargs,
+    )
+    model_path_s1 = myolo_train(
+        cfg_path,
+        model_path_s1,
+        network=network,
+        auto_optim=auto_optim,
+        retrain=True,
+        epochs=stage2_epochs,
+        project=project,
+        name=stage2_name,
+        patience=stage2_epochs,
+        **kwargs,
+    )
+    return model_path_s1
+
+
 def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain=False, **kwargs):
     model = network(cfg_path, task=TASK)
     model.load(pretrain_path)
@@ -52,6 +90,7 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
         )
     train_params.update(kwargs)
     model.train(**train_params)
+    return model.trainer.best
 
 
 def model_val(weight_path, network=YOLO, **kwargs):
@@ -122,24 +161,51 @@ def get_freeze_num(cfg_path):
 # region run tools
 
 
-def myolo8(cfg_path, weight_path="yolov8x.pt", auto_optim=False, retrain=False, **kwargs):
+def myolo8(cfg_path, weight_path="yolov8x.pt", auto_optim=False, **kwargs):
     assert "yolov8" in cfg_path, ValueError(cfg_path, "is not yolov8 config!")
-    myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="myolo8_stage1",
+        stage2_name="myolo8_stage2",
+        **kwargs,
+    )
 
 
-def myolo9(cfg_path, weight_path="yolov9e.pt", auto_optim=False, retrain=False, **kwargs):
+def myolo9(cfg_path, weight_path="yolov9e.pt", auto_optim=False, **kwargs):
     assert "yolov9" in cfg_path, ValueError(cfg_path, "is not yolov9 config!")
-    myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="myolo9_stage1",
+        stage2_name="myolo9_stage2",
+        **kwargs,
+    )
 
 
-def myolo10(cfg_path, weight_path="yolov10x.pt", auto_optim=False, retrain=False, **kwargs):
+def myolo10(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
     assert "yolov10" in cfg_path, ValueError(cfg_path, "is not yolov10 config!")
-    myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="myolo10_stage1",
+        stage2_name="myolo10_stage2",
+        **kwargs,
+    )
 
 
-def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, retrain=False, **kwargs):
-    kwargs["mloss_mask"] = True
-    myolo_train(cfg_path, pretrain_path=weight_path, auto_optim=auto_optim, retrain=retrain, **kwargs)
+def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name="mayolo_stage1",
+        stage2_name="mayolo_stage2",
+        **kwargs,
+    )
 
 
 # endregion
