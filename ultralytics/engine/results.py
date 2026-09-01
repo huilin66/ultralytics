@@ -1069,7 +1069,8 @@ class MdetResults(SimpleClass):
 
     def __init__(
         self, orig_img, path, names, boxes=None, attributes=None, masks=None, probs=None, keypoints=None, obb=None,
-            speed=None, attribute_names=None, nc=None, na=None, nal=None, risk_enlarge=1) -> None:
+            speed=None, attribute_names=None, nc=None, na=None, nal=None, risk_enlarge=1,
+            multiclass_attributes=False) -> None:
         """
         Initialize the Results class.
 
@@ -1086,7 +1087,18 @@ class MdetResults(SimpleClass):
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
         self.boxes = Boxes(boxes, self.orig_shape) if boxes is not None else None  # native size boxes
-        self.attributes = Attributes(attributes, attribute_names, self.orig_shape, risk_enlarge=risk_enlarge) if attributes is not None else None
+        self.attributes = (
+            Attributes(
+                attributes,
+                attribute_names,
+                self.orig_shape,
+                risk_enlarge=risk_enlarge,
+                multiclass=multiclass_attributes,
+                nal=nal,
+            )
+            if attributes is not None
+            else None
+        )
         self.masks = Masks(masks, self.orig_shape) if masks is not None else None  # native size or imgsz masks
         self.probs = Probs(probs) if probs is not None else None
         self.keypoints = Keypoints(keypoints, self.orig_shape) if keypoints is not None else None
@@ -1100,6 +1112,7 @@ class MdetResults(SimpleClass):
         self.nc = nc
         self.na = na
         self.nal = nal
+        self.multiclass_attributes = multiclass_attributes
 
     def __getitem__(self, idx):
         """Return a Results object for the specified index."""
@@ -1366,10 +1379,18 @@ class MdetResults(SimpleClass):
             [texts.append(f"{probs.data[j]:.2f} {self.names[j]}") for j in probs.top5]
         elif boxes:
             # Detect/segment/pose
+            decoded_attributes = (
+                attributes._decoded_indices() if attributes.multiclass and not save_risk_score else None
+            )
             for j, d in enumerate(boxes):
-                att = attributes.data[j].cpu().numpy()
+                if decoded_attributes is not None:
+                    att = decoded_attributes[j]
+                else:
+                    att = attributes.data[j].cpu().numpy()
                 if not save_risk_score:
-                    if self.nal is not None:
+                    if attributes.multiclass:
+                        att = np.asarray(att, dtype=np.int32)
+                    elif self.nal is not None:
                         att = np.floor(att * self.attributes.risk_enlarge * self.nal).astype(np.int32)
                         att = np.clip(att, 0, self.nal-1)
                     else:
@@ -1472,18 +1493,42 @@ class MdetResults(SimpleClass):
         return json.dumps(self.summary(normalize=normalize, decimals=decimals), indent=2)
 
 class Attributes(BaseTensor):
-    def __init__(self, attributes, attribute_names, orig_shape, risk_enlarge=1) -> None:
+    def __init__(self, attributes, attribute_names, orig_shape, risk_enlarge=1, multiclass=False, nal=None) -> None:
         super().__init__(attributes, orig_shape)
         self.orig_shape = orig_shape
         self.attribute_names = attribute_names
         self.attribute_len, self.attribute_level = get_attribute_num(attribute_names)
         self.risk_enlarge = np.array(risk_enlarge)
+        self.nal = int(nal) if nal is not None else self.attribute_level
+        self.multiclass = multiclass or (
+            self.nal > 1 and self.data.shape[-1] == self.attribute_len * self.nal
+        )
+
+    def _decoded_indices(self):
+        """Return one integer level for each attribute in every prediction."""
+        data = torch.as_tensor(self.data)
+        if self.multiclass:
+            expected = self.attribute_len * self.nal
+            if data.shape[-1] != expected:
+                raise ValueError(
+                    f"Expected {expected} attribute probabilities ({self.attribute_len} x {self.nal}), "
+                    f"got {data.shape[-1]}"
+                )
+            data = data.reshape(*data.shape[:-1], self.attribute_len, self.nal).argmax(dim=-1)
+            # Some datasets have attributes with fewer levels than the global nal.
+            max_levels = torch.tensor(
+                [len(values) for values in self.attribute_names.values()], device=data.device
+            )
+            data = torch.minimum(data, (max_levels - 1).to(data.dtype))
+        else:
+            risk_enlarge = torch.as_tensor(self.risk_enlarge, device=data.device)
+            data = torch.floor(data * risk_enlarge * self.attribute_level).long()
+            data = torch.clip(data, min=0, max=self.attribute_level - 1)
+        return data.cpu().numpy()
 
     @property
     def result(self):
-        data = torch.floor(self.data * torch.tensor(self.risk_enlarge, device=self.data.device) * self.attribute_level).long()
-        data = torch.clip(data, min=0, max=self.attribute_level-1)
-        data = data.cpu().numpy()
+        data = self._decoded_indices()
         value = self.get_attribute(self.attribute_names, data)
         return value
 
@@ -1501,7 +1546,14 @@ class Attributes(BaseTensor):
 
     def __getitem__(self, idx):
         """Return a BaseTensor with the specified index of the data tensor."""
-        return self.__class__(self.data[idx], self.attribute_names, self.orig_shape)
+        return self.__class__(
+            self.data[idx],
+            self.attribute_names,
+            self.orig_shape,
+            risk_enlarge=self.risk_enlarge,
+            multiclass=self.multiclass,
+            nal=self.nal,
+        )
 
 class Boxes(BaseTensor):
     """

@@ -816,7 +816,9 @@ class v8MDetectionLoss(v8DetectionLoss):
         m = model.model[-1]
         self.na = m.na
         self.nal = m.nal
-        self.no = m.nc + m.na + m.reg_max * 4
+        self.attribute_channels = getattr(m, "attribute_channels", self.na * self.nal)
+        self.multiclass_attributes = self.attribute_channels == self.na * self.nal and self.nal > 1
+        self.no = m.no
         self.assigner = TaskAlignedAssignerMdet(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.mloss_enlarge = model.args.mloss_enlarge
         self.mloss_mask = model.args.mloss_mask
@@ -839,7 +841,7 @@ class v8MDetectionLoss(v8DetectionLoss):
         loss = torch.zeros(4, device=self.device)  # box, cls, att, dfl
         feats = preds[1] if isinstance(preds, tuple) else preds
         pred_distri, pred_scores, pred_attributes = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc, self.na), 1
+            (self.reg_max * 4, self.nc, self.attribute_channels), 1
         )
 
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
@@ -895,47 +897,61 @@ class v8MDetectionLoss(v8DetectionLoss):
         if fg_mask.any():
             pred_attributes_fg = pred_attributes[fg_mask]
             gt_attributes_fg = gt_attributes[fg_mask]
-            gt_attributes_fg = gt_attributes_fg * (1 - self.mloss_enlarge) + self.mloss_enlarge
-
-            if self.mloss_mask:
-                if self.mloss_enlarge == 0:
-                    weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
-                else:
-                    weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device,
-                                          dtype=pred_attributes.dtype) if self.mloss_weight else None
-                loss[3] = F.binary_cross_entropy_with_logits(
-                    input=pred_attributes_fg,
-                    target=gt_attributes_fg,
-                    weight=weight
-                )
+            if self.multiclass_attributes:
+                # The mdet head emits nal mutually exclusive logits for each attribute.
+                # Flatten only after selecting foreground anchors so background placeholders
+                # from the assigner can never contribute to the attribute loss.
+                pred_attributes_fg = pred_attributes_fg.reshape(-1, self.na, self.nal)
+                gt_attributes_fg = gt_attributes_fg.long().clamp_(0, self.nal - 1)
+                attribute_loss = F.cross_entropy(
+                    pred_attributes_fg.reshape(-1, self.nal),
+                    gt_attributes_fg.reshape(-1),
+                    reduction="none",
+                ).reshape(-1, self.na)
+                if self.mloss_weight:
+                    attribute_loss = attribute_loss * target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+                loss[3] = attribute_loss.mean()
             else:
-                # task1: risk exists or not
-                gt_attributes_exist = (gt_attributes_fg > 0).float()
-
-                pos_weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype)
-                loss_exists = F.binary_cross_entropy_with_logits(
-                    input=pred_attributes_fg,
-                    target=gt_attributes_exist,
-                    pos_weight=pos_weight,
-                )
-
-                has_high_label = (gt_attributes_fg == 2).any()
-                if has_high_label:
-                    mask_active = gt_attributes_fg > 0
-                    pred_attribute_active = pred_attributes_fg[mask_active]
-                    gt_attributes_active = gt_attributes_fg[mask_active] - 1
-                    if gt_attributes_active.shape[0] > 0:
-                        loss_active = F.binary_cross_entropy_with_logits(
-                            input=pred_attribute_active,
-                            target=gt_attributes_active,
-                            pos_weight=pos_weight,
-                        )
+                gt_attributes_fg = gt_attributes_fg * (1 - self.mloss_enlarge) + self.mloss_enlarge
+                if self.mloss_mask:
+                    if self.mloss_enlarge == 0:
+                        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1) if self.mloss_weight else None
                     else:
-                        loss_active = 0
-
-                    loss[3] = (1 - self.mloss_weight) * loss_exists + self.mloss_weight * loss_active
+                        weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device,
+                                              dtype=pred_attributes.dtype) if self.mloss_weight else None
+                    loss[3] = F.binary_cross_entropy_with_logits(
+                        input=pred_attributes_fg,
+                        target=gt_attributes_fg,
+                        weight=weight
+                    )
                 else:
-                    loss[3] = loss_exists
+                    # task1: risk exists or not
+                    gt_attributes_exist = (gt_attributes_fg > 0).float()
+
+                    pos_weight = torch.tensor([self.mloss_enlarge], device=pred_attributes.device, dtype=pred_attributes.dtype)
+                    loss_exists = F.binary_cross_entropy_with_logits(
+                        input=pred_attributes_fg,
+                        target=gt_attributes_exist,
+                        pos_weight=pos_weight,
+                    )
+
+                    has_high_label = (gt_attributes_fg == 2).any()
+                    if has_high_label:
+                        mask_active = gt_attributes_fg > 0
+                        pred_attribute_active = pred_attributes_fg[mask_active]
+                        gt_attributes_active = gt_attributes_fg[mask_active] - 1
+                        if gt_attributes_active.shape[0] > 0:
+                            loss_active = F.binary_cross_entropy_with_logits(
+                                input=pred_attribute_active,
+                                target=gt_attributes_active,
+                                pos_weight=pos_weight,
+                            )
+                        else:
+                            loss_active = 0
+
+                        loss[3] = (1 - self.mloss_weight) * loss_exists + self.mloss_weight * loss_active
+                    else:
+                        loss[3] = loss_exists
         else:
             # A background-only batch has no attribute labels and must not produce an empty BCE.
             loss[3] = pred_attributes.sum() * 0.0

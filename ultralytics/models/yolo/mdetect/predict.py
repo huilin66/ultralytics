@@ -30,7 +30,7 @@ class MDetectionPredictor(BasePredictor):
             max_det=self.args.max_det,
             classes=self.args.classes,
             nc=self.model.model.nc,
-            na=self.model.model.na,
+            na=getattr(self.model.model, "attribute_channels", self.model.model.na),
         )
         if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
             orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
@@ -69,4 +69,16 @@ class MDetectionPredictor(BasePredictor):
         pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
         attributes = pred[:, 6:]
         attribute_names = self.model.model.attribute_names
-        return MdetResults(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], attributes=attributes, attribute_names=attribute_names, risk_enlarge = self.args.risk_enlarge)
+        return MdetResults(
+            orig_img,
+            path=img_path,
+            names=self.model.names,
+            boxes=pred[:, :6],
+            attributes=attributes,
+            attribute_names=attribute_names,
+            nc=self.model.model.nc,
+            na=self.model.model.na,
+            nal=self.model.model.nal,
+            risk_enlarge=self.args.risk_enlarge,
+            multiclass_attributes=getattr(self.model.model, "multiclass_attributes", False),
+        )

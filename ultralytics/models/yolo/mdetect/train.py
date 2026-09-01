@@ -88,7 +88,13 @@ class MDetectionTrainer(BaseTrainer):
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return a YOLO detection model."""
-        model = MDetectionModel(cfg, nc=self.data["nc"], verbose=verbose and RANK == -1)
+        model = MDetectionModel(
+            cfg,
+            nc=self.data["nc"],
+            na=self.data.get("na"),
+            nal=self.data.get("nal"),
+            verbose=verbose and RANK == -1,
+        )
         if weights:
             model.load(weights)
         return model

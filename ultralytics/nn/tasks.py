@@ -588,9 +588,15 @@ class MDetectionModel(BaseModel):
 
         # Define model
         ch = self.yaml["ch"] = self.yaml.get("ch", ch)  # input channels
-        self.nc = self.yaml['nc']
-        self.na = self.yaml['na']
-        self.nal = self.yaml['nal']
+        # Attribute metadata may be supplied by the dataset during mdet training.
+        # Keep a two-level default for standalone model construction and allow model
+        # YAMLs written before ``nal`` was added to remain loadable.
+        self.yaml.setdefault("nc", nc)
+        self.yaml.setdefault("na", na)
+        self.yaml.setdefault("nal", nal if nal is not None else 2)
+        self.nc = self.yaml["nc"]
+        self.na = self.yaml["na"]
+        self.nal = self.yaml["nal"]
         if nc and nc != self.yaml["nc"]:
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml["nc"] = nc  # override YAML value
@@ -600,6 +606,9 @@ class MDetectionModel(BaseModel):
         if nal and nal != self.yaml["nal"]:
             LOGGER.info(f"Overriding model.yaml nal={self.yaml['nal']} with nal={nal}")
             self.yaml["nal"] = nal  # override YAML value
+        self.nc = self.yaml["nc"]
+        self.na = self.yaml["na"]
+        self.nal = self.yaml["nal"]
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
         self.attribute_names = {i: f"{i}" for i in range(self.yaml["na"])}
@@ -1558,6 +1567,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         elif m in frozenset({Detect, MDetect, WorldDetect, Segment, MSegment, Pose, OBB, ImagePoolingAttn, v10Detect, v10MDetect, v10Segment}):
+            # Older mdet YAMLs use [nc, na, params] and rely on nal from the dataset/model.
+            if m in {MDetect, v10MDetect} and len(args) == 3 and isinstance(args[2], (list, tuple)):
+                args.insert(2, d.get("nal", 2))
             args.append([ch[x] for x in f])
             if m is Segment or m is v10Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)

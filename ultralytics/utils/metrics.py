@@ -471,13 +471,25 @@ class MConfusionMatrix:
         iou_thres (float): The Intersection over Union threshold.
     """
 
-    def __init__(self, nc, na, nal, conf=0.25, iou_thres=0.45, task="detect", risk_enlarge=1.0, eval_att_by_class=True):
+    def __init__(
+        self,
+        nc,
+        na,
+        nal,
+        conf=0.25,
+        iou_thres=0.45,
+        task="detect",
+        risk_enlarge=1.0,
+        eval_att_by_class=True,
+        attribute_channels=None,
+    ):
         """Initialize attributes for the YOLO model."""
         self.task = task
         self.matrix = np.zeros((nc + 1, nc + 1)) if self.task == "detect" else np.zeros((nc, nc))
         self.nc = nc  # number of classes
         self.na = na
         self.nal = nal
+        self.attribute_channels = attribute_channels or na
         self.conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
         self.iou_thres = iou_thres
         self.matrix_atts = [np.zeros((nal, nal)) for _ in range(na)]
@@ -520,12 +532,16 @@ class MConfusionMatrix:
                 self.matrix[self.nc, gc] += 1  # background FN
             return
 
-        pred_attributes = detections[:, 6:6+self.na]
-        risk_enlarge_tensor = torch.tensor(self.risk_enlarge, device=pred_attributes.device).view(1, -1)
-        pred_attributes = torch.floor(pred_attributes * risk_enlarge_tensor * (self.nal)).long()
-        pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
+        keep = detections[:, 4] > self.conf
+        pred_attributes = detections[keep, 6:6+self.attribute_channels]
+        if self.attribute_channels == self.na * self.nal:
+            pred_attributes = pred_attributes.reshape(-1, self.na, self.nal).argmax(dim=-1)
+        else:
+            risk_enlarge_tensor = torch.tensor(self.risk_enlarge, device=pred_attributes.device).view(1, -1)
+            pred_attributes = torch.floor(pred_attributes * risk_enlarge_tensor * self.nal).long()
+            pred_attributes = torch.clip(pred_attributes, min=0, max=self.nal-1)
 
-        detections = detections[detections[:, 4] > self.conf]
+        detections = detections[keep]
         gt_classes = gt_cls.int()
         detection_classes = detections[:, 5].int()
         is_obb = detections.shape[1] == 7 and gt_bboxes.shape[1] == 5  # with additional `angle` dimension

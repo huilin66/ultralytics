@@ -93,7 +93,16 @@ class MDetectionValidator(BaseValidator):
         self.metrics.nc = self.nc
         self.metrics.na = self.na
         self.metrics.nal = self.nal
-        self.confusion_matrix = MConfusionMatrix(nc=self.nc, na=self.na, nal=self.nal, conf=self.args.conf, risk_enlarge=self.args.risk_enlarge, eval_att_by_class = self.args.eval_att_by_class)
+        attribute_channels = self.na * self.nal if self.args.task == "mdetect" else self.na
+        self.confusion_matrix = MConfusionMatrix(
+            nc=self.nc,
+            na=self.na,
+            nal=self.nal,
+            attribute_channels=attribute_channels,
+            conf=self.args.conf,
+            risk_enlarge=self.args.risk_enlarge,
+            eval_att_by_class=self.args.eval_att_by_class,
+        )
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], ap=[], conf_mat=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[], filter_small_gt=[], filter_small_pred=[])
@@ -114,7 +123,7 @@ class MDetectionValidator(BaseValidator):
             agnostic=self.args.single_cls,
             max_det=self.args.max_det,
             nc=self.nc,
-            na=self.na,
+            na=self.na * self.nal,
         )
 
     def _prepare_batch(self, si, batch):
@@ -254,7 +263,17 @@ class MDetectionValidator(BaseValidator):
             (torch.Tensor): Correct prediction matrix of shape [N, 10] for 10 IoU levels.
         """
         iou = box_iou(gt_bboxes, detections[:, :4])
-        return self.match_predictions(detections[:, :4], gt_bboxes, detections[:, 5], gt_cls, iou, detections[:, 6:], gt_attributes, pbatch=pbatch)
+        return self.match_predictions(
+            detections[:, :4],
+            gt_bboxes,
+            detections[:, 5],
+            gt_cls,
+            iou,
+            detections[:, 6:],
+            gt_attributes,
+            nal=self.nal,
+            pbatch=pbatch,
+        )
 
     def get_conf_mats(self, gt_attributes, pred_attributes_result, correct_attributes, correct_box, num_classes, device):
         batch_conf_mat = torch.zeros((correct_attributes.shape[-1], num_classes, num_classes), dtype=torch.int64, device=device)
@@ -333,10 +352,14 @@ class MDetectionValidator(BaseValidator):
 
         correct = torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
 
-        # attribute result
-        risk_enlarge_tensor = torch.tensor(self.args.risk_enlarge, device=pred_attributes.device).view(1, -1)
-        pred_attributes_result = torch.floor(pred_attributes * risk_enlarge_tensor * (nal)).long()
-        pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=nal-1)
+        # The mdet predictor returns nal probabilities for each of the na attributes.
+        # Keep the legacy scalar decoder for callers that still provide na channels (e.g. msegment).
+        if pred_attributes.shape[-1] == self.na * nal:
+            pred_attributes_result = pred_attributes.reshape(-1, self.na, nal).argmax(dim=-1)
+        else:
+            risk_enlarge_tensor = torch.tensor(self.args.risk_enlarge, device=pred_attributes.device).view(1, -1)
+            pred_attributes_result = torch.floor(pred_attributes * risk_enlarge_tensor * nal).long()
+            pred_attributes_result = torch.clip(pred_attributes_result, min=0, max=nal-1)
 
         matched_box = torch.zeros_like(iou, dtype=torch.bool, device=iou.device)
         matches50 = np.array(np.nonzero(iou_np >= 0.5)).T
