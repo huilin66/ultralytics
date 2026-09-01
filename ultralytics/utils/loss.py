@@ -818,6 +818,18 @@ class v8MDetectionLoss(v8DetectionLoss):
         self.nal = m.nal
         self.attribute_channels = getattr(m, "attribute_channels", self.na * self.nal)
         self.multiclass_attributes = self.attribute_channels == self.na * self.nal and self.nal > 1
+        self.attribute_class_weights = getattr(model, "attribute_class_weights", None)
+        if self.attribute_class_weights is not None:
+            self.attribute_class_weights = torch.as_tensor(
+                self.attribute_class_weights, device=self.device, dtype=torch.float32
+            )
+            if self.attribute_class_weights.ndim == 1 and self.attribute_class_weights.numel() == self.nal:
+                self.attribute_class_weights = self.attribute_class_weights.expand(self.na, -1)
+            if tuple(self.attribute_class_weights.shape) != (self.na, self.nal):
+                raise ValueError(
+                    "attribute_class_weights must have shape "
+                    f"({self.na}, {self.nal}), got {tuple(self.attribute_class_weights.shape)}"
+                )
         self.no = m.no
         self.assigner = TaskAlignedAssignerMdet(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.mloss_enlarge = model.args.mloss_enlarge
@@ -919,10 +931,15 @@ class v8MDetectionLoss(v8DetectionLoss):
                     safe_gt_attributes.reshape(-1),
                     reduction="none",
                 ).reshape(-1, self.na)
+                if self.attribute_class_weights is None:
+                    attribute_weights = torch.ones_like(attribute_loss)
+                else:
+                    attribute_weights = self.attribute_class_weights.gather(1, safe_gt_attributes)
                 if self.mloss_weight:
-                    attribute_loss = attribute_loss * target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-                attribute_loss = attribute_loss * valid_attributes.to(attribute_loss.dtype)
-                loss[3] = attribute_loss.sum() / valid_attributes.sum().clamp_min(1)
+                    attribute_weights = attribute_weights * target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+                valid_attributes = valid_attributes.to(attribute_loss.dtype)
+                weighted_attributes = attribute_loss * attribute_weights * valid_attributes
+                loss[3] = weighted_attributes.sum() / (attribute_weights * valid_attributes).sum().clamp_min(1)
             else:
                 gt_attributes_fg = gt_attributes_fg * (1 - self.mloss_enlarge) + self.mloss_enlarge
                 if self.mloss_mask:

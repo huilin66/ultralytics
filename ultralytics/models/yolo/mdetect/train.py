@@ -5,6 +5,7 @@ import random
 from copy import copy
 
 import numpy as np
+import torch
 import torch.nn as nn
 
 from ultralytics.data import build_dataloader, build_yolo_dataset, build_yolo_mdet_dataset
@@ -73,6 +74,11 @@ class MDetectionTrainer(BaseTrainer):
             batch["img"] = imgs
         return batch
 
+    def _setup_train(self, world_size):
+        """Set up training, then compute attribute weights once labels are available."""
+        super()._setup_train(world_size)
+        self.set_class_weights()
+
     def set_model_attributes(self):
         """Nl = de_parallel(self.model).model[-1].nl  # number of detection layers (to scale hyps)."""
         # self.args.box *= 3 / nl  # scale to layers
@@ -85,6 +91,85 @@ class MDetectionTrainer(BaseTrainer):
         self.model.nal = self.data['nal']
         self.model.attribute_names = self.data["attributes"] # attach attribute names to model
         # TODO: self.model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc
+
+    def get_attribute_class_counts(self):
+        """Return per-attribute, per-level frequencies from the training labels."""
+        na = int(self.data["na"])
+        nal = int(self.data["nal"])
+        counts = np.zeros((na, nal), dtype=np.float64)
+
+        for label in self.train_loader.dataset.labels:
+            attributes = label.get("mdet_attributes")
+            if attributes is None:
+                continue
+            attributes = np.asarray(attributes, dtype=np.float64)
+            if attributes.size == 0:
+                continue
+            if attributes.ndim == 1:
+                attributes = attributes.reshape(1, -1)
+
+            for attribute_index in range(min(na, attributes.shape[1])):
+                values = attributes[:, attribute_index]
+                valid = (
+                    np.isfinite(values)
+                    & (values >= 0)
+                    & (values < nal)
+                    & (values == np.floor(values))
+                )
+                if valid.any():
+                    counts[attribute_index] += np.bincount(
+                        values[valid].astype(np.int64), minlength=nal
+                    )[:nal]
+        return counts
+
+    def compute_attribute_class_weights(self, class_counts):
+        """Convert attribute frequencies to normalized inverse-frequency weights."""
+        power = float(getattr(self.args, "att_pw", 0.0))
+        if not 0.0 <= power <= 1.0:
+            raise ValueError(f"att_pw must be in the range [0, 1], got {power}")
+
+        active = class_counts > 0
+        safe_counts = np.where(active, class_counts, 1.0)
+        weights = np.power(1.0 / safe_counts, power)
+        weights[~active] = 0.0
+
+        # Each attribute has its own softmax. Normalize within each attribute so
+        # a rare attribute does not change the global mdet loss scale.
+        for attribute_index in range(weights.shape[0]):
+            active_weights = active[attribute_index]
+            if active_weights.any():
+                weights[attribute_index] /= weights[attribute_index, active_weights].mean()
+        return weights.astype(np.float32)
+
+    def set_class_weights(self):
+        """Compute and attach per-attribute class weights for the softmax mdet loss."""
+        model = de_parallel(self.model)
+        power = float(getattr(self.args, "att_pw", 0.0))
+        if not 0.0 <= power <= 1.0:
+            raise ValueError(f"att_pw must be in the range [0, 1], got {power}")
+
+        # Clear weights from a resumed checkpoint when weighting is disabled or
+        # when the model uses the legacy single-logit attribute layout.
+        model.attribute_class_weights = None
+        model.criterion = None
+        if getattr(self, "ema", None) is not None:
+            self.ema.ema.attribute_class_weights = None
+
+        # nal=1 is not a classification problem and follows the legacy path.
+        if power == 0.0 or int(self.data["nal"]) <= 1:
+            return
+
+        class_counts = self.get_attribute_class_counts()
+        if not class_counts.any():
+            LOGGER.warning("WARNING ⚠️ No valid attribute labels found; attribute class weighting is disabled")
+            return
+
+        weights = self.compute_attribute_class_weights(class_counts)
+        model.attribute_class_weights = torch.from_numpy(weights).to(self.device)
+        model.criterion = None
+        if getattr(self, "ema", None) is not None:
+            self.ema.ema.attribute_class_weights = model.attribute_class_weights.detach().clone()
+        LOGGER.info(f"Attribute class weights: {weights.round(3).tolist()}")
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return a YOLO detection model."""

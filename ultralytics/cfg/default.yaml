@@ -113,6 +113,7 @@ box: 7.5 # (float) box loss gain
 seg: 7.5 # (float) seg loss gain
 cls: 0.5 # (float) cls loss gain (scale with pixels)
 mdet: 0.5  # (float) mdet loss gain
+att_pw: 0.0  # (float) inverse-frequency power for mdetect attribute classes (0.0=disable, 1.0=full)
 mloss_enlarge: 0.0
 mloss_weight: False
 mloss_mask: False
