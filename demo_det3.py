@@ -36,12 +36,18 @@ if __name__ == "__main__":
     #     save_txt=True,
     #     save_conf=True,
     # )
-    demo_base.model_val(
-        [
-            r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt",
-            r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v3-[yolov8x]/weights/best.pt",
-        ],
-        weight_name=False,
+    # demo_base.model_val(
+    #     [
+    #         r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v2-[yolov8x]/weights/best.pt",
+    #         r"/localnvme/project/aic_mdet/models/ultralytics/runs/detect/hmt_t_update_v3-[yolov8x]/weights/best.pt",
+    #     ],
+    #     weight_name=False,
+    #     save_txt=True,
+    #     save_conf=True,
+    # )
+    demo_base.model_predict(
+        "tf_defect_3-[yolov8x]",
+        img_dir=r"/scrinvme/huilin/traffic_sign/highway/road sign defect/road sign defect",
         save_txt=True,
         save_conf=True,
     )
