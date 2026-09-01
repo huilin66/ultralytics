@@ -18,6 +18,19 @@ OKS_SIGMA = (
 )
 
 
+def clip_attribute_indices(indices, attribute_names):
+    """Clip decoded attribute levels to the number of levels declared for each attribute."""
+    if attribute_names is None:
+        return indices
+
+    levels = [len(values) for values in attribute_names.values()]
+    if len(levels) != indices.shape[-1]:
+        raise ValueError(f"Expected {indices.shape[-1]} attribute definitions, got {len(levels)}")
+
+    max_indices = torch.tensor(levels, device=indices.device, dtype=indices.dtype).sub(1).clamp_min_(0)
+    return torch.minimum(indices, max_indices)
+
+
 def bbox_ioa(box1, box2, iou=False, eps=1e-7):
     """
     Calculate the intersection over box2 area given box1 and box2. Boxes are in x1y1x2y2 format.
@@ -482,6 +495,7 @@ class MConfusionMatrix:
         risk_enlarge=1.0,
         eval_att_by_class=True,
         attribute_channels=None,
+        attribute_names=None,
     ):
         """Initialize attributes for the YOLO model."""
         self.task = task
@@ -489,7 +503,9 @@ class MConfusionMatrix:
         self.nc = nc  # number of classes
         self.na = na
         self.nal = nal
-        self.attribute_channels = attribute_channels or na
+        self.attribute_channels = na if attribute_channels is None else attribute_channels
+        self.multiclass_attributes = self.attribute_channels == self.na * self.nal and self.nal > 1
+        self.attribute_names = attribute_names
         self.conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
         self.iou_thres = iou_thres
         self.matrix_atts = [np.zeros((nal, nal)) for _ in range(na)]
@@ -534,8 +550,9 @@ class MConfusionMatrix:
 
         keep = detections[:, 4] > self.conf
         pred_attributes = detections[keep, 6:6+self.attribute_channels]
-        if self.attribute_channels == self.na * self.nal:
+        if self.multiclass_attributes:
             pred_attributes = pred_attributes.reshape(-1, self.na, self.nal).argmax(dim=-1)
+            pred_attributes = clip_attribute_indices(pred_attributes, self.attribute_names)
         else:
             risk_enlarge_tensor = torch.tensor(self.risk_enlarge, device=pred_attributes.device).view(1, -1)
             pred_attributes = torch.floor(pred_attributes * risk_enlarge_tensor * self.nal).long()

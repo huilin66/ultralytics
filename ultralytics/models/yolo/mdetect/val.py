@@ -11,7 +11,7 @@ from ultralytics.engine.validator import BaseValidator
 from ultralytics.nn.tasks import MDetectionModel
 from ultralytics.utils import LOGGER, ops
 from ultralytics.utils.checks import check_requirements
-from ultralytics.utils.metrics import MConfusionMatrix, MDetMetrics, box_iou
+from ultralytics.utils.metrics import MConfusionMatrix, MDetMetrics, box_iou, clip_attribute_indices
 from ultralytics.utils.plotting import output_to_target, plot_images
 
 
@@ -87,18 +87,23 @@ class MDetectionValidator(BaseValidator):
             self.attribute_names = model.model.attribute_names
             self.na = model.model.na
             self.nal = model.model.nal
+        model_core = getattr(model, "model", model)
+        model_container = getattr(model_core, "model", model_core)
+        head = model_container[-1]
+        self.attribute_channels = getattr(head, "attribute_channels", self.na)
+        self.multiclass_attributes = self.attribute_channels == self.na * self.nal and self.nal > 1
         self.metrics.names = self.names
         self.metrics.plot = self.args.plots
         self.metrics.attribute_names = self.attribute_names
         self.metrics.nc = self.nc
         self.metrics.na = self.na
         self.metrics.nal = self.nal
-        attribute_channels = self.na * self.nal if self.args.task == "mdetect" else self.na
         self.confusion_matrix = MConfusionMatrix(
             nc=self.nc,
             na=self.na,
             nal=self.nal,
-            attribute_channels=attribute_channels,
+            attribute_channels=self.attribute_channels,
+            attribute_names=self.attribute_names,
             conf=self.args.conf,
             risk_enlarge=self.args.risk_enlarge,
             eval_att_by_class=self.args.eval_att_by_class,
@@ -123,7 +128,7 @@ class MDetectionValidator(BaseValidator):
             agnostic=self.args.single_cls,
             max_det=self.args.max_det,
             nc=self.nc,
-            na=self.na * self.nal,
+            na=self.attribute_channels,
         )
 
     def _prepare_batch(self, si, batch):
@@ -183,7 +188,7 @@ class MDetectionValidator(BaseValidator):
             predn = self._prepare_pred(pred, pbatch)
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
-            stat["pred_attributes"] = predn[:, 6:]
+            stat["pred_attributes"] = predn[:, 6:6 + self.attribute_channels]
 
             # Evaluate
             if nl:
@@ -269,7 +274,7 @@ class MDetectionValidator(BaseValidator):
             detections[:, 5],
             gt_cls,
             iou,
-            detections[:, 6:],
+            detections[:, 6:6 + self.attribute_channels],
             gt_attributes,
             nal=self.nal,
             pbatch=pbatch,
@@ -354,8 +359,15 @@ class MDetectionValidator(BaseValidator):
 
         # The mdet predictor returns nal probabilities for each of the na attributes.
         # Keep the legacy scalar decoder for callers that still provide na channels (e.g. msegment).
-        if pred_attributes.shape[-1] == self.na * nal:
+        attribute_channels = getattr(self, "attribute_channels", self.na)
+        multiclass_attributes = attribute_channels == self.na * nal and nal > 1
+        if multiclass_attributes:
+            if pred_attributes.shape[-1] != attribute_channels:
+                raise ValueError(
+                    f"Expected {attribute_channels} attribute channels, got {pred_attributes.shape[-1]}"
+                )
             pred_attributes_result = pred_attributes.reshape(-1, self.na, nal).argmax(dim=-1)
+            pred_attributes_result = clip_attribute_indices(pred_attributes_result, self.attribute_names)
         else:
             risk_enlarge_tensor = torch.tensor(self.args.risk_enlarge, device=pred_attributes.device).view(1, -1)
             pred_attributes_result = torch.floor(pred_attributes * risk_enlarge_tensor * nal).long()
@@ -437,7 +449,7 @@ class MDetectionValidator(BaseValidator):
             xyxy = row[:4]  # Bounding box coordinates
             conf = row[4]  # Confidence
             cls = row[5]  # Class ID
-            att = row[6:]  # Attributes
+            att = row[6:6 + self.attribute_channels]  # Attributes
 
             xywh = (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
             line = (cls, len(att), *att, *xywh, conf) if save_conf else (cls, len(att), *att, *xywh)  # label format

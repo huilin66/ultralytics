@@ -902,15 +902,27 @@ class v8MDetectionLoss(v8DetectionLoss):
                 # Flatten only after selecting foreground anchors so background placeholders
                 # from the assigner can never contribute to the attribute loss.
                 pred_attributes_fg = pred_attributes_fg.reshape(-1, self.na, self.nal)
-                gt_attributes_fg = gt_attributes_fg.long().clamp_(0, self.nal - 1)
+                # Do not clamp missing/out-of-range labels into a real class.  In particular,
+                # -1 is commonly used by custom datasets for an unannotated attribute.  Such
+                # labels must be excluded from CE instead of silently becoming class 0.
+                valid_attributes = (
+                    torch.isfinite(gt_attributes_fg)
+                    & (gt_attributes_fg >= 0)
+                    & (gt_attributes_fg < self.nal)
+                    & (gt_attributes_fg == gt_attributes_fg.round())
+                )
+                safe_gt_attributes = torch.where(
+                    valid_attributes, gt_attributes_fg, torch.zeros_like(gt_attributes_fg)
+                ).long()
                 attribute_loss = F.cross_entropy(
                     pred_attributes_fg.reshape(-1, self.nal),
-                    gt_attributes_fg.reshape(-1),
+                    safe_gt_attributes.reshape(-1),
                     reduction="none",
                 ).reshape(-1, self.na)
                 if self.mloss_weight:
                     attribute_loss = attribute_loss * target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-                loss[3] = attribute_loss.mean()
+                attribute_loss = attribute_loss * valid_attributes.to(attribute_loss.dtype)
+                loss[3] = attribute_loss.sum() / valid_attributes.sum().clamp_min(1)
             else:
                 gt_attributes_fg = gt_attributes_fg * (1 - self.mloss_enlarge) + self.mloss_enlarge
                 if self.mloss_mask:

@@ -1070,7 +1070,7 @@ class MdetResults(SimpleClass):
     def __init__(
         self, orig_img, path, names, boxes=None, attributes=None, masks=None, probs=None, keypoints=None, obb=None,
             speed=None, attribute_names=None, nc=None, na=None, nal=None, risk_enlarge=1,
-            multiclass_attributes=False) -> None:
+            multiclass_attributes=False, attribute_channels=None) -> None:
         """
         Initialize the Results class.
 
@@ -1087,6 +1087,8 @@ class MdetResults(SimpleClass):
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
         self.boxes = Boxes(boxes, self.orig_shape) if boxes is not None else None  # native size boxes
+        if attribute_channels is None and attributes is not None:
+            attribute_channels = attributes.shape[-1]
         self.attributes = (
             Attributes(
                 attributes,
@@ -1095,6 +1097,7 @@ class MdetResults(SimpleClass):
                 risk_enlarge=risk_enlarge,
                 multiclass=multiclass_attributes,
                 nal=nal,
+                attribute_channels=attribute_channels,
             )
             if attributes is not None
             else None
@@ -1109,10 +1112,12 @@ class MdetResults(SimpleClass):
         self.path = path
         self.save_dir = None
         self._keys = "boxes", "attributes", "masks", "probs", "keypoints", "obb"
+        self.risk_enlarge = risk_enlarge
         self.nc = nc
         self.na = na
         self.nal = nal
         self.multiclass_attributes = multiclass_attributes
+        self.attribute_channels = attribute_channels
 
     def __getitem__(self, idx):
         """Return a Results object for the specified index."""
@@ -1174,7 +1179,19 @@ class MdetResults(SimpleClass):
 
     def new(self):
         """Return a new Results object with the same image, path, names and speed."""
-        return Results(orig_img=self.orig_img, path=self.path, names=self.names, speed=self.speed)
+        return MdetResults(
+            orig_img=self.orig_img,
+            path=self.path,
+            names=self.names,
+            speed=self.speed,
+            attribute_names=self.attribute_names,
+            nc=self.nc,
+            na=self.na,
+            nal=self.nal,
+            risk_enlarge=self.risk_enlarge,
+            multiclass_attributes=self.multiclass_attributes,
+            attribute_channels=self.attribute_channels,
+        )
 
 
 
@@ -1493,16 +1510,70 @@ class MdetResults(SimpleClass):
         return json.dumps(self.summary(normalize=normalize, decimals=decimals), indent=2)
 
 class Attributes(BaseTensor):
-    def __init__(self, attributes, attribute_names, orig_shape, risk_enlarge=1, multiclass=False, nal=None) -> None:
+    def __init__(
+        self,
+        attributes,
+        attribute_names,
+        orig_shape,
+        risk_enlarge=1,
+        multiclass=False,
+        nal=None,
+        attribute_channels=None,
+    ) -> None:
         super().__init__(attributes, orig_shape)
         self.orig_shape = orig_shape
         self.attribute_names = attribute_names
         self.attribute_len, self.attribute_level = get_attribute_num(attribute_names)
         self.risk_enlarge = np.array(risk_enlarge)
         self.nal = int(nal) if nal is not None else self.attribute_level
-        self.multiclass = multiclass or (
-            self.nal > 1 and self.data.shape[-1] == self.attribute_len * self.nal
+        self.attribute_channels = self.data.shape[-1] if attribute_channels is None else int(attribute_channels)
+        expected_channels = self.attribute_len * self.nal
+        is_multiclass_layout = self.nal > 1 and self.attribute_channels == expected_channels
+        if multiclass and not is_multiclass_layout:
+            raise ValueError(
+                f"Multi-class attributes require {expected_channels} channels ({self.attribute_len} x {self.nal}), "
+                f"got {self.attribute_channels}"
+            )
+        self.multiclass = bool(multiclass) and is_multiclass_layout
+        if self.multiclass:
+            if self.data.shape[-1] != expected_channels:
+                raise ValueError(
+                    f"Expected {expected_channels} attribute probabilities ({self.attribute_len} x {self.nal}), "
+                    f"got {self.data.shape[-1]}"
+                )
+        elif self.data.shape[-1] != self.attribute_len:
+            raise ValueError(
+                f"Expected {self.attribute_len} legacy attribute values, got {self.data.shape[-1]}. "
+                "Pass multiclass=True with nal logits for multi-class attributes."
+            )
+
+    def _new(self, data):
+        """Create an attribute tensor while retaining its decoding metadata."""
+        return self.__class__(
+            data,
+            self.attribute_names,
+            self.orig_shape,
+            risk_enlarge=self.risk_enlarge,
+            multiclass=self.multiclass,
+            nal=self.nal,
+            attribute_channels=self.attribute_channels,
         )
+
+    def cpu(self):
+        """Return attributes on CPU while retaining their decoding metadata."""
+        return self if isinstance(self.data, np.ndarray) else self._new(self.data.cpu())
+
+    def numpy(self):
+        """Return attributes as NumPy data while retaining their decoding metadata."""
+        return self if isinstance(self.data, np.ndarray) else self._new(self.data.numpy())
+
+    def cuda(self):
+        """Return attributes on CUDA while retaining their decoding metadata."""
+        return self._new(torch.as_tensor(self.data).cuda())
+
+    def to(self, *args, **kwargs):
+        """Return attributes on the requested device/dtype while retaining their decoding metadata."""
+        return self._new(torch.as_tensor(self.data).to(*args, **kwargs))
 
     def _decoded_indices(self):
         """Return one integer level for each attribute in every prediction."""
@@ -1553,6 +1624,7 @@ class Attributes(BaseTensor):
             risk_enlarge=self.risk_enlarge,
             multiclass=self.multiclass,
             nal=self.nal,
+            attribute_channels=self.attribute_channels,
         )
 
 class Boxes(BaseTensor):

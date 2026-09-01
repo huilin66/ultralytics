@@ -5,6 +5,13 @@ from ultralytics.engine.results import MdetResults
 from ultralytics.utils import ops
 
 
+def _get_mdetect_head(model):
+    """Return the final mdet head from an AutoBackend or a raw detection model."""
+    model_core = getattr(model, "model", model)
+    model_container = getattr(model_core, "model", model_core)
+    return model_container[-1]
+
+
 class MDetectionPredictor(BasePredictor):
     """
     A class extending the BasePredictor class for prediction based on a detection model.
@@ -22,6 +29,7 @@ class MDetectionPredictor(BasePredictor):
 
     def postprocess(self, preds, img, orig_imgs, **kwargs):
         """Post-processes predictions and returns a list of Results objects."""
+        head = _get_mdetect_head(self.model)
         preds = ops.non_max_suppression_with_attributes(
             preds,
             self.args.conf,
@@ -29,8 +37,8 @@ class MDetectionPredictor(BasePredictor):
             agnostic=self.args.agnostic_nms,
             max_det=self.args.max_det,
             classes=self.args.classes,
-            nc=self.model.model.nc,
-            na=getattr(self.model.model, "attribute_channels", self.model.model.na),
+            nc=head.nc,
+            na=head.attribute_channels,
         )
         if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
             orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
@@ -68,7 +76,9 @@ class MDetectionPredictor(BasePredictor):
         """
         pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
         attributes = pred[:, 6:]
-        attribute_names = self.model.model.attribute_names
+        head = _get_mdetect_head(self.model)
+        model_core = getattr(self.model, "model", self.model)
+        attribute_names = model_core.attribute_names
         return MdetResults(
             orig_img,
             path=img_path,
@@ -76,9 +86,10 @@ class MDetectionPredictor(BasePredictor):
             boxes=pred[:, :6],
             attributes=attributes,
             attribute_names=attribute_names,
-            nc=self.model.model.nc,
-            na=self.model.model.na,
-            nal=self.model.model.nal,
+            nc=head.nc,
+            na=head.na,
+            nal=head.nal,
             risk_enlarge=self.args.risk_enlarge,
-            multiclass_attributes=getattr(self.model.model, "multiclass_attributes", False),
+            multiclass_attributes=head.multiclass_attributes,
+            attribute_channels=head.attribute_channels,
         )

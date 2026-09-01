@@ -359,8 +359,11 @@ class MDetect(nn.Module):
         # MSegment reuses MDetect but its ``cv4`` branch is replaced by mask coefficients.
         # Keep its legacy ``na``-channel layout while making the mdet head explicit about
         # producing ``nal`` logits for each of its ``na`` attributes.
-        self.multiclass_attributes = self.__class__.__name__ not in {"MSegment", "v10MSegment"}
-        self.attribute_channels = self.na * self.nal if self.multiclass_attributes else self.na
+        legacy_attribute_layout = self.__class__.__name__ in {"MSegment", "v10MSegment"}
+        self.attribute_channels = self.na if legacy_attribute_layout else self.na * self.nal
+        # This is the single layout predicate shared by the mdet loss/metrics/results code.
+        # A one-level attribute is not a multinomial classification problem.
+        self.multiclass_attributes = self.attribute_channels == self.na * self.nal and self.nal > 1
         self.attribute_head_channels = self.nal if self.multiclass_attributes else 1
         self.no = nc + self.attribute_channels + self.reg_max * 4  # number of outputs per anchor
         self.stride = torch.zeros(self.nl)  # strides computed during build
