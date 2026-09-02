@@ -1,0 +1,16 @@
+path: /localnvme/data/bdd_hmt/sua_rgb_merge_filter_0.02_AND # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names:
+  0: background
+  1: Broken
+  2: Corrosion
+  3: Delaminated Tile Low Risk
+  4: Delaminate Tile High Risk
+  5: Efforescene Low Gray
+  6: Efflorescene Low Risk
+  7: Efflorescene High Risk
+
