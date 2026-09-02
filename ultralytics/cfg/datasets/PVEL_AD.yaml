@@ -1,0 +1,19 @@
+path: /root/huilin/data/EL2021/trainval # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt  # test images (optional)
+
+# Classes
+names:
+  0: short_circuit
+  1: scratch
+  2: thick_line
+  3: crack
+  4: vertical_dislocation
+  5: finger
+  6: black_core
+  7: horizontal_dislocation
+  8: star_crack
+  9: fragment
+  10: corner
+  11: printing_error

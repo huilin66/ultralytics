@@ -1,0 +1,12 @@
+short_circuit
+scratch
+thick_line
+crack
+vertical_dislocation
+finger
+black_core
+horizontal_dislocation
+star_crack
+fragment
+corner
+printing_error
