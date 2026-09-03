@@ -1404,8 +1404,17 @@ class MDetMetrics(SimpleClass):
     @property
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)", "metrics/mAP",
-                "metrics/f1_macro", "metrics/f1_micro", "metrics/precision", "metrics/recall"]
+        return [
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "metrics/mAP50(B)",
+            "metrics/mAP50-95(B)",
+            "metrics/OA(A)",
+            "metrics/f1_macro(A)",
+            "metrics/f1_micro(A)",
+            "metrics/precision(A)",
+            "metrics/recall(A)",
+        ]
 
 
     def mean_results(self):
