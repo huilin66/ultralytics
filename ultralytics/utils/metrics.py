@@ -1695,21 +1695,35 @@ class MSegmentMetrics(SimpleClass):
             "metrics/recall(M)",
             "metrics/mAP50(M)",
             "metrics/mAP50-95(M)",
-            "metrics/mAP",
-            "metrics/f1_macro",
-            "metrics/f1_micro"
+            "metrics/OA(A)",
+            "metrics/f1_macro(A)",
+            "metrics/f1_micro(A)",
+            "metrics/precision(A)",
+            "metrics/recall(A)",
         ]
 
     def mean_results(self):
         """Return the mean metrics for bounding box and segmentation results."""
-        return self.box.mean_results() + self.seg.mean_results() + [self.attributes.map, self.attributes.mf1_macro, self.attributes.mf1_micro]
+        return self.box.mean_results() + self.seg.mean_results() + [
+            self.attributes.moa,
+            self.attributes.mf1_macro,
+            self.attributes.mf1_micro,
+            self.attributes.mprecision,
+            self.attributes.mrecall,
+        ]
 
     def class_result(self, i):
         """Returns classification results for a specified class index."""
         if i < self.nc:
-            return self.box.class_result(i) + self.seg.class_result(i) + (0, 0, 0)
+            return self.box.class_result(i) + self.seg.class_result(i) + (0, 0, 0, 0, 0)
         else:
-            return (0, 0, 0, 0, 0, 0, 0, 0) + (self.attributes.all_ap[i - self.nc], self.attributes.all_f1_macro[i - self.nc], 0)
+            return (0, 0, 0, 0, 0, 0, 0, 0) + (
+                self.attributes.all_ap[i - self.nc],
+                self.attributes.all_f1_macro[i - self.nc],
+                0,
+                self.attributes.all_precision[i - self.nc],
+                self.attributes.all_recall[i - self.nc],
+            )
 
     @property
     def maps(self):

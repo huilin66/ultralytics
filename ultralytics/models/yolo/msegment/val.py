@@ -50,7 +50,7 @@ class MSegmentationValidator(MDetectionValidator):
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 13) % (
+        return ("%22s" + "%11s" * 15) % (
             "Class",
             "Images",
             "Instances",
@@ -63,8 +63,10 @@ class MSegmentationValidator(MDetectionValidator):
             "mAP50",
             "mAP50-95)",
             "OA",
-            "F1_marco",
-            "F1_mirco",
+            "F1_macro",
+            "F1_micro",
+            "P_att",
+            "R_att",
         )
 
     def postprocess(self, preds):
