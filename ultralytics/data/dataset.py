@@ -372,6 +372,7 @@ class YOLOMDETDataset(BaseDataset):
                     repeat(len(self.data["names"])),
                     repeat(nkpt),
                     repeat(ndim),
+                    repeat(int(self.data.get("na", 0))),
                 ),
             )
             pbar = TQDM(results, desc=desc, total=total)

@@ -168,9 +168,15 @@ def verify_image_label(args):
 # not consider keypoints, segments and detect, only used for mdetect
 def verify_image_label_mdet(args):
     """Verify one image-label pair."""
-    im_file, lb_file, prefix, keypoint, seg, attribute, num_cls, nkpt, ndim = args
+    if len(args) == 9:  # backward-compatible direct callers
+        im_file, lb_file, prefix, keypoint, seg, attribute, num_cls, nkpt, ndim = args
+        num_attributes = 0
+    else:
+        im_file, lb_file, prefix, keypoint, seg, attribute, num_cls, nkpt, ndim, num_attributes = args
     # Number (missing, found, empty, corrupt), message, segments, keypoints
-    nm, nf, ne, nc, msg, segments, keypoints, mdet_attributes = 0, 0, 0, 0, "", [], None, []
+    nm, nf, ne, nc, msg, segments, keypoints = 0, 0, 0, 0, "", [], None
+    num_attributes = int(num_attributes or 0)
+    mdet_attributes = np.zeros((0, num_attributes), dtype=np.float32)
     try:
         # Verify images
         im = Image.open(im_file)
@@ -191,8 +197,8 @@ def verify_image_label_mdet(args):
             nf = 1  # label found
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
-                na = int(lb[0][1])
-                if seg:  # is segment
+                if lb and seg:  # is segment
+                    na = int(lb[0][1])
                     classes = np.array([x[0] for x in lb], dtype=np.float32)
                     attributes = np.array([x[1:1 + 1 + na] for x in lb], dtype=np.float32)
                     segments = [np.array(x[1 + 1 + na:], dtype=np.float32).reshape(-1, 2) for x in lb]  # (cls, xy1...)
@@ -231,7 +237,7 @@ def verify_image_label_mdet(args):
                 lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
         else:
             nm = 1  # label missing
-            lb = np.zeros((0, (5 + nkpt * ndim) if keypoints else 5), dtype=np.float32)
+            lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
         return im_file, lb, shape, segments, keypoints, mdet_attributes, nm, nf, ne, nc, msg
     except Exception as e:
         nc = 1
