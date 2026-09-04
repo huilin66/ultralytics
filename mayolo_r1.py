@@ -3,7 +3,7 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import torch
 
-from ultralytics import YOLO
+from ultralytics import RTDETR, YOLO
 
 BATCH_SIZE = 32
 EPOCHS = 500
@@ -27,6 +27,40 @@ FREEZE_NUMS = {
 }
 # MLOSS_ENLARGE = 0.3
 # region meta tools
+
+
+def _is_rtdetr(network):
+    """Return whether the requested network is the RT-DETR wrapper."""
+    return network is RTDETR
+
+
+def _build_model(network, model_path):
+    """Build a model while keeping the YOLO and RT-DETR constructor signatures separate."""
+    return network(model_path) if _is_rtdetr(network) else network(model_path, task=TASK)
+
+
+def _rtdetr_attribute_only_params(model):
+    """Freeze RT-DETR except for its encoder and decoder attribute heads in stage two."""
+    detector = model.model
+    layers = detector.model
+    return {
+        # Freeze backbone, neck and all layers before the RT-DETR decoder head.
+        "freeze": list(range(max(len(layers) - 1, 0))),
+        # Freeze the complete decoder except enc_attribute_head/dec_attribute_head.
+        "freeze_head": [
+            ".input_proj",
+            ".decoder",
+            ".denoising_class_embed",
+            ".tgt_embed",
+            ".query_pos_head",
+            ".enc_output",
+            ".enc_score_head",
+            ".enc_bbox_head",
+            ".dec_score_head",
+            ".dec_bbox_head",
+        ],
+        "freeze_bn": True,
+    }
 
 
 def myolo_train_full(
@@ -65,7 +99,7 @@ def myolo_train_full(
 
 
 def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain=False, **kwargs):
-    model = network(cfg_path, task=TASK)
+    model = _build_model(network, cfg_path)
     model.load(pretrain_path)
 
     train_params = {
@@ -82,22 +116,25 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
         train_params.update({"optimizer": "AdamW", "lr0": 0.0001})
 
     if retrain:
-        train_params.update(
-            {
-                "freeze": get_freeze_num(cfg_path),
-                "freeze_head": [".cv2", ".cv3"]
-                if "yolov10" not in cfg_path and "mayolo" not in cfg_path
-                else [".cv2", ".cv3", ".one2one_cv2", ".one2one_cv3"],
-                "freeze_bn": True,
-            }
-        )
+        if _is_rtdetr(network):
+            train_params.update(_rtdetr_attribute_only_params(model))
+        else:
+            train_params.update(
+                {
+                    "freeze": get_freeze_num(cfg_path),
+                    "freeze_head": [".cv2", ".cv3"]
+                    if "yolov10" not in cfg_path and "mayolo" not in cfg_path
+                    else [".cv2", ".cv3", ".one2one_cv2", ".one2one_cv3"],
+                    "freeze_bn": True,
+                }
+            )
     train_params.update(kwargs)
     model.train(**train_params)
     return model.trainer.best
 
 
 def model_val(weight_path, network=YOLO, **kwargs):
-    model = network(weight_path, task=TASK)
+    model = _build_model(network, weight_path)
     print(weight_path)
     print(model.info(detailed=False))
     val_params = {
@@ -109,7 +146,7 @@ def model_val(weight_path, network=YOLO, **kwargs):
 
 
 def model_gat_val(weight_path, com_path, network=YOLO):
-    model = network(weight_path, task=TASK)
+    model = _build_model(network, weight_path)
     model.model.model[-1].added_gat_head(com_path)
     print(weight_path)
     print(model.info(detailed=False))
@@ -117,7 +154,7 @@ def model_gat_val(weight_path, com_path, network=YOLO):
 
 
 def model_val_single(weight_path, network=YOLO):
-    model = network(weight_path, task=TASK)
+    model = _build_model(network, weight_path)
     model.model.model[-1].use_one2many_head()
     print(weight_path)
     print(model.info(detailed=False))
@@ -125,7 +162,7 @@ def model_val_single(weight_path, network=YOLO):
 
 
 def model_predict(weight_path, img_dir, network=YOLO, name=None, visualize=False):
-    model = network(weight_path, task=TASK)
+    model = _build_model(network, weight_path)
     model.predict(
         img_dir,
         save=True,
@@ -140,7 +177,7 @@ def model_predict(weight_path, img_dir, network=YOLO, name=None, visualize=False
 
 
 def model_export(weight_path, format="onnx", network=YOLO):
-    model = network(weight_path, task=TASK)
+    model = _build_model(network, weight_path)
     model.export(format=format)
 
 
@@ -242,6 +279,26 @@ def myolo13(cfg_path, weight_path="yolov13x.pt", auto_optim=False, **kwargs):
     )
 
 
+def rtdetr(
+    cfg_path="ultralytics/cfg/models/rt-detr/rtdetr-l-md.yaml",
+    weight_path="rtdetr-l.pt",
+    auto_optim=False,
+    **kwargs,
+):
+    """Train an RT-DETR object-level multi-attribute model for 100+100 epochs by default."""
+    assert "rtdetr" in str(cfg_path).lower(), ValueError(cfg_path, "is not an RT-DETR config!")
+    scale = weight_path[-4]
+    return myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        network=RTDETR,
+        auto_optim=auto_optim,
+        stage1_name=f"rtdetr{scale}_stage1",
+        stage2_name=f"rtdetr{scale}_stage2",
+        **kwargs,
+    )
+
+
 def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
     scale = weight_path[-4]
     myolo_train_full(
@@ -258,6 +315,13 @@ def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
 
 if __name__ == "__main__":
     # test
+    # rtdetr(
+    #     r"ultralytics/cfg/models/rt-detr/rtdetr-l-md.yaml",
+    #     weight_path=r"rtdetr-l.pt",
+    #     data=DATA,
+    #     stage1_epochs=100,
+    #     stage2_epochs=100,
+    # )
     # myolo10(r"yolov10x-mdetect.yaml", data="mayolo_v1.yaml")
     # mayolo(r"mayolovx.yaml", data="mayolo_v1.yaml")
     model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
