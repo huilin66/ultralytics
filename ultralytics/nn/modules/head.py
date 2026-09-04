@@ -1055,7 +1055,11 @@ class Classify(nn.Module):
         x = self.linear(self.drop(self.pool(self.conv(x)).flatten(1)))
         if self.training:
             return x
-        y = x.softmax(1)  # get final output
+        # Standard classification is mutually exclusive and uses softmax.
+        # Image-level multi-label classifiers opt in explicitly so existing
+        # classification checkpoints and all detection/segmentation heads are
+        # unchanged.
+        y = x.sigmoid() if getattr(self, "multilabel", False) else x.softmax(1)
         return y if self.export else (y, x)
 
 
