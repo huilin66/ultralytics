@@ -258,9 +258,9 @@ def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
 
 if __name__ == "__main__":
     # test
-    myolo10(r"yolov10x-mdetect.yaml", data="mayolo_v1.yaml")
-    mayolo(r"mayolovx.yaml", data="mayolo_v1.yaml")
-    # model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
-    # model_val(r"runs/mdetect/mayolox_stage2/weights/best.pt")
-    # model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
-    # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
+    # myolo10(r"yolov10x-mdetect.yaml", data="mayolo_v1.yaml")
+    # mayolo(r"mayolovx.yaml", data="mayolo_v1.yaml")
+    model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
+    model_val(r"runs/mdetect/mayolox_stage2/weights/best.pt")
+    model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
+    model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
