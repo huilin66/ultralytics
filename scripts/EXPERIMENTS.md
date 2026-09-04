@@ -9,6 +9,19 @@
 - 检测主指标使用 `mAP50`，`mAP50:95` 可以保留为补充结果。
 
 先在 `mdet` 环境中进入仓库根目录，并把示例中的数据集、权重和矩阵路径换成实际路径。
+下面命令中的反引号 `` ` `` 是 PowerShell 换行符；在 Linux/bash 中请使用反斜杠
+``\``，并通过 `python`/`python3` 执行，不能使用 `bash` 执行 `.py` 文件。
+
+Linux/bash 的 E1 写法：
+
+```bash
+python scripts/train_mdet_experiments.py w4 \
+  --data path/to/billboard_mdet.yaml \
+  --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
+  --pretrain yolov10x.pt \
+  --w4-values 0.25 0.5 1.0 \
+  --project runs/experiments/E1_w4
+```
 
 ## E1：w4 敏感性
 

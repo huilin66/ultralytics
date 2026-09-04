@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.cli_compat import add_bool_argument
 from ultralytics import YOLO
 
 from multilabel_yolo.classification_trainer import MultiLabelClassificationTrainer
@@ -32,8 +33,8 @@ def parse_args():
     parser.add_argument("--project", default=None)
     parser.add_argument("--name", default=None)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
+    add_bool_argument(parser, "--pretrained", default=True)
+    add_bool_argument(parser, "--amp", default=True)
     return parser.parse_args()
 
 

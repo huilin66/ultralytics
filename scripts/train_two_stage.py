@@ -28,6 +28,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.cli_compat import add_bool_argument
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Train the image-level multi-label classifier for the two-stage baseline"
@@ -47,9 +50,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project", default="runs/experiments")
     parser.add_argument("--name", default="E6_two_stage_classifier")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--exist-ok", action=argparse.BooleanOptionalAction, default=False)
+    add_bool_argument(parser, "--pretrained", default=True)
+    add_bool_argument(parser, "--amp", default=True)
+    add_bool_argument(parser, "--exist-ok", default=False)
     parser.add_argument("--dry-run", action="store_true", help="print the training configuration only")
     return parser
 

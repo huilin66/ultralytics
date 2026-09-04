@@ -46,6 +46,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.cli_compat import add_bool_argument
+
+
 def _slug(value: object) -> str:
     """Make a value safe to use as a run name."""
     text = str(value).strip()
@@ -147,9 +150,9 @@ def _add_train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--w4", type=float, default=0.5, help="attribute loss gain; mapped to mdet")
     parser.add_argument("--close-mosaic", type=int, default=None)
-    parser.add_argument("--auto-optim", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--exist-ok", action=argparse.BooleanOptionalAction, default=False)
+    add_bool_argument(parser, "--auto-optim", default=False)
+    add_bool_argument(parser, "--amp", default=True)
+    add_bool_argument(parser, "--exist-ok", default=False)
     parser.add_argument(
         "--com-path",
         default=None,

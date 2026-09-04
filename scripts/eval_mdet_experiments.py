@@ -18,6 +18,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.cli_compat import add_bool_argument
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate non-training mdet experiment comparisons")
     subparsers = parser.add_subparsers(dest="experiment", required=True)
@@ -33,7 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ho.add_argument("--conf", type=float, default=None, help="optional validation confidence threshold")
     ho.add_argument("--project", default="runs/experiments")
     ho.add_argument("--name", default="E2_4_HO")
-    ho.add_argument("--plots", action=argparse.BooleanOptionalAction, default=True)
+    add_bool_argument(ho, "--plots", default=True)
     return parser
 
 

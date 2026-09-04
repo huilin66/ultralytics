@@ -13,6 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.cli_compat import add_bool_argument
 from ultralytics import YOLO
 
 from multilabel_yolo.validator import MultiLabelDetectionValidator
@@ -29,7 +30,7 @@ def main():
     parser.add_argument("--device", default=None)
     parser.add_argument("--conf", type=float, default=0.001)
     parser.add_argument("--iou", type=float, default=0.7)
-    parser.add_argument("--plots", action=argparse.BooleanOptionalAction, default=True)
+    add_bool_argument(parser, "--plots", default=True)
     args = parser.parse_args()
 
     kwargs = {
