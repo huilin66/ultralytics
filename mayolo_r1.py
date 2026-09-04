@@ -10,7 +10,7 @@ EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5
 TASK = "mdetect"
-DEVICE = torch.device("cuda:1")
+DEVICE = torch.device("cuda:0")
 DATA = "billboard_mdet5_10_c_0806m.yaml"
 FREEZE_NUMS = {
     "yolov8": 22,
@@ -36,9 +36,8 @@ def myolo_train_full(
     auto_optim=False,
     stage1_epochs=100,
     stage2_epochs=100,
-    project=r"runs\mdetect",
     stage1_name="stage1",
-    stage2_name="stage2_attribute",
+    stage2_name="stage2",
     **kwargs,
 ):
     model_path_s1 = myolo_train(
@@ -48,7 +47,6 @@ def myolo_train_full(
         auto_optim=auto_optim,
         retrain=False,
         epochs=stage1_epochs,
-        project=project,
         name=stage1_name,
         **kwargs,
     )
@@ -59,7 +57,6 @@ def myolo_train_full(
         auto_optim=auto_optim,
         retrain=True,
         epochs=stage2_epochs,
-        project=project,
         name=stage2_name,
         patience=stage2_epochs,
         **kwargs,
@@ -261,4 +258,9 @@ def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
 
 if __name__ == "__main__":
     # test
-    mayolo(r"mayolovx.yaml")
+    myolo10(r"yolov10x-mdetect.yaml", data="mayolo_v1.yaml")
+    mayolo(r"mayolovx.yaml", data="mayolo_v1.yaml")
+    # model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
+    # model_val(r"runs/mdetect/mayolox_stage2/weights/best.pt")
+    # model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
+    # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")

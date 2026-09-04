@@ -1,13 +1,12 @@
-path: /localnvme/data/billboard/yolo_rgb_detection5_10_c # dataset root dir
+path: /localnvme/data/billboard/mayolo_v1 # dataset root dir
 train: train.txt # train images (relative to 'path') 118287 images
 val: val.txt # val images (relative to 'path') 5000 images
 test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
 
 # Classes
 names:
-  0: background
-  1: wall_signboard
-  2: projecting_signboard
+  0: wall_signboard
+  1: projecting_signboard
 
 nal: 2
 
