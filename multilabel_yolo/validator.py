@@ -7,6 +7,7 @@ from ultralytics.models.yolo.detect.val import DetectionValidator
 from ultralytics.utils import colorstr, ops
 
 from .dataset import MultiLabelYOLODataset
+from .inference import prepare_prediction_for_multilabel_nms
 
 
 class MultiLabelDetectionValidator(DetectionValidator):
@@ -54,6 +55,7 @@ class MultiLabelDetectionValidator(DetectionValidator):
 
     def postprocess(self, preds):
         """Keep every class above threshold for a candidate box."""
+        preds = prepare_prediction_for_multilabel_nms(preds, self.model)
         return ops.non_max_suppression(
             preds,
             conf_thres=self.args.conf,
@@ -64,7 +66,7 @@ class MultiLabelDetectionValidator(DetectionValidator):
             classes=self.args.classes,
             agnostic=self.args.single_cls or self.args.agnostic_nms,
             max_det=self.args.max_det,
-            end2end=self.end2end,
+            end2end=False,
             rotated=self.args.task == "obb",
         )
 
@@ -89,6 +91,11 @@ class MultiLabelDetectionValidator(DetectionValidator):
             bbox = ops.xywh2xyxy(bbox) * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]
             ops.scale_boxes(imgsz, bbox, ori_shape, ratio_pad=ratio_pad)
         return {"cls": cls, "bbox": bbox, "ori_shape": ori_shape, "imgsz": imgsz, "ratio_pad": ratio_pad}
+
+    def init_metrics(self, model):
+        """Keep the raw model available for decoding YOLOv10 branches."""
+        self.model = model
+        super().init_metrics(model)
 
     def plot_val_samples(self, batch, ni):
         """Disable the native plot because its scalar class column is transport-only."""

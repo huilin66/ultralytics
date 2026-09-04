@@ -59,3 +59,33 @@ def test_box_weight_is_cardinality_invariant():
     triple_norm = MultiLabelDetectionLoss.normalize_box_scores(triple)
     assert torch.allclose(single_norm.sum(-1), triple_norm.sum(-1))
     assert torch.allclose(triple_norm[0, 0, [1, 3, 4]], torch.full((3,), 0.8 / 3))
+
+
+def test_end_to_end_loss_uses_one_to_many_and_one_to_one_branches():
+    """YOLOv10's two training branches use the same n-hot loss independently."""
+    model = _Model()
+    criterion = MultiLabelDetectionLoss(model, tal_topk=5)
+    no = criterion.no
+    one2many = [
+        torch.randn(2, no, 8, 8, requires_grad=True),
+        torch.randn(2, no, 4, 4, requires_grad=True),
+        torch.randn(2, no, 2, 2, requires_grad=True),
+    ]
+    one2one = [
+        torch.randn(2, no, 8, 8, requires_grad=True),
+        torch.randn(2, no, 4, 4, requires_grad=True),
+        torch.randn(2, no, 2, 2, requires_grad=True),
+    ]
+    batch = {
+        "batch_idx": torch.tensor([0.0, 1.0]),
+        "cls": torch.tensor([[13.0], [27.0]]),  # transport IDs are not model classes
+        "bboxes": torch.tensor([[0.5, 0.5, 0.25, 0.25], [0.4, 0.4, 0.2, 0.2]]),
+        "cls_nhot": torch.tensor([[1, 0, 1, 0, 0], [0, 1, 0, 1, 0]], dtype=torch.float32),
+    }
+    total, items = criterion({"one2many": one2many, "one2one": one2one}, batch)
+    assert criterion.assigner.topk == 5
+    assert criterion.one2one_assigner.topk == 1
+    assert torch.isfinite(total)
+    assert torch.isfinite(items).all()
+    total.backward()
+    assert all(feature.grad is not None for feature in one2many + one2one)

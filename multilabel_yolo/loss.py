@@ -20,6 +20,13 @@ class MultiLabelDetectionLoss(v8DetectionLoss):
         self.assigner = MultiLabelTaskAlignedAssigner(
             topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0
         ).to(self.device)
+        # YOLOv10's one-to-one branch uses the same loss formulation with a
+        # single aligned candidate per object.  Keep a separate assigner so
+        # the one-to-many and one-to-one branches do not share mutable TAL
+        # state (``bs`` and ``n_max_boxes`` are updated on every call).
+        self.one2one_assigner = MultiLabelTaskAlignedAssigner(
+            topk=1, num_classes=self.nc, alpha=0.5, beta=6.0
+        ).to(self.device)
 
     @staticmethod
     def normalize_box_scores(target_scores):
@@ -46,8 +53,13 @@ class MultiLabelDetectionLoss(v8DetectionLoss):
                 raise ValueError("Every physical object must have at least one positive class")
         return cls_nhot
 
-    def __call__(self, preds, batch):
-        """Calculate box, independent per-class BCE, and DFL losses."""
+    @staticmethod
+    def _unwrap_predictions(preds):
+        """Unwrap the training payload returned by a YOLO detection head."""
+        return preds[1] if isinstance(preds, tuple) else preds
+
+    def _branch_loss(self, preds, batch, assigner):
+        """Calculate one branch of box, independent per-class BCE, and DFL losses."""
         loss = torch.zeros(3, device=self.device)  # box, cls, dfl
         feats = preds[1] if isinstance(preds, tuple) else preds
         pred_distri, pred_scores = torch.cat(
@@ -76,7 +88,7 @@ class MultiLabelDetectionLoss(v8DetectionLoss):
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)
-        _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+        _, target_bboxes, target_scores, fg_mask, _ = assigner(
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
             anchor_points * stride_tensor,
@@ -108,6 +120,15 @@ class MultiLabelDetectionLoss(v8DetectionLoss):
         loss[1] *= self.hyp.cls
         loss[2] *= self.hyp.dfl
         return loss.sum() * batch_size, loss.detach()
+
+    def __call__(self, preds, batch):
+        """Calculate losses for a standard head or both YOLOv10 E2E branches."""
+        preds = self._unwrap_predictions(preds)
+        if isinstance(preds, dict) and {"one2many", "one2one"}.issubset(preds):
+            loss_one2many = self._branch_loss(preds["one2many"], batch, self.assigner)
+            loss_one2one = self._branch_loss(preds["one2one"], batch, self.one2one_assigner)
+            return loss_one2many[0] + loss_one2one[0], loss_one2many[1] + loss_one2one[1]
+        return self._branch_loss(preds, batch, self.assigner)
 
     def _make_anchors(self, feats, dtype):
         """Build anchors while keeping the native loss imports local to this extension."""
