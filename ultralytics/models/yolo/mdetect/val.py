@@ -8,7 +8,6 @@ import torch
 
 from ultralytics.data import build_dataloader, converter, build_yolo_mdet_dataset
 from ultralytics.engine.validator import BaseValidator
-from ultralytics.nn.tasks import MDetectionModel
 from ultralytics.utils import LOGGER, ops
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.metrics import MConfusionMatrix, MDetMetrics, box_iou, clip_attribute_indices
@@ -77,19 +76,13 @@ class MDetectionValidator(BaseValidator):
         self.class_map = converter.coco80_to_coco91_class() if self.is_coco else list(range(len(model.names)))
         self.args.save_json |= (self.is_coco or self.is_lvis) and not self.training  # run on final val if training COCO
         self.names = model.names
-        if isinstance(model, MDetectionModel):
-            self.nc = model.nc
-            self.attribute_names = model.attribute_names
-            self.na = model.na
-            self.nal = model.nal
-        else:
-            self.nc = model.model.nc
-            self.attribute_names = model.model.attribute_names
-            self.na = model.model.na
-            self.nal = model.model.nal
         model_core = getattr(model, "model", model)
         model_container = getattr(model_core, "model", model_core)
         head = model_container[-1]
+        self.nc = int(getattr(model, "nc", getattr(model_core, "nc", getattr(head, "nc", len(model.names)))))
+        self.attribute_names = getattr(model, "attribute_names", getattr(model_core, "attribute_names", {}))
+        self.na = int(getattr(model, "na", getattr(model_core, "na", getattr(head, "na", 0))) or 0)
+        self.nal = int(getattr(model, "nal", getattr(model_core, "nal", getattr(head, "nal", 1))) or 1)
         self.attribute_channels = getattr(head, "attribute_channels", self.na)
         self.multiclass_attributes = self.attribute_channels == self.na * self.nal and self.nal > 1
         self.metrics.names = self.names

@@ -949,7 +949,7 @@ class RTDETRDetectionModel(DetectionModel):
         predict: Performs a forward pass through the network and returns the output.
     """
 
-    def __init__(self, cfg="rtdetr-l.yaml", ch=3, nc=None, verbose=True):
+    def __init__(self, cfg="rtdetr-l.yaml", ch=3, nc=None, verbose=True, na=None, nal=None):
         """
         Initialize the RTDETRDetectionModel.
 
@@ -957,15 +957,40 @@ class RTDETRDetectionModel(DetectionModel):
             cfg (str | dict): Configuration file name or path.
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
+            na (int, optional): Number of object-level attributes. When provided, the decoder is built with an
+                attribute head even if the base RT-DETR YAML is vanilla.
+            nal (int, optional): Number of levels per attribute.
             verbose (bool): Print additional information during initialization.
         """
+        if na is not None:
+            cfg = deepcopy(cfg) if isinstance(cfg, dict) else yaml_model_load(cfg)
+            cfg["na"] = int(na)
+            cfg["nal"] = int(nal or 1)
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        self.nc = self.yaml["nc"]
+        head = self.model[-1]
+        self.na = int(getattr(head, "na", self.yaml.get("na", 0)) or 0)
+        self.nal = int(getattr(head, "nal", self.yaml.get("nal", 1)) or 1)
+        self.attribute_channels = int(getattr(head, "attribute_channels", self.na * self.nal))
+        self.multiclass_attributes = bool(getattr(head, "multiclass_attributes", self.nal > 1 and self.na > 0))
+        self.attribute_names = self.yaml.get("attributes", {})
 
     def init_criterion(self):
         """Initialize the loss criterion for the RTDETRDetectionModel."""
         from ultralytics.models.utils.loss import RTDETRDetectionLoss
 
-        return RTDETRDetectionLoss(nc=self.nc, use_vfl=True)
+        model_args = getattr(self, "args", None)
+        if isinstance(model_args, dict):
+            attribute_gain = model_args.get("mdet", 1.0)
+        else:
+            attribute_gain = getattr(model_args, "mdet", 1.0) if model_args is not None else 1.0
+        return RTDETRDetectionLoss(
+            nc=self.nc,
+            na=self.na,
+            nal=self.nal,
+            attribute_gain=float(attribute_gain),
+            use_vfl=True,
+        )
 
     def loss(self, batch, preds=None):
         """
@@ -976,7 +1001,7 @@ class RTDETRDetectionModel(DetectionModel):
             preds (torch.Tensor, optional): Precomputed model predictions.
 
         Returns:
-            (tuple): A tuple containing the total loss and main three losses in a tensor.
+            (tuple): A tuple containing the total loss and main loss components in a tensor.
         """
         if not hasattr(self, "criterion"):
             self.criterion = self.init_criterion()
@@ -992,25 +1017,48 @@ class RTDETRDetectionModel(DetectionModel):
             "batch_idx": batch_idx.to(img.device, dtype=torch.long).view(-1),
             "gt_groups": gt_groups,
         }
+        if self.attribute_channels:
+            if "mdet_attributes" not in batch:
+                raise KeyError("RT-DETR attribute head is enabled but the batch has no 'mdet_attributes' targets")
+            attributes = batch["mdet_attributes"]
+            if isinstance(attributes, list):
+                attributes = torch.cat([torch.as_tensor(value) for value in attributes], dim=0)
+            targets["mdet_attributes"] = attributes.to(img.device)
 
         preds = self.predict(img, batch=targets) if preds is None else preds
-        dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta = preds if self.training else preds[1]
+        raw_preds = preds if self.training else preds[1]
+        if self.attribute_channels:
+            dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta, dec_attributes, enc_attributes = raw_preds
+        else:
+            dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta = raw_preds
         if dn_meta is None:
-            dn_bboxes, dn_scores = None, None
+            dn_bboxes = dn_scores = dn_attributes = None
         else:
             dn_bboxes, dec_bboxes = torch.split(dec_bboxes, dn_meta["dn_num_split"], dim=2)
             dn_scores, dec_scores = torch.split(dec_scores, dn_meta["dn_num_split"], dim=2)
+            if self.attribute_channels:
+                dn_attributes, dec_attributes = torch.split(dec_attributes, dn_meta["dn_num_split"], dim=2)
 
         dec_bboxes = torch.cat([enc_bboxes.unsqueeze(0), dec_bboxes])  # (7, bs, 300, 4)
         dec_scores = torch.cat([enc_scores.unsqueeze(0), dec_scores])
+        criterion_preds = (dec_bboxes, dec_scores)
+        if self.attribute_channels:
+            dec_attributes = torch.cat([enc_attributes.unsqueeze(0), dec_attributes])
+            criterion_preds = (*criterion_preds, dec_attributes)
 
         loss = self.criterion(
-            (dec_bboxes, dec_scores), targets, dn_bboxes=dn_bboxes, dn_scores=dn_scores, dn_meta=dn_meta
+            criterion_preds,
+            targets,
+            dn_bboxes=dn_bboxes,
+            dn_scores=dn_scores,
+            dn_attributes=dn_attributes,
+            dn_meta=dn_meta,
         )
-        # NOTE: There are like 12 losses in RTDETR, backward with all losses but only show the main three losses.
-        return sum(loss.values()), torch.as_tensor(
-            [loss[k].detach() for k in ["loss_giou", "loss_class", "loss_bbox"]], device=img.device
-        )
+        # RT-DETR has auxiliary and denoising losses; expose the main box/class/attribute terms to the trainer.
+        loss_items = [loss[k].detach() for k in ["loss_giou", "loss_class", "loss_bbox"]]
+        if self.attribute_channels:
+            loss_items.append(loss["loss_attribute"].detach())
+        return sum(loss.values()), torch.as_tensor(loss_items, device=img.device)
 
     def predict(self, x, profile=False, visualize=False, batch=None, augment=False, embed=None):
         """
@@ -1587,6 +1635,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 m.legacy = legacy
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
+            # RT-DETR keeps the optional object-level attribute dimensions immediately after ``ch``.
+            # This preserves vanilla ``[nc]`` YAMLs while allowing ``[nc, na, nal]`` mdet YAMLs.
+            if len(args) == 2 and d.get("na"):
+                args.extend((d["na"], d.get("nal", 1)))
         elif m is CBLinear:
             c2 = args[0]
             c1 = ch[f]

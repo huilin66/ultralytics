@@ -1128,6 +1128,8 @@ class RTDETRDecoder(nn.Module):
         self,
         nc=80,
         ch=(512, 1024, 2048),
+        na=0,  # number of attributes
+        nal=1,  # number of levels per attribute
         hd=256,  # hidden dim
         nq=300,  # num queries
         ndp=4,  # num decoder points
@@ -1149,6 +1151,8 @@ class RTDETRDecoder(nn.Module):
         Args:
             nc (int): Number of classes. Default is 80.
             ch (tuple): Channels in the backbone feature maps. Default is (512, 1024, 2048).
+            na (int): Number of object-level attributes. Default is 0 (vanilla RT-DETR).
+            nal (int): Number of levels for each attribute. Default is 1.
             hd (int): Dimension of hidden layers. Default is 256.
             nq (int): Number of query points. Default is 300.
             ndp (int): Number of decoder points. Default is 4.
@@ -1168,6 +1172,10 @@ class RTDETRDecoder(nn.Module):
         self.nhead = nh
         self.nl = len(ch)  # num level
         self.nc = nc
+        self.na = int(na or 0)
+        self.nal = int(nal or 1)
+        self.attribute_channels = self.na * self.nal
+        self.multiclass_attributes = self.na > 0 and self.nal > 1
         self.num_queries = nq
         self.num_decoder_layers = ndl
 
@@ -1196,10 +1204,16 @@ class RTDETRDecoder(nn.Module):
         self.enc_output = nn.Sequential(nn.Linear(hd, hd), nn.LayerNorm(hd))
         self.enc_score_head = nn.Linear(hd, nc)
         self.enc_bbox_head = MLP(hd, hd, 4, num_layers=3)
+        self.enc_attribute_head = nn.Linear(hd, self.attribute_channels) if self.attribute_channels else None
 
         # Decoder head
         self.dec_score_head = nn.ModuleList([nn.Linear(hd, nc) for _ in range(ndl)])
         self.dec_bbox_head = nn.ModuleList([MLP(hd, hd, 4, num_layers=3) for _ in range(ndl)])
+        self.dec_attribute_head = (
+            nn.ModuleList([nn.Linear(hd, self.attribute_channels) for _ in range(ndl)])
+            if self.attribute_channels
+            else None
+        )
 
         self._reset_parameters()
 
@@ -1222,10 +1236,16 @@ class RTDETRDecoder(nn.Module):
             self.training,
         )
 
-        embed, refer_bbox, enc_bboxes, enc_scores = self._get_decoder_input(feats, shapes, dn_embed, dn_bbox)
+        decoder_inputs = self._get_decoder_input(
+            feats, shapes, dn_embed, dn_bbox, return_attributes=bool(self.attribute_channels)
+        )
+        if self.attribute_channels:
+            embed, refer_bbox, enc_bboxes, enc_scores, enc_attributes = decoder_inputs
+        else:
+            embed, refer_bbox, enc_bboxes, enc_scores = decoder_inputs
 
         # Decoder
-        dec_bboxes, dec_scores = self.decoder(
+        decoder_outputs = self.decoder(
             embed,
             refer_bbox,
             feats,
@@ -1233,13 +1253,28 @@ class RTDETRDecoder(nn.Module):
             self.dec_bbox_head,
             self.dec_score_head,
             self.query_pos_head,
+            attribute_head=self.dec_attribute_head,
             attn_mask=attn_mask,
         )
-        x = dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta
+        if self.attribute_channels:
+            dec_bboxes, dec_scores, dec_attributes = decoder_outputs
+            x = dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta, dec_attributes, enc_attributes
+        else:
+            dec_bboxes, dec_scores = decoder_outputs
+            x = dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta
         if self.training:
             return x
-        # (bs, 300, 4+nc)
-        y = torch.cat((dec_bboxes.squeeze(0), dec_scores.squeeze(0).sigmoid()), -1)
+        # (bs, num_queries, 4 + nc + attribute_channels)
+        outputs = [dec_bboxes.squeeze(0), dec_scores.squeeze(0).sigmoid()]
+        if self.attribute_channels:
+            attributes = dec_attributes.squeeze(0)
+            if self.multiclass_attributes:
+                attributes = attributes.reshape(attributes.shape[0], attributes.shape[1], self.na, self.nal)
+                attributes = attributes.softmax(-1).reshape(attributes.shape[0], attributes.shape[1], -1)
+            else:
+                attributes = attributes.sigmoid()
+            outputs.append(attributes)
+        y = torch.cat(outputs, -1)
         return y if self.export else (y, x)
 
     def _generate_anchors(self, shapes, grid_size=0.05, dtype=torch.float32, device="cpu", eps=1e-2):
@@ -1280,7 +1315,7 @@ class RTDETRDecoder(nn.Module):
         feats = torch.cat(feats, 1)
         return feats, shapes
 
-    def _get_decoder_input(self, feats, shapes, dn_embed=None, dn_bbox=None):
+    def _get_decoder_input(self, feats, shapes, dn_embed=None, dn_bbox=None, return_attributes=False):
         """Generates and prepares the input required for the decoder from the provided features and shapes."""
         bs = feats.shape[0]
         # Prepare input for decoder
@@ -1297,6 +1332,7 @@ class RTDETRDecoder(nn.Module):
 
         # (bs, num_queries, 256)
         top_k_features = features[batch_ind, topk_ind].view(bs, self.num_queries, -1)
+        enc_attributes = self.enc_attribute_head(top_k_features) if return_attributes else None
         # (bs, num_queries, 4)
         top_k_anchors = anchors[:, topk_ind].view(bs, self.num_queries, -1)
 
@@ -1316,7 +1352,8 @@ class RTDETRDecoder(nn.Module):
         if dn_embed is not None:
             embeddings = torch.cat([dn_embed, embeddings], 1)
 
-        return embeddings, refer_bbox, enc_bboxes, enc_scores
+        outputs = (embeddings, refer_bbox, enc_bboxes, enc_scores)
+        return (*outputs, enc_attributes) if return_attributes else outputs
 
     def _reset_parameters(self):
         """Initializes or resets the parameters of the model's various components with predefined weights and biases."""
@@ -1332,6 +1369,11 @@ class RTDETRDecoder(nn.Module):
             constant_(cls_.bias, bias_cls)
             constant_(reg_.layers[-1].weight, 0.0)
             constant_(reg_.layers[-1].bias, 0.0)
+        if self.attribute_channels:
+            attribute_heads = [self.enc_attribute_head, *self.dec_attribute_head]
+            for attribute_head in attribute_heads:
+                xavier_uniform_(attribute_head.weight)
+                constant_(attribute_head.bias, 0.0)
 
         linear_init(self.enc_output[0])
         xavier_uniform_(self.enc_output[0].weight)

@@ -7,8 +7,9 @@ import torch
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.nn.tasks import RTDETRDetectionModel
 from ultralytics.utils import RANK, colorstr
+from ultralytics.utils.torch_utils import de_parallel
 
-from .val import RTDETRDataset, RTDETRValidator
+from .val import RTDETRDataset, RTDETRMDetectionValidator, RTDETRValidator
 
 
 class RTDETRTrainer(DetectionTrainer):
@@ -49,7 +50,13 @@ class RTDETRTrainer(DetectionTrainer):
         Returns:
             (RTDETRDetectionModel): Initialized model.
         """
-        model = RTDETRDetectionModel(cfg, nc=self.data["nc"], verbose=verbose and RANK == -1)
+        model = RTDETRDetectionModel(
+            cfg,
+            nc=self.data["nc"],
+            na=self.data.get("na"),
+            nal=self.data.get("nal"),
+            verbose=verbose and RANK == -1,
+        )
         if weights:
             model.load(weights)
         return model
@@ -83,8 +90,32 @@ class RTDETRTrainer(DetectionTrainer):
 
     def get_validator(self):
         """Returns a DetectionValidator suitable for RT-DETR model validation."""
-        self.loss_names = "giou_loss", "cls_loss", "l1_loss"
-        return RTDETRValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args))
+        has_attributes = bool(self.data.get("na"))
+        self.loss_names = ("giou_loss", "cls_loss", "l1_loss", "attribute_loss") if has_attributes else (
+            "giou_loss", "cls_loss", "l1_loss"
+        )
+        validator = RTDETRMDetectionValidator if has_attributes else RTDETRValidator
+        return validator(self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks)
+
+    def set_model_attributes(self):
+        """Attach dataset metadata to the RT-DETR model and its object-level attribute head."""
+        super().set_model_attributes()
+        model = de_parallel(self.model)
+        head = model.model[-1]
+        expected_channels = int(self.data.get("na", 0) or 0) * int(self.data.get("nal", 1) or 1)
+        actual_channels = int(getattr(head, "attribute_channels", 0) or 0)
+        if expected_channels and actual_channels != expected_channels:
+            raise ValueError(
+                f"RT-DETR mdet dataset requires {expected_channels} attribute channels, but the model head has "
+                f"{actual_channels}. Use an attribute-aware RT-DETR YAML such as rtdetr-l-md.yaml."
+            )
+        model.na = int(getattr(head, "na", self.data.get("na", 0)) or 0)
+        model.nal = int(getattr(head, "nal", self.data.get("nal", 1)) or 1)
+        model.attribute_channels = int(getattr(head, "attribute_channels", model.na * model.nal))
+        model.multiclass_attributes = bool(
+            getattr(head, "multiclass_attributes", model.na > 0 and model.nal > 1)
+        )
+        model.attribute_names = self.data.get("attributes", {})
 
     def preprocess_batch(self, batch):
         """

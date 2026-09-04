@@ -2,6 +2,6 @@
 
 from .model import RTDETR
 from .predict import RTDETRPredictor
-from .val import RTDETRValidator
+from .val import RTDETRMDetectionValidator, RTDETRValidator
 
-__all__ = "RTDETRPredictor", "RTDETRValidator", "RTDETR"
+__all__ = "RTDETRPredictor", "RTDETRValidator", "RTDETRMDetectionValidator", "RTDETR"

@@ -104,6 +104,62 @@ class DETRLoss(nn.Module):
         loss[name_giou] = self.loss_gain["giou"] * loss[name_giou]
         return {k: v.squeeze() for k, v in loss.items()}
 
+    def _get_loss_attribute(self, pred_attributes, gt_attributes, match_indices, postfix=""):
+        """Compute attribute classification loss only for queries matched to a foreground object.
+
+        RT-DETR has a fixed set of object queries. Attribute labels belong to the matched object, not to every
+        query, so applying this loss to unmatched queries would introduce the same background contamination that the
+        mdet branch is designed to avoid.
+        """
+        if pred_attributes is None:
+            return {}
+
+        name = f"loss_attribute{postfix}"
+        attribute_channels = int(getattr(self, "attribute_channels", 0))
+        na = int(getattr(self, "na", 0))
+        nal = int(getattr(self, "nal", 1))
+        if not attribute_channels or not na:
+            return {name: pred_attributes.sum() * 0.0}
+        if pred_attributes.shape[-1] != attribute_channels:
+            raise ValueError(
+                f"Expected {attribute_channels} RT-DETR attribute logits, got {pred_attributes.shape[-1]}"
+            )
+        if gt_attributes is None:
+            raise KeyError("RT-DETR attribute head is enabled but the batch has no 'mdet_attributes' targets")
+
+        idx, gt_idx = self._get_index(match_indices)
+        if idx[0].numel() == 0:
+            return {name: pred_attributes.sum() * 0.0}
+
+        idx = tuple(index.to(pred_attributes.device) for index in idx)
+        gt_idx = gt_idx.to(pred_attributes.device)
+        logits = pred_attributes[idx].reshape(-1, na, nal)
+        targets = gt_attributes.to(device=logits.device)[gt_idx]
+        if targets.ndim == 1:
+            targets = targets.reshape(-1, na)
+        if targets.shape[-1] != na:
+            raise ValueError(f"Expected {na} attribute targets, got {targets.shape[-1]}")
+
+        target_float = targets.float()
+        valid = (
+            torch.isfinite(target_float)
+            & (target_float >= 0)
+            & (target_float < nal)
+            & (target_float == target_float.floor())
+        )
+        losses = []
+        for attribute_index in range(na):
+            attribute_valid = valid[:, attribute_index]
+            if attribute_valid.any():
+                losses.append(
+                    F.cross_entropy(
+                        logits[:, attribute_index, :][attribute_valid],
+                        targets[:, attribute_index].long()[attribute_valid],
+                    )
+                )
+        loss = torch.stack(losses).mean() if losses else logits.sum() * 0.0
+        return {name: loss * self.loss_gain.get("attribute", 1.0)}
+
     # This function is for future RT-DETR Segment models
     # def _get_loss_mask(self, masks, gt_mask, match_indices, postfix=''):
     #     # masks: [b, query, h, w], gt_mask: list[[n, H, W]]
@@ -146,6 +202,8 @@ class DETRLoss(nn.Module):
         postfix="",
         masks=None,
         gt_mask=None,
+        pred_attributes=None,
+        gt_attributes=None,
     ):
         """
         Get auxiliary losses for intermediate decoder layers.
@@ -164,8 +222,9 @@ class DETRLoss(nn.Module):
         Returns:
             (Dict): Dictionary of auxiliary losses.
         """
-        # NOTE: loss class, bbox, giou, mask, dice
-        loss = torch.zeros(5 if masks is not None else 3, device=pred_bboxes.device)
+        # NOTE: loss class, bbox, giou, attribute, mask, dice
+        has_attributes = pred_attributes is not None
+        loss = torch.zeros(5 if masks is not None else (4 if has_attributes else 3), device=pred_bboxes.device)
         if match_indices is None and self.use_uni_match:
             match_indices = self.matcher(
                 pred_bboxes[self.uni_match_ind],
@@ -176,7 +235,14 @@ class DETRLoss(nn.Module):
                 masks=masks[self.uni_match_ind] if masks is not None else None,
                 gt_mask=gt_mask,
             )
-        for i, (aux_bboxes, aux_scores) in enumerate(zip(pred_bboxes, pred_scores)):
+        predictions = (
+            zip(pred_bboxes, pred_scores, pred_attributes)
+            if has_attributes
+            else zip(pred_bboxes, pred_scores)
+        )
+        for i, prediction in enumerate(predictions):
+            aux_bboxes, aux_scores = prediction[:2]
+            aux_attributes = prediction[2] if has_attributes else None
             aux_masks = masks[i] if masks is not None else None
             loss_ = self._get_loss(
                 aux_bboxes,
@@ -188,20 +254,27 @@ class DETRLoss(nn.Module):
                 gt_mask=gt_mask,
                 postfix=postfix,
                 match_indices=match_indices,
+                pred_attributes=aux_attributes,
+                gt_attributes=gt_attributes,
             )
             loss[0] += loss_[f"loss_class{postfix}"]
             loss[1] += loss_[f"loss_bbox{postfix}"]
             loss[2] += loss_[f"loss_giou{postfix}"]
+            if has_attributes:
+                loss[3] += loss_[f"loss_attribute{postfix}"]
             # if masks is not None and gt_mask is not None:
             #     loss_ = self._get_loss_mask(aux_masks, gt_mask, match_indices, postfix)
             #     loss[3] += loss_[f'loss_mask{postfix}']
             #     loss[4] += loss_[f'loss_dice{postfix}']
 
+        attribute_loss = loss[3] if has_attributes else None
         loss = {
             f"loss_class_aux{postfix}": loss[0],
             f"loss_bbox_aux{postfix}": loss[1],
             f"loss_giou_aux{postfix}": loss[2],
         }
+        if has_attributes:
+            loss[f"loss_attribute_aux{postfix}"] = attribute_loss
         # if masks is not None and gt_mask is not None:
         #     loss[f'loss_mask_aux{postfix}'] = loss[3]
         #     loss[f'loss_dice_aux{postfix}'] = loss[4]
@@ -260,6 +333,8 @@ class DETRLoss(nn.Module):
         gt_mask=None,
         postfix="",
         match_indices=None,
+        pred_attributes=None,
+        gt_attributes=None,
     ):
         """
         Calculate losses for a single prediction layer.
@@ -297,6 +372,7 @@ class DETRLoss(nn.Module):
         return {
             **self._get_loss_class(pred_scores, targets, gt_scores, len(gt_bboxes), postfix),
             **self._get_loss_bbox(pred_bboxes, gt_bboxes, postfix),
+            **self._get_loss_attribute(pred_attributes, gt_attributes, match_indices, postfix),
             # **(self._get_loss_mask(masks, gt_mask, match_indices, postfix) if masks is not None and gt_mask is not None else {})
         }
 
@@ -324,15 +400,33 @@ class DETRLoss(nn.Module):
         self.device = pred_bboxes.device
         match_indices = kwargs.get("match_indices", None)
         gt_cls, gt_bboxes, gt_groups = batch["cls"], batch["bboxes"], batch["gt_groups"]
+        pred_attributes = kwargs.get("pred_attributes", None)
+        gt_attributes = batch.get("mdet_attributes", None)
 
         total_loss = self._get_loss(
-            pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups, postfix=postfix, match_indices=match_indices
+            pred_bboxes[-1],
+            pred_scores[-1],
+            gt_bboxes,
+            gt_cls,
+            gt_groups,
+            postfix=postfix,
+            match_indices=match_indices,
+            pred_attributes=pred_attributes[-1] if pred_attributes is not None else None,
+            gt_attributes=gt_attributes,
         )
 
         if self.aux_loss:
             total_loss.update(
                 self._get_loss_aux(
-                    pred_bboxes[:-1], pred_scores[:-1], gt_bboxes, gt_cls, gt_groups, match_indices, postfix
+                    pred_bboxes[:-1],
+                    pred_scores[:-1],
+                    gt_bboxes,
+                    gt_cls,
+                    gt_groups,
+                    match_indices,
+                    postfix,
+                    pred_attributes=pred_attributes[:-1] if pred_attributes is not None else None,
+                    gt_attributes=gt_attributes,
                 )
             )
 
@@ -347,22 +441,36 @@ class RTDETRDetectionLoss(DETRLoss):
     an additional denoising training loss when provided with denoising metadata.
     """
 
-    def forward(self, preds, batch, dn_bboxes=None, dn_scores=None, dn_meta=None):
+    def __init__(self, nc=80, na=0, nal=1, attribute_gain=1.0, **kwargs):
+        """Initialize RT-DETR loss with optional object-level multi-attribute supervision."""
+        super().__init__(nc=nc, **kwargs)
+        self.na = int(na or 0)
+        self.nal = int(nal or 1)
+        self.attribute_channels = self.na * self.nal
+        if self.attribute_channels:
+            self.loss_gain.setdefault("attribute", float(attribute_gain))
+
+    def forward(self, preds, batch, dn_bboxes=None, dn_scores=None, dn_attributes=None, dn_meta=None):
         """
         Forward pass to compute detection loss with optional denoising loss.
 
         Args:
-            preds (tuple): Tuple containing predicted bounding boxes and scores.
+            preds (tuple): Tuple containing predicted bounding boxes, scores, and optional attribute logits.
             batch (Dict): Batch data containing ground truth information.
             dn_bboxes (torch.Tensor, optional): Denoising bounding boxes.
             dn_scores (torch.Tensor, optional): Denoising scores.
+            dn_attributes (torch.Tensor, optional): Denoising attribute logits.
             dn_meta (Dict, optional): Metadata for denoising.
 
         Returns:
             (Dict): Dictionary containing total loss and denoising loss if applicable.
         """
-        pred_bboxes, pred_scores = preds
-        total_loss = super().forward(pred_bboxes, pred_scores, batch)
+        if len(preds) == 3:
+            pred_bboxes, pred_scores, pred_attributes = preds
+        else:
+            pred_bboxes, pred_scores = preds
+            pred_attributes = None
+        total_loss = super().forward(pred_bboxes, pred_scores, batch, pred_attributes=pred_attributes)
 
         # Check for denoising metadata to compute denoising training loss
         if dn_meta is not None:
@@ -373,7 +481,14 @@ class RTDETRDetectionLoss(DETRLoss):
             match_indices = self.get_dn_match_indices(dn_pos_idx, dn_num_group, batch["gt_groups"])
 
             # Compute the denoising training loss
-            dn_loss = super().forward(dn_bboxes, dn_scores, batch, postfix="_dn", match_indices=match_indices)
+            dn_loss = super().forward(
+                dn_bboxes,
+                dn_scores,
+                batch,
+                postfix="_dn",
+                match_indices=match_indices,
+                pred_attributes=dn_attributes,
+            )
             total_loss.update(dn_loss)
         else:
             # If no denoising metadata is provided, set denoising loss to zero

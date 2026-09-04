@@ -1,0 +1,42 @@
+# Ultralytics 🚀 RT-DETR-L object-level multi-attribute detector
+# One decoder query predicts one object box, one object class, and na attributes.
+
+# Parameters
+nc: 80 # number of object classes (overridden by the dataset)
+na: 10 # number of attributes per object
+nal: 2 # number of levels for each attribute
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, HGStem, [32, 48]]
+  - [-1, 6, HGBlock, [48, 128, 3]]
+  - [-1, 1, DWConv, [128, 3, 2, 1, False]]
+  - [-1, 6, HGBlock, [96, 512, 3]]
+  - [-1, 1, DWConv, [512, 3, 2, 1, False]]
+  - [-1, 6, HGBlock, [192, 1024, 5, True, False]]
+  - [-1, 6, HGBlock, [192, 1024, 5, True, True]]
+  - [-1, 6, HGBlock, [192, 1024, 5, True, True]]
+  - [-1, 1, DWConv, [1024, 3, 2, 1, False]]
+  - [-1, 6, HGBlock, [384, 2048, 5, True, False]]
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]
+  - [-1, 1, AIFI, [1024, 8]]
+  - [-1, 1, Conv, [256, 1, 1]]
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [7, 1, Conv, [256, 1, 1, None, 1, 1, False]]
+  - [[-2, -1], 1, Concat, [1]]
+  - [-1, 3, RepC3, [256]]
+  - [-1, 1, Conv, [256, 1, 1]]
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [3, 1, Conv, [256, 1, 1, None, 1, 1, False]]
+  - [[-2, -1], 1, Concat, [1]]
+  - [-1, 3, RepC3, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 17], 1, Concat, [1]]
+  - [-1, 3, RepC3, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 12], 1, Concat, [1]]
+  - [-1, 3, RepC3, [256]]
+  - [[21, 24, 27], 1, RTDETRDecoder, [nc, na, nal]]

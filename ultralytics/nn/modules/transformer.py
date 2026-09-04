@@ -690,6 +690,7 @@ class DeformableTransformerDecoder(nn.Module):
         pos_mlp,
         attn_mask=None,
         padding_mask=None,
+        attribute_head=None,
     ):
         """
         Perform the forward pass through the entire decoder.
@@ -704,14 +705,17 @@ class DeformableTransformerDecoder(nn.Module):
             pos_mlp (nn.Module): Position MLP.
             attn_mask (torch.Tensor, optional): Attention mask.
             padding_mask (torch.Tensor, optional): Padding mask.
+            attribute_head (nn.ModuleList, optional): Per-layer attribute prediction heads.
 
         Returns:
             dec_bboxes (torch.Tensor): Decoded bounding boxes.
             dec_cls (torch.Tensor): Decoded classification scores.
+            dec_attributes (torch.Tensor, optional): Attribute logits when ``attribute_head`` is provided.
         """
         output = embed
         dec_bboxes = []
         dec_cls = []
+        dec_attributes = []
         last_refined_bbox = None
         refer_bbox = refer_bbox.sigmoid()
         for i, layer in enumerate(self.layers):
@@ -722,19 +726,24 @@ class DeformableTransformerDecoder(nn.Module):
 
             if self.training:
                 dec_cls.append(score_head[i](output))
+                if attribute_head is not None:
+                    dec_attributes.append(attribute_head[i](output))
                 if i == 0:
                     dec_bboxes.append(refined_bbox)
                 else:
                     dec_bboxes.append(torch.sigmoid(bbox + inverse_sigmoid(last_refined_bbox)))
             elif i == self.eval_idx:
                 dec_cls.append(score_head[i](output))
+                if attribute_head is not None:
+                    dec_attributes.append(attribute_head[i](output))
                 dec_bboxes.append(refined_bbox)
                 break
 
             last_refined_bbox = refined_bbox
             refer_bbox = refined_bbox.detach() if self.training else refined_bbox
 
-        return torch.stack(dec_bboxes), torch.stack(dec_cls)
+        outputs = (torch.stack(dec_bboxes), torch.stack(dec_cls))
+        return (*outputs, torch.stack(dec_attributes)) if attribute_head is not None else outputs
 
 
 class SwinTransformerBlock(nn.Module):
@@ -1282,4 +1291,3 @@ def _get_clones(module, N):
 #
 #         return output
 # endregion
-
