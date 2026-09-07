@@ -23,6 +23,54 @@ python scripts/train_mdet_experiments.py w4 \
   --project runs/experiments/E1_w4
 ```
 
+## E0：两阶段训练时长选择（优先完成）
+
+这两组实验必须使用“独立配置的独立训练”，不能从一次 500 epochs 的日志中截取
+第 100/200/300/400/500 epoch 代替独立实验。总 epoch 数会影响学习率和增强策略，
+因此截取到的中间 checkpoint 不等价于单独配置的短训练。
+
+### E0.1：Stage1-only epoch 敏感性
+
+下面命令会分别启动 100、200、300、400、500 epochs 的 Stage1-only 训练。每组都从
+同一个预训练检测器开始，不进入 Stage2；结果会写入不同的 run 目录，并追加到
+`experiment_manifest.jsonl`，其中 `stage2_epochs` 为 0。
+
+```bash
+python scripts/train_mdet_experiments.py stage1-sweep \
+  --data path/to/billboard_mdet.yaml \
+  --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
+  --pretrain yolov10x.pt \
+  --stage1-values 100 200 300 400 500 \
+  --w4 0.5 \
+  --project runs/experiments/E0_stage1_sweep
+```
+
+如果只想先试跑参数链路，可加 `--dry-run`；`--dry-run` 不会启动 GPU 训练。
+
+### E0.2：固定 Stage1 checkpoint 的 Stage2-only epoch 敏感性
+
+先根据 E0.1 的验证集 `mAP50` 选择一个 Stage1 epoch，例如 `N*=200`，再把该组的
+`best.pt` 作为唯一初始化权重，独立运行 Stage2 的 50、100、200 epochs：
+
+```bash
+python scripts/train_mdet_experiments.py stage2-sweep \
+  --data path/to/billboard_mdet.yaml \
+  --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
+  --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_200_w4_0p5_seed_0/weights/best.pt \
+  --stage1-epochs 200 \
+  --stage2-values 50 100 200 \
+  --w4 0.5 \
+  --project runs/experiments/E0_stage2_sweep
+```
+
+上面的 checkpoint 路径仅是命名示例，需要替换为远程服务器上实际生成的路径。
+三组 Stage2 都从同一个 `N*` checkpoint 开始，且每组独立配置自己的 Stage2 总
+epoch 数；不能用 Stage2=200 的第 50/100 epoch 代替 Stage2=50/100 的独立训练。
+
+最终至少保留以下对照：Stage1-only 的最佳时长、固定该 Stage1 checkpoint 后的最佳
+Stage2 时长，以及同一 `N*+K*` 设置下的完整 Stage1+Stage2 结果。所有选择只看
+验证集，测试集留到最终模型确定后再运行。
+
 ## E1：w4 敏感性
 
 默认直接运行 `0.25、0.5、1.0` 三组：

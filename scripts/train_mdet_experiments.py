@@ -1,9 +1,14 @@
 """Reproducible training launcher for the mdet experiment matrix.
 
-This launcher deliberately uses :func:`mayolo_r1.myolo_train_full`, so every
-mdet run follows the project's two-stage protocol: ``100 + 100`` epochs by
-default, with the second stage retaining the attribute head.  It does not
-touch segmentation code.
+The launcher supports the normal two-stage protocol and two schedule studies:
+
+* ``stage1-sweep`` independently trains stage 1 for several epoch budgets;
+* ``stage2-sweep`` independently trains stage 2 from one fixed stage-1
+  checkpoint for several epoch budgets.
+
+The schedule studies deliberately do not reuse intermediate checkpoints from a
+longer run, because the learning-rate and augmentation schedules depend on the
+configured total epoch count.  It does not touch segmentation code.
 
 The experiment plan calls the attribute-loss coefficient ``w4``.  The current
 Ultralytics configuration exposes that coefficient as ``mdet``; therefore
@@ -25,6 +30,19 @@ Examples (PowerShell):
         --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
         --variant gia_p3=path/to/yolov10x_gia_p3.yaml `
         --w4 0.5
+
+    python scripts/train_mdet_experiments.py stage1-sweep `
+        --data path/to/billboard_mdet.yaml `
+        --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
+        --pretrain yolov10x.pt `
+        --stage1-values 100 200 300 400 500
+
+    python scripts/train_mdet_experiments.py stage2-sweep `
+        --data path/to/billboard_mdet.yaml `
+        --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
+        --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_200_w4_0p5_seed_0/weights/best.pt `
+        --stage1-epochs 200 `
+        --stage2-values 50 100 200
 
 For GCA configurations copied from a Linux training machine, pass
 ``--com-path`` to replace the embedded ``/nfsv4/...co_occurrence_matrix*.csv``
@@ -137,12 +155,10 @@ def _materialize_config(config: str, com_path: Optional[str], project: str) -> s
     return str(target.resolve())
 
 
-def _add_train_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
     """Add arguments shared by all mdet training experiments."""
     parser.add_argument("--data", required=True, help="mdet dataset YAML")
     parser.add_argument("--project", default="runs/experiments", help="output root")
-    parser.add_argument("--stage1-epochs", type=int, default=100)
-    parser.add_argument("--stage2-epochs", type=int, default=100)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=32)
     parser.add_argument("--workers", type=int, default=8)
@@ -159,6 +175,13 @@ def _add_train_arguments(parser: argparse.ArgumentParser) -> None:
         help="local GCA co-occurrence CSV; replaces an /nfsv4 path in a generated YAML copy",
     )
     parser.add_argument("--dry-run", action="store_true", help="print runs without training")
+
+
+def _add_train_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add arguments for the standard two-stage mdet protocol."""
+    _add_common_train_arguments(parser)
+    parser.add_argument("--stage1-epochs", type=int, default=100)
+    parser.add_argument("--stage2-epochs", type=int, default=100)
 
 
 def _add_variant_arguments(parser: argparse.ArgumentParser, default_network: str = "yolo") -> None:
@@ -295,6 +318,96 @@ def _train_one(
     return str(best) if best else None
 
 
+def _validate_epoch_values(values: Sequence[int], option: str) -> Sequence[int]:
+    """Validate an epoch-budget list and preserve the requested order."""
+    if not values or any(value < 1 for value in values):
+        raise ValueError(f"{option} must contain only positive integers")
+    if len(set(values)) != len(values):
+        raise ValueError(f"{option} must not contain duplicate values")
+    return values
+
+
+def _train_direct_stage(
+    args: argparse.Namespace,
+    *,
+    label: str,
+    variant_name: str,
+    config: str,
+    pretrain: str,
+    w4: float,
+    seed: int,
+    epochs: int,
+    retrain: bool,
+    stage1_epochs: int,
+    run_name: str,
+) -> Optional[str]:
+    """Run one independent stage-only experiment and record its provenance."""
+    if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
+        raise ValueError(f"Segmentation config is outside this launcher: {config}")
+    if epochs < 1 or w4 < 0:
+        raise ValueError("epochs must be positive and w4/mdet must be non-negative")
+    if retrain and not args.dry_run and not Path(pretrain).expanduser().is_file():
+        raise FileNotFoundError(f"Stage1 checkpoint not found: {pretrain}")
+
+    resolved_config = _materialize_config(config, args.com_path, args.project)
+    record: Dict[str, object] = {
+        "protocol": "stage2_only" if retrain else "stage1_only",
+        "label": label,
+        "variant": variant_name,
+        "config": resolved_config,
+        "pretrain": pretrain,
+        "stage1_checkpoint": pretrain if retrain else None,
+        "network": "yolo",
+        "w4": float(w4),
+        "ultralytics_argument": {"mdet": float(w4)},
+        "seed": seed,
+        "stage1_epochs": stage1_epochs,
+        "stage2_epochs": epochs if retrain else 0,
+        "data": args.data,
+        "project": args.project,
+        "run_name": run_name,
+        "status": "dry-run" if args.dry_run else "started",
+    }
+    _append_manifest(args.project, record)
+
+    print(json.dumps(record, ensure_ascii=False, indent=2))
+    if args.dry_run:
+        return None
+
+    from mayolo_r1 import myolo_train
+    from ultralytics import YOLO
+
+    train_kwargs = _training_kwargs(args, w4, seed)
+    # Match myolo_train_full's semantics: stage 1 uses the trainer default
+    # patience, while the original stage-2 path explicitly uses its own
+    # epoch budget as patience.
+    if retrain:
+        train_kwargs["patience"] = epochs
+    try:
+        best = myolo_train(
+            resolved_config,
+            pretrain_path=pretrain,
+            network=YOLO,
+            auto_optim=args.auto_optim,
+            retrain=retrain,
+            epochs=epochs,
+            name=run_name,
+            project=args.project,
+            **train_kwargs,
+        )
+    except Exception as error:
+        failed = dict(record)
+        failed.update({"status": "failed", "error": repr(error)})
+        _append_manifest(args.project, failed)
+        raise
+
+    finished = dict(record)
+    finished.update({"status": "finished", "best": str(best) if best else None})
+    _append_manifest(args.project, finished)
+    print(f"[finished] {run_name}: best={best}")
+    return str(best) if best else None
+
+
 def _run_w4(args: argparse.Namespace) -> None:
     """Run E1: w4 sensitivity."""
     for value in args.w4_values:
@@ -307,6 +420,52 @@ def _run_w4(args: argparse.Namespace) -> None:
             w4=float(value),
             seed=args.seed,
             network_name="yolo",
+        )
+
+
+def _run_stage1_sweep(args: argparse.Namespace) -> None:
+    """Run independent stage-1-only jobs for each requested epoch budget."""
+    values = _validate_epoch_values(args.stage1_values, "--stage1-values")
+    for epochs in values:
+        run_name = (
+            f"{_slug(args.label)}_stage1_{epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
+        )
+        _train_direct_stage(
+            args,
+            label=args.label,
+            variant_name=f"stage1_{epochs}",
+            config=args.model,
+            pretrain=args.pretrain,
+            w4=args.w4,
+            seed=args.seed,
+            epochs=int(epochs),
+            retrain=False,
+            stage1_epochs=int(epochs),
+            run_name=run_name,
+        )
+
+
+def _run_stage2_sweep(args: argparse.Namespace) -> None:
+    """Run independent stage-2-only jobs from one fixed stage-1 checkpoint."""
+    _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
+    values = _validate_epoch_values(args.stage2_values, "--stage2-values")
+    for epochs in values:
+        run_name = (
+            f"{_slug(args.label)}_stage1_{args.stage1_epochs}_stage2_{epochs}"
+            f"_w4_{_slug(args.w4)}_seed_{args.seed}"
+        )
+        _train_direct_stage(
+            args,
+            label=args.label,
+            variant_name=f"stage1_{args.stage1_epochs}_stage2_{epochs}",
+            config=args.model,
+            pretrain=args.stage1_checkpoint,
+            w4=args.w4,
+            seed=args.seed,
+            epochs=int(epochs),
+            retrain=True,
+            stage1_epochs=args.stage1_epochs,
+            run_name=run_name,
         )
 
 
@@ -359,7 +518,7 @@ def _run_stability(args: argparse.Namespace) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Train the planned mdet experiments with the project's 100+100 protocol"
+        description="Train the planned mdet experiments and independent stage schedule studies"
     )
     subparsers = parser.add_subparsers(dest="experiment", required=True)
 
@@ -369,6 +528,46 @@ def _build_parser() -> argparse.ArgumentParser:
     w4.add_argument("--model", required=True, help="one mdet model YAML")
     w4.add_argument("--pretrain", required=True, help="pretrained detector checkpoint")
     w4.add_argument("--w4-values", nargs="+", type=float, default=[0.25, 0.5, 1.0])
+
+    stage1 = subparsers.add_parser(
+        "stage1-sweep", help="E0.1: independent stage-1-only epoch sensitivity"
+    )
+    _add_common_train_arguments(stage1)
+    stage1.add_argument("--label", default="E0_stage1")
+    stage1.add_argument("--model", required=True, help="one mdet model YAML")
+    stage1.add_argument("--pretrain", required=True, help="pretrained detector checkpoint")
+    stage1.add_argument(
+        "--stage1-values",
+        nargs="+",
+        type=int,
+        default=[100, 200, 300, 400, 500],
+        help="independent stage-1 epoch budgets",
+    )
+
+    stage2 = subparsers.add_parser(
+        "stage2-sweep", help="E0.2: independent stage-2 epoch sensitivity"
+    )
+    _add_common_train_arguments(stage2)
+    stage2.add_argument("--label", default="E0_stage2")
+    stage2.add_argument("--model", required=True, help="same mdet model YAML used by stage 1")
+    stage2.add_argument(
+        "--stage1-checkpoint",
+        required=True,
+        help="one fixed stage-1 best.pt used to initialize every stage-2 run",
+    )
+    stage2.add_argument(
+        "--stage1-epochs",
+        required=True,
+        type=int,
+        help="stage-1 epoch budget that produced --stage1-checkpoint",
+    )
+    stage2.add_argument(
+        "--stage2-values",
+        nargs="+",
+        type=int,
+        default=[50, 100, 200],
+        help="independent stage-2 epoch budgets",
+    )
 
     for name, help_text, default_network in (
         ("variants", "Run named ablation/model variants", "yolo"),
@@ -393,6 +592,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     args = _build_parser().parse_args(argv)
     if args.experiment == "w4":
         _run_w4(args)
+    elif args.experiment == "stage1-sweep":
+        _run_stage1_sweep(args)
+    elif args.experiment == "stage2-sweep":
+        _run_stage2_sweep(args)
     elif args.experiment == "stability":
         _run_stability(args)
     else:
