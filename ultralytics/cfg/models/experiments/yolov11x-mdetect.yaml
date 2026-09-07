@@ -1,6 +1,6 @@
 # YOLOv11-X multi-attribute detection model.
 
-nc: 3
+nc: 2
 na: 10
 nal: 2
 scales:

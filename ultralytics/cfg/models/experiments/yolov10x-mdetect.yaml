@@ -1,5 +1,5 @@
 # Parameters
-nc: 3 # number of classes
+nc: 2 # number of classes
 na: 10 # number of attributes
 nal: 2
 scales: # model compound scaling constants, i.e. 'model=yolov8n.yaml' will call yolov8.yaml with scale 'n'

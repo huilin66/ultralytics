@@ -3,8 +3,9 @@
 # 1225 layers, 58206592 parameters, 193.0 GFLOPs
 
 # parameters
-nc: 3 # number of classes
+nc: 2 # number of classes
 na: 10 # number of attributes
+nal: 2 # number of levels per attribute
 # GELAN backbone
 backbone:
   - [-1, 1, Conv, [16, 3, 2]] # 0-P1/2
@@ -35,4 +36,4 @@ head:
   - [[-1, 9], 1, Concat, [1]] # cat head P5
   - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]] # 21 (P5/32-large)
 
-  - [[15, 18, 21], 1, MDetect, [nc, na, [False, None, None]]] # Detect(P3, P4, P5)
+  - [[15, 18, 21], 1, MDetect, [nc, na, nal, [False, None, None]]] # Detect(P3, P4, P5)
