@@ -416,4 +416,4 @@ if __name__ == "__main__":
     # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
     # model_val_dir(r"runs/mdetect")  # validates best.pt & last.pt under every exp dir
     # model_val_dir(r"runs/mdetect", save_txt=r"runs/mdetect/mdetect_stats.csv")  # val+test in one row, CSV
-    model_val_dir(r"runs/experiments/E1_w4")
+    model_val_dir(r"runs/experiments/E1_w4_test")
