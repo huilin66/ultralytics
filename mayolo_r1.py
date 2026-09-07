@@ -133,16 +133,37 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
     return model.trainer.best
 
 
-def model_val(weight_path, network=YOLO, **kwargs):
+def model_val(weight_path, network=YOLO, run_test=False, **kwargs):
     model = _build_model(network, weight_path)
     print(weight_path)
     print(model.info(detailed=False))
     val_params = {
-        "data": DATA,
+        # "data": DATA,
         "device": DEVICE,
     }
     val_params.update(kwargs)
+    if run_test:
+        model.val(split="test", **val_params)
     return model.val(**val_params)
+
+
+def _find_weight_paths(folder, names=("best.pt",)):
+    """Return sorted weight files matching ``names`` under any ``weights`` dir in ``folder``."""
+    weights = []
+    for root, _, files in os.walk(folder):
+        if os.path.basename(root) != "weights":
+            continue
+        weights.extend(os.path.join(root, name) for name in names if name in files)
+    return sorted(weights)
+
+
+def model_val_dir(folder, network=YOLO, names=("best.pt",), run_test=True, **kwargs):
+    """Validate every training result (weight file) found under ``folder``."""
+    weight_list = _find_weight_paths(folder, names)
+    print(f"=== validating {len(weight_list)} weight files under {folder} ===")
+    for weight_path in weight_list:
+        print(f"\n=== validating {weight_path} ===")
+        model_val(weight_path, network=network, run_test=run_test, **kwargs)
 
 
 def model_gat_val(weight_path, com_path, network=YOLO):
@@ -324,7 +345,9 @@ if __name__ == "__main__":
     # )
     # myolo10(r"yolov10x-mdetect.yaml", data="mayolo_v1.yaml")
     # mayolo(r"mayolovx.yaml", data="mayolo_v1.yaml")
-    model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
-    model_val(r"runs/mdetect/mayolox_stage2/weights/best.pt")
-    model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
-    model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
+    # model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
+    # model_val(r"runs/mdetect/mayolox_stage2/weights/best.pt")
+    # model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
+    # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
+    # model_val_dir(r"runs/mdetect")  # validates best.pt & last.pt under every exp dir
+    model_val_dir(r"runs/experiments/E1_w4")
