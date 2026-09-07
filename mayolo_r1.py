@@ -1,3 +1,4 @@
+import csv
 import os
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -157,13 +158,77 @@ def _find_weight_paths(folder, names=("best.pt",)):
     return sorted(weights)
 
 
-def model_val_dir(folder, network=YOLO, names=("best.pt",), run_test=True, **kwargs):
-    """Validate every training result (weight file) found under ``folder``."""
+MDETECT_METRIC_KEYS = [
+    "metrics/mAP50(B)",
+    "metrics/mAP50-95(B)",
+    "metrics/OA(A)",
+    "metrics/f1_macro(A)",
+    "metrics/f1_micro(A)",
+    "metrics/precision(A)",
+    "metrics/recall(A)",
+]
+MDETECT_METRIC_LABELS = {
+    "metrics/mAP50(B)": "mAP50",
+    "metrics/mAP50-95(B)": "mAP50-95",
+    "metrics/OA(A)": "OA",
+    "metrics/f1_macro(A)": "F1_macro",
+    "metrics/f1_micro(A)": "F1_micro",
+    "metrics/precision(A)": "P_att",
+    "metrics/recall(A)": "R_att",
+}
+
+
+def _metric_row(metrics):
+    """Return the selected metric values of a ``metrics`` object aligned with MDETECT_METRIC_KEYS."""
+    results = metrics.results_dict
+    return [results.get(k, "") for k in MDETECT_METRIC_KEYS]
+
+
+def _save_stats_csv(records, splits, save_txt):
+    """Write one row per weight, with val and test metrics side by side, to a CSV file."""
+    header = ["weight"] + [f"{MDETECT_METRIC_LABELS[k]}_{split}" for split in splits for k in MDETECT_METRIC_KEYS]
+    with open(save_txt, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(records)
+    print(f"\n=== saved {len(records)} records to {save_txt} ===")
+
+
+def model_val_dir(
+    folder,
+    network=YOLO,
+    names=("best.pt",),
+    run_test=True,
+    save_txt=None,
+    **kwargs,
+):
+    """
+    Validate every training result (weight file) found under ``folder``.
+
+    For each weight, run the val split (and the test split when ``run_test``) and collect
+    the metrics into a CSV file with val and test columns side by side on one row.
+    """
+    if save_txt is None:
+        save_txt = os.path.join(folder, "summary.csv")
     weight_list = _find_weight_paths(folder, names)
     print(f"=== validating {len(weight_list)} weight files under {folder} ===")
+    records = []
+    splits = ["val"] + (["test"] if run_test else [])
     for weight_path in weight_list:
         print(f"\n=== validating {weight_path} ===")
-        model_val(weight_path, network=network, run_test=run_test, **kwargs)
+        model = _build_model(network, weight_path)
+        print(model.info(detailed=False))
+        val_params = {"device": DEVICE}
+        val_params.update(kwargs)
+        split_metrics = {}
+        for split in splits:
+            metrics = model.val(split=split, **val_params)
+            split_metrics[split] = _metric_row(metrics)
+        row = [weight_path]
+        for split in splits:
+            row.extend(split_metrics[split])
+        records.append(row)
+    _save_stats_csv(records, splits, save_txt)
 
 
 def model_gat_val(weight_path, com_path, network=YOLO):
@@ -350,4 +415,5 @@ if __name__ == "__main__":
     # model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
     # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
     # model_val_dir(r"runs/mdetect")  # validates best.pt & last.pt under every exp dir
+    # model_val_dir(r"runs/mdetect", save_txt=r"runs/mdetect/mdetect_stats.csv")  # val+test in one row, CSV
     model_val_dir(r"runs/experiments/E1_w4")
