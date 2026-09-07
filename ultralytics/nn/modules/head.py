@@ -5,22 +5,43 @@ import copy
 import math
 
 import torch
-import torch.nn as nn
-from torch.nn.init import constant_, xavier_uniform_
 import torch.nn.functional as F
+from torch import nn
+from torch.nn.init import constant_, xavier_uniform_
+
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
-from .block import DFL, BNContrastiveHead, ContrastiveHead, Proto, RepNCSPELAN4, C2fCIB, Deformable_LKA, Deformable_LKA_Attention, C3STR
+from .block import (
+    DFL,
+    BNContrastiveHead,
+    C2fCIB,
+    ContrastiveHead,
+    Proto,
+    RepNCSPELAN4,
+)
 from .conv import Conv, DWConv
-from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer, SwinTransformerBlock, MLP
+from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
 
-__all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder", "v10Detect", 'v10Segment'
+__all__ = "OBB", "Classify", "Detect", "Pose", "RTDETRDecoder", "Segment", "v10Detect", "v10Segment"
 
 # region added gat
 
+
 class GAT(nn.Module):
-    def __init__(self, input_chs, output_chs, att_type='com', com_path=None, proj=True, res=False, add_softmax=True, drop_rate=0, leaky_rate=0.1, feature_ds=True):
+    def __init__(
+        self,
+        input_chs,
+        output_chs,
+        att_type="com",
+        com_path=None,
+        proj=True,
+        res=False,
+        add_softmax=True,
+        drop_rate=0,
+        leaky_rate=0.1,
+        feature_ds=True,
+    ):
         super().__init__()
         self.input_chs = input_chs
         self.output_chs = output_chs
@@ -32,32 +53,32 @@ class GAT(nn.Module):
         self.drop_rate = drop_rate
         self.leaky_rate = leaky_rate
         self.feature_ds = feature_ds
-        self.proj_w = MLP(input_chs, output_chs*2, output_chs, 2) if self.proj else nn.Identity()
+        self.proj_w = MLP(input_chs, output_chs * 2, output_chs, 2) if self.proj else nn.Identity()
 
-        if self.att_type == 'mlp':
+        if self.att_type == "mlp":
             self.proj_a = nn.AdaptiveAvgPool1d(1)
-        elif self.att_type == 'cos':
+        elif self.att_type == "cos":
             self.proj_a = self.proj_cos
-        elif self.att_type == 'mlpr':
-            self.proj_a = MLP(output_chs*2, output_chs//2, 1, 2)
-        elif self.att_type == 'mlpt':
+        elif self.att_type == "mlpr":
+            self.proj_a = MLP(output_chs * 2, output_chs // 2, 1, 2)
+        elif self.att_type == "mlpt":
             self.proj_a = nn.AdaptiveAvgPool1d(1)
-        elif self.att_type == 'cost':
+        elif self.att_type == "cost":
             self.proj_a = self.proj_cos
-        elif self.att_type == 'com':
+        elif self.att_type == "com":
             self.correlation = self.load_com(self.com_path)
         else:
-            raise NotImplementedError('Attention type %s not implemented'%self.att_type)
+            raise NotImplementedError("Attention type %s not implemented" % self.att_type)
 
         self.leaky_relu = nn.LeakyReLU(leaky_rate)
         self.dropout = nn.Dropout(self.drop_rate)
         self.softmax = nn.Softmax(dim=1)
         self.feature_down = nn.MaxPool1d(kernel_size=4, stride=4)
-        self.feature_up = nn.Upsample(scale_factor=4, mode='nearest')
-
+        self.feature_up = nn.Upsample(scale_factor=4, mode="nearest")
 
     def load_com(self, com_path):
         import pandas as pd
+
         com = pd.read_csv(com_path, header=0, index_col=0)
         com = com.to_numpy()
         com = torch.tensor(com).float()
@@ -85,26 +106,25 @@ class GAT(nn.Module):
         feature = inputs.view((b, c, n)).permute((0, 2, 1))
         feature_proj = self.proj_w(feature)
 
-
-        if (hasattr(self, 'feature_ds') and self.feature_ds) and feature_proj.shape[1] > 4000:
+        if (hasattr(self, "feature_ds") and self.feature_ds) and feature_proj.shape[1] > 4000:
             feature_down = self.feature_down(self.feature_down(feature_proj.permute((0, 2, 1)))).permute((0, 2, 1))
-        elif (hasattr(self, 'feature_ds') and self.feature_ds) and feature_proj.shape[1] > 1000:
+        elif (hasattr(self, "feature_ds") and self.feature_ds) and feature_proj.shape[1] > 1000:
             feature_down = self.feature_down(feature_proj.permute((0, 2, 1))).permute((0, 2, 1))
         else:
             feature_down = feature_proj
 
-        if self.att_type == 'mlp':
+        if self.att_type == "mlp":
             feature_repeat = self.data_prepare(feature_down)  # size(b, c, c, 2n)
             correlation = feature_repeat.mean(dim=-1).squeeze(-1)  # size(b, c, c)
-        elif self.att_type == 'cos':
+        elif self.att_type == "cos":
             correlation = self.proj_a(feature_down).squeeze(-1)  # size(b, c, c)
-        elif self.att_type == 'mlpr':
+        elif self.att_type == "mlpr":
             feature_repeat = self.data_prepare(feature_down)  # size(b, c, c, 2n)
             correlation = self.proj_a(feature_repeat).squeeze(-1)  # size(b, c, c)
-        elif self.att_type == 'mlpt':
+        elif self.att_type == "mlpt":
             feature_repeat = self.data_prepare(feature_proj.permute((0, 2, 1)))  # size(b, c, c, 2n)
             correlation = feature_repeat.mean(dim=-1).squeeze(-1)  # size(b, c, c)
-        elif self.att_type == 'cost':
+        elif self.att_type == "cost":
             correlation = self.proj_a(feature_proj.permute((0, 2, 1))).squeeze(-1)  # size(b, c, c)
         else:
             correlation = self.correlation.to(inputs.device).to(inputs.dtype)
@@ -113,7 +133,7 @@ class GAT(nn.Module):
         attention = self.softmax(correlation) if self.add_softmax else correlation
         attention = self.dropout(attention)
 
-        if self.att_type in ['mlp', 'cos', 'mlpr']:
+        if self.att_type in ["mlp", "cos", "mlpr"]:
             outputs = torch.matmul(attention, feature_down)
             if feature_proj.shape[1] > 4000:
                 outputs = self.feature_up(self.feature_up(outputs.permute((0, 2, 1)))).permute((0, 2, 1))
@@ -129,51 +149,45 @@ class GAT(nn.Module):
             outputs = outputs + inputs
         return outputs
 
-class TextureAttention(nn.Module):
-    """
 
-    """
+class TextureAttention(nn.Module):
+    """ """
+
     def __init__(self, channels, reduction=4, kernel_size=7):
         super().__init__()
         self.channels = channels
 
-
-        self.dw_conv = nn.Conv2d(channels, channels, kernel_size=3,
-                                 padding=1, groups=channels, bias=False)
+        self.dw_conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1, groups=channels, bias=False)
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.mlp = nn.Sequential(
             nn.Linear(channels, channels // reduction, bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(channels // reduction, channels, bias=False)
+            nn.Linear(channels // reduction, channels, bias=False),
         )
 
-
-        self.spatial_conv = nn.Conv2d(1, 1, kernel_size,
-                                      padding=kernel_size // 2, bias=False)
+        self.spatial_conv = nn.Conv2d(1, 1, kernel_size, padding=kernel_size // 2, bias=False)
 
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         b, c, h, w = x.size()
 
+        edge = self.dw_conv(x)  # B,C,H,W
 
-        edge = self.dw_conv(x)                    # B,C,H,W
-
-
-        y = self.avg_pool(edge).view(b, c)        # B,C
-        y = self.mlp(y).view(b, c, 1, 1)          # B,C,1,1
-        ca = self.sigmoid(y)                      # B,C,1,1
-
+        y = self.avg_pool(edge).view(b, c)  # B,C
+        y = self.mlp(y).view(b, c, 1, 1)  # B,C,1,1
+        ca = self.sigmoid(y)  # B,C,1,1
 
         edge_map = edge.abs().mean(1, keepdim=True)  # B,1,H,W
         sa = self.sigmoid(self.spatial_conv(edge_map))  # B,1,H,W
 
-
         out = x * (1 + ca) * (1 + sa)
         return out
 
+
 # endregion
+
 
 class Detect(nn.Module):
     """YOLO Detect head for detection models."""
@@ -197,7 +211,7 @@ class Detect(nn.Module):
         self.no = nc + self.reg_max * 4  # number of outputs per anchor
         self.stride = torch.zeros(self.nl)  # strides computed during build
         c2, c3 = max((16, ch[0] // 4, self.reg_max * 4)), max(ch[0], min(self.nc, 100))  # channels
-        if len(ch)==4:
+        if len(ch) == 4:
             c2, c3 = max((16, ch[1] // 4, self.reg_max * 4)), max(ch[1], min(self.nc, 100))  # channels
         self.cv2 = nn.ModuleList(
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch
@@ -336,7 +350,6 @@ class Detect(nn.Module):
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
 
 
-
 class MDetect(nn.Module):
     """YOLOv8 Detect head for detection models."""
 
@@ -374,7 +387,7 @@ class MDetect(nn.Module):
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
-        params = [None if v == 'None' else v for v in params]
+        params = [None if v == "None" else v for v in params]
         if len(params) == 3:
             sep, c4, gat = params
             com_path = None
@@ -385,7 +398,7 @@ class MDetect(nn.Module):
         elif len(params) == 5:
             sep, c4, gat, retrain, com_path = params
         else:
-            raise ValueError("the length (%d) of params is not correct!"%len(params))
+            raise ValueError("the length (%d) of params is not correct!" % len(params))
         self.sep = sep
         self.gat = gat
         if retrain:
@@ -394,17 +407,15 @@ class MDetect(nn.Module):
         c4 = c3 if c4 is None else c4
         if not self.sep:
             self.cv4 = nn.ModuleList(
-                nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1))
-                for x in ch
+                nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1)) for x in ch
             )
             self.cv4_out = None
-        elif self.sep=='6no':
+        elif self.sep == "6no":
             self.cv4 = nn.ModuleList(
-                nn.Sequential(C2fCIB(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1))
-                for x in ch
+                nn.Sequential(C2fCIB(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1)) for x in ch
             )
             self.cv4_out = None
-        elif self.sep=='7no':
+        elif self.sep == "7no":
             self.cv4 = nn.ModuleList(
                 nn.Sequential(
                     C2fCIB(x, x, 3), Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1)
@@ -412,17 +423,17 @@ class MDetect(nn.Module):
                 for x in ch
             )
             self.cv4_out = None
-        elif self.sep=='8no':
+        elif self.sep == "8no":
             self.cv4 = nn.ModuleList(
                 nn.Sequential(
-                    RepNCSPELAN4(x, c4, c4, int(c4//2)),
+                    RepNCSPELAN4(x, c4, c4, int(c4 // 2)),
                     Conv(c4, c4, 3),
                     nn.Conv2d(c4, self.attribute_channels, 1),
                 )
                 for x in ch
             )
             self.cv4_out = None
-        elif self.sep=='9no':
+        elif self.sep == "9no":
             self.cv4 = nn.ModuleList(
                 nn.Sequential(
                     RepNCSPELAN4(x, x, x, int(x // 2)),
@@ -433,25 +444,25 @@ class MDetect(nn.Module):
                 for x in ch
             )
             self.cv4_out = None
-        elif self.sep==1:
-            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3)) for x in ch)
+        elif self.sep == 1:
+            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4 * self.na, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
-                    nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, self.attribute_head_channels, 1))
-                    for x in ch
+                    nn.Sequential(Conv(c4 * self.na, c4, 3), nn.Conv2d(c4, self.attribute_head_channels, 1)) for x in ch
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==2:
-            self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4*self.na, 3), Conv(c4*self.na, c4*self.na, 3)) for x in ch)
+        elif self.sep == 2:
+            self.cv4 = nn.ModuleList(
+                nn.Sequential(Conv(x, c4 * self.na, 3), Conv(c4 * self.na, c4 * self.na, 3)) for x in ch
+            )
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
-                    nn.Sequential(Conv(c4*self.na, c4, 3), nn.Conv2d(c4, self.attribute_head_channels, 1))
-                    for x in ch
+                    nn.Sequential(Conv(c4 * self.na, c4, 3), nn.Conv2d(c4, self.attribute_head_channels, 1)) for x in ch
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==3:
+        elif self.sep == 3:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, x, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
@@ -460,7 +471,7 @@ class MDetect(nn.Module):
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==4:
+        elif self.sep == 4:
             self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
@@ -469,7 +480,7 @@ class MDetect(nn.Module):
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==5:
+        elif self.sep == 5:
             self.cv4 = nn.ModuleList(nn.Sequential(nn.Identity()) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
@@ -478,19 +489,19 @@ class MDetect(nn.Module):
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==6:
+        elif self.sep == 6:
             self.cv4 = nn.ModuleList(nn.Sequential(C2fCIB(x, c4, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
                     nn.Sequential(
-                        Conv(c4, c4//self.na, 3),
-                        nn.Conv2d(c4//self.na, self.attribute_head_channels, 1),
+                        Conv(c4, c4 // self.na, 3),
+                        nn.Conv2d(c4 // self.na, self.attribute_head_channels, 1),
                     )
                     for x in ch
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==7:
+        elif self.sep == 7:
             self.cv4 = nn.ModuleList(nn.Sequential(C2fCIB(x, x, 3)) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
@@ -502,8 +513,8 @@ class MDetect(nn.Module):
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==8:
-            self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, c4, c4, int(c4//2))) for x in ch)
+        elif self.sep == 8:
+            self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, c4, c4, int(c4 // 2))) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
                     nn.Sequential(
@@ -514,7 +525,7 @@ class MDetect(nn.Module):
                 )
                 for _ in range(self.na)
             )
-        elif self.sep==9:
+        elif self.sep == 9:
             self.cv4 = nn.ModuleList(nn.Sequential(RepNCSPELAN4(x, x, x, int(x // 2))) for x in ch)
             self.cv4_out = nn.ModuleList(
                 nn.ModuleList(
@@ -528,49 +539,61 @@ class MDetect(nn.Module):
             )
         else:
             self.cv4 = nn.ModuleList(
-                nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1))
-                for x in ch
+                nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.attribute_channels, 1)) for x in ch
             )
             self.cv4_out = None
 
-        if self.gat == 'mlp':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp') for x in ch)
-        elif self.gat == 'mlpr':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpr') for x in ch)
-        elif self.gat == 'cos':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos') for x in ch)
-        elif self.gat == 'mlp_res':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlp', res=True) for x in ch)
-        elif self.gat == 'mlpr_res':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpr', res=True) for x in ch)
-        elif self.gat == 'cos_res':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cos', res=True) for x in ch)
-        elif self.gat == 'mlpt':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt') for x in ch)
-        elif self.gat == 'cost':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost') for x in ch)
-        elif self.gat == 'mlpt_res':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'mlpt', res=True) for x in ch)
-        elif self.gat == 'cost_res':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'cost', res=True) for x in ch)
-        elif self.gat == 'com_gat':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path, proj=True, add_softmax=False) for x in ch)
-        elif self.gat == 'com':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path) for x in ch)
-        elif self.gat == 'com_res':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, com_path=self.com_path) for x in ch)
-        elif self.gat == 'com_nosf':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', add_softmax=False, com_path=self.com_path) for x in ch)
-        elif self.gat == 'com_res_nosf':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path) for x in ch)
-        elif self.gat == 'com_pure':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', com_path=self.com_path, proj=False) for x in ch)
-        elif self.gat == 'com_res_pure':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, com_path=self.com_path, proj=False) for x in ch)
-        elif self.gat == 'com_nosf_pure':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', add_softmax=False, com_path=self.com_path, proj=False) for x in ch)
-        elif self.gat == 'com_res_nosf_pure':
-            self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=True, add_softmax=False, com_path=self.com_path, proj=False) for x in ch)
+        if self.gat == "mlp":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "mlp") for x in ch)
+        elif self.gat == "mlpr":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "mlpr") for x in ch)
+        elif self.gat == "cos":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "cos") for x in ch)
+        elif self.gat == "mlp_res":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "mlp", res=True) for x in ch)
+        elif self.gat == "mlpr_res":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "mlpr", res=True) for x in ch)
+        elif self.gat == "cos_res":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "cos", res=True) for x in ch)
+        elif self.gat == "mlpt":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "mlpt") for x in ch)
+        elif self.gat == "cost":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "cost") for x in ch)
+        elif self.gat == "mlpt_res":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "mlpt", res=True) for x in ch)
+        elif self.gat == "cost_res":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "cost", res=True) for x in ch)
+        elif self.gat == "com_gat":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", com_path=self.com_path, proj=True, add_softmax=False) for x in ch
+            )
+        elif self.gat == "com":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "com", com_path=self.com_path) for x in ch)
+        elif self.gat == "com_res":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "com", res=True, com_path=self.com_path) for x in ch)
+        elif self.gat == "com_nosf":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", add_softmax=False, com_path=self.com_path) for x in ch
+            )
+        elif self.gat == "com_res_nosf":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", res=True, add_softmax=False, com_path=self.com_path) for x in ch
+            )
+        elif self.gat == "com_pure":
+            self.gat_head = nn.ModuleList(GAT(self.na, self.na, "com", com_path=self.com_path, proj=False) for x in ch)
+        elif self.gat == "com_res_pure":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", res=True, com_path=self.com_path, proj=False) for x in ch
+            )
+        elif self.gat == "com_nosf_pure":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", add_softmax=False, com_path=self.com_path, proj=False) for x in ch
+            )
+        elif self.gat == "com_res_nosf_pure":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", res=True, add_softmax=False, com_path=self.com_path, proj=False)
+                for x in ch
+            )
         else:
             self.gat_head = None
 
@@ -582,9 +605,12 @@ class MDetect(nn.Module):
             self.one2one_gat_head = copy.deepcopy(self.gat_head) if self.gat_head is not None else None
 
     def added_gat_head(self, com_path):
-        self.gat = 'com_nosf_pure'
+        self.gat = "com_nosf_pure"
         self.com_path = com_path
-        self.gat_head = nn.ModuleList(GAT(self.na, self.na, 'com', res=False, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1) for x in range(self.nl))
+        self.gat_head = nn.ModuleList(
+            GAT(self.na, self.na, "com", res=False, add_softmax=False, com_path=self.com_path, proj=False, leaky_rate=1)
+            for x in range(self.nl)
+        )
 
     def _apply_attribute_gat(self, attribute_logits, gat_head):
         """Apply an attribute-level GAT to each of the ``nal`` class-logit slices."""
@@ -594,20 +620,18 @@ class MDetect(nn.Module):
         batch, channels, height, width = attribute_logits.shape
         expected_channels = self.na * self.nal
         if channels != expected_channels:
-            raise RuntimeError(
-                f"Expected {expected_channels} attribute channels before GAT, got {channels}"
-            )
+            raise RuntimeError(f"Expected {expected_channels} attribute channels before GAT, got {channels}")
 
         # Existing GAT/co-occurrence matrices model relations between attributes (na x na).
         # Apply the same graph independently to each level so those matrices remain valid.
         attribute_logits = attribute_logits.reshape(batch, self.na, self.nal, height, width)
-        attribute_logits = attribute_logits.permute(0, 2, 1, 3, 4).reshape(
-            batch * self.nal, self.na, height, width
-        )
+        attribute_logits = attribute_logits.permute(0, 2, 1, 3, 4).reshape(batch * self.nal, self.na, height, width)
         attribute_logits = gat_head(attribute_logits)
-        return attribute_logits.reshape(batch, self.nal, self.na, height, width).permute(
-            0, 2, 1, 3, 4
-        ).reshape(batch, expected_channels, height, width)
+        return (
+            attribute_logits.reshape(batch, self.nal, self.na, height, width)
+            .permute(0, 2, 1, 3, 4)
+            .reshape(batch, expected_channels, height, width)
+        )
 
     def use_one2many_head(self):
         self.end2end = False
@@ -623,7 +647,7 @@ class MDetect(nn.Module):
             return self.forward_end2end(x)
 
         for i in range(self.nl):
-            if not self.sep or self.sep in ['6no', '7no', '8no', '9no']:
+            if not self.sep or self.sep in ["6no", "7no", "8no", "9no"]:
                 if self.gat is not None:
                     attribute_logits = self._apply_attribute_gat(self.cv4[i](x[i]), self.gat_head[i])
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), attribute_logits), 1)
@@ -642,7 +666,7 @@ class MDetect(nn.Module):
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
-                    raise ValueError('sep error %g'%self.sep)
+                    raise ValueError("sep error %g" % self.sep)
         if self.training:  # Training path
             return x
         y = self._inference(x)
@@ -661,7 +685,7 @@ class MDetect(nn.Module):
         """
         x_detach = [xi.detach() for xi in x]
         for i in range(self.nl):
-            if not self.sep or self.sep in ['6no', '7no', '8no', '9no']:
+            if not self.sep or self.sep in ["6no", "7no", "8no", "9no"]:
                 if self.gat is not None:
                     attribute_logits = self._apply_attribute_gat(
                         self.one2one_cv4[i](x_detach[i]), self.one2one_gat_head[i]
@@ -670,28 +694,37 @@ class MDetect(nn.Module):
                         (self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), attribute_logits), 1
                     )
                 else:
-                    x_detach[i] = torch.cat((self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), self.one2one_cv4[i](x_detach[i])), 1)
+                    x_detach[i] = torch.cat(
+                        (
+                            self.one2one_cv2[i](x_detach[i]),
+                            self.one2one_cv3[i](x_detach[i]),
+                            self.one2one_cv4[i](x_detach[i]),
+                        ),
+                        1,
+                    )
             else:
                 if self.sep in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
                     if self.gat is not None:
                         attribute_feature = self.one2one_cv4[i](x_detach[i])
                         attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         attribute_logits = [
-                            self._apply_attribute_gat(
-                                torch.cat(attribute_logits, 1), self.one2one_gat_head[i]
-                            )
+                            self._apply_attribute_gat(torch.cat(attribute_logits, 1), self.one2one_gat_head[i])
                         ]
-                        x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
+                        x_detach[i] = torch.cat(
+                            [self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1
+                        )
                     else:
                         attribute_feature = self.one2one_cv4[i](x_detach[i])
                         attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
-                        x_detach[i] = torch.cat([self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1)
+                        x_detach[i] = torch.cat(
+                            [self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1
+                        )
                 else:
-                    raise ValueError('sep error %g' % self.sep)
+                    raise ValueError("sep error %g" % self.sep)
         one2one = x_detach
 
         for i in range(self.nl):
-            if not self.sep or self.sep in ['6no', '7no', '8no', '9no']:
+            if not self.sep or self.sep in ["6no", "7no", "8no", "9no"]:
                 if self.gat is not None:
                     attribute_logits = self._apply_attribute_gat(self.cv4[i](x[i]), self.gat_head[i])
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), attribute_logits), 1)
@@ -702,16 +735,14 @@ class MDetect(nn.Module):
                     if self.gat is not None:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
-                        attribute_logits = [
-                            self._apply_attribute_gat(torch.cat(attribute_logits, 1), self.gat_head[i])
-                        ]
+                        attribute_logits = [self._apply_attribute_gat(torch.cat(attribute_logits, 1), self.gat_head[i])]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                     else:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                 else:
-                    raise ValueError('sep error %g'%self.sep)
+                    raise ValueError("sep error %g" % self.sep)
         if self.training:  # Training path
             return {"one2many": x, "one2one": one2one}
 
@@ -733,7 +764,7 @@ class MDetect(nn.Module):
         if self.export and self.format in {"saved_model", "pb", "tflite", "edgetpu", "tfjs"}:  # avoid TF FlexSplitV ops
             box = x_cat[:, : self.reg_max * 4]
             cls = x_cat[:, self.reg_max * 4 : self.reg_max * 4 + self.nc]
-            att = x_cat[:, self.reg_max * 4 + self.nc : ]
+            att = x_cat[:, self.reg_max * 4 + self.nc :]
         else:
             box, cls, att = x_cat.split((self.reg_max * 4, self.nc, self.attribute_channels), 1)
 
@@ -749,8 +780,10 @@ class MDetect(nn.Module):
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
 
         if self.multiclass_attributes:
-            att = att.reshape(att.shape[0], self.na, self.nal, -1).softmax(dim=2).reshape(
-                att.shape[0], self.attribute_channels, -1
+            att = (
+                att.reshape(att.shape[0], self.na, self.nal, -1)
+                .softmax(dim=2)
+                .reshape(att.shape[0], self.attribute_channels, -1)
             )
 
         return torch.cat((dbox, cls.sigmoid(), att), 1)
@@ -806,7 +839,6 @@ class MDetect(nn.Module):
         boxes = torch.gather(boxes, dim=1, index=index.repeat(1, 1, boxes.shape[-1]))
         scores = torch.gather(scores, dim=1, index=index.repeat(1, 1, scores.shape[-1]))
         attributes = torch.gather(attributes, dim=1, index=index.repeat(1, 1, attributes.shape[-1]))
-        print(scores.max())
 
         # NOTE: simplify but result slightly lower mAP
         # scores, labels = scores.max(dim=-1)
@@ -819,6 +851,7 @@ class MDetect(nn.Module):
         attributes = attributes.gather(dim=1, index=index.unsqueeze(-1).repeat(1, 1, attributes.shape[-1]))
 
         return torch.cat([boxes, scores.unsqueeze(-1), labels.unsqueeze(-1).to(boxes.dtype), attributes], dim=-1)
+
 
 class Segment(Detect):
     """YOLO Segment head for segmentation models."""
@@ -845,7 +878,6 @@ class Segment(Detect):
         return (torch.cat([x, mc], 1), p) if self.export else (torch.cat([x[0], mc], 1), (x[1], mc, p))
 
 
-
 class Segment(Detect):
     """YOLO Segment head for segmentation models."""
 
@@ -862,7 +894,6 @@ class Segment(Detect):
             self.one2one_proto = copy.deepcopy(self.proto)
             self.one2one_cv4 = copy.deepcopy(self.cv4)
 
-
     def forward_end2end(self, x):
         x_detach = [xi.detach() for xi in x]
         p_one2one = self.one2one_proto(x_detach[0])
@@ -870,13 +901,14 @@ class Segment(Detect):
         p = self.proto(x[0])  # mask protos
         bs = p.shape[0]  # batch size
 
-
-        one2one_mc = torch.cat([self.one2one_cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
+        one2one_mc = torch.cat(
+            [self.one2one_cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2
+        )  # mask coefficients
         mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
 
         out = Detect.forward_end2end(self, x, seg=True)
 
-        x, x_one2one = out['one2many'], out['one2one']
+        x, x_one2one = out["one2many"], out["one2one"]
 
         if self.training:
             return {"one2many": [x, mc, p], "one2one": [x_one2one, one2one_mc, p_one2one]}
@@ -884,7 +916,6 @@ class Segment(Detect):
         one2many_output = (torch.cat([x[0], mc], 1), (x[1], mc, p))
         one2one_output = (torch.cat([x_one2one[0], one2one_mc], 1), (x_one2one[1], one2one_mc, p_one2one))
         return (torch.cat([x, mc], 1), p) if self.export else {"one2many": one2many_output, "one2one": one2one_output}
-
 
     def forward(self, x):
         """Return model outputs and mask coefficients if training, otherwise return outputs and mask coefficients."""
@@ -904,7 +935,7 @@ class Segment(Detect):
 class MSegment(MDetect):
     """YOLOv8 Segment head for segmentation models."""
 
-    def __init__(self, nc=80, na=14, nal=2, nm=32, npr=256, params=(),  ch=()):
+    def __init__(self, nc=80, na=14, nal=2, nm=32, npr=256, params=(), ch=()):
         """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers."""
         super().__init__(nc, na, nal, params, ch)
         self.nm = nm  # number of masks
@@ -931,7 +962,6 @@ class MSegment(MDetect):
         if self.training:
             return x, mc, p
         return (torch.cat([x, mc], 1), p) if self.export else (torch.cat([x[0], mc], 1), (x[1], mc, p))
-
 
     def forward(self, x):
         """Return model outputs and mask coefficients if training, otherwise return outputs and mask coefficients."""
@@ -1463,6 +1493,7 @@ class v10MDetect(MDetect):
 
 class v10Segment(Segment):
     end2end = True
+
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         """Initializes the v10Detect object with the specified number of classes and input channels."""
         super().__init__(nc, nm, npr, ch)
@@ -1470,6 +1501,7 @@ class v10Segment(Segment):
 
 class v10MSegment(MSegment):
     end2end = True
-    def __init__(self, nc=80, na=14, nal=2, nm=32, npr=256, params=(),  ch=()):
+
+    def __init__(self, nc=80, na=14, nal=2, nm=32, npr=256, params=(), ch=()):
         """Initializes the v10Detect object with the specified number of classes and input channels."""
-        super().__init__(nc=80, na=14, nal=2, nm=32, npr=256, params=(),  ch=())
+        super().__init__(nc=80, na=14, nal=2, nm=32, npr=256, params=(), ch=())
