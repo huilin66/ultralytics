@@ -72,7 +72,7 @@ python scripts/train_mdet_experiments.py gca-structure `
   --label E2_2_GCA_structure `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
   --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
-  --variant gat=ultralytics/cfg/models/exp_ablation0107/yolov10x_GCA.yaml `
+  --variant gat=ultralytics/cfg/models/exp_ablation/yolov10x_GCA.yaml `
   --w4 0.5 --com-path path/to/co_occurrence_matrix6.csv `
   --project runs/experiments/E2_2_GCA
 
@@ -80,12 +80,12 @@ python scripts/train_mdet_experiments.py gia-gca `
   --label E2_3_GIA_GCA `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
   --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
-  --variant gia_gca=ultralytics/cfg/models/exp_ablation0107/yolov10x_GIA_GCA.yaml `
+  --variant gia_gca=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_GCA.yaml `
   --w4 0.5 --com-path path/to/co_occurrence_matrix6.csv `
   --project runs/experiments/E2_3_GIA_GCA
 ```
 
-`exp_ablation0107` 中的 GCA YAML 含有 Linux 下的 `/nfsv4/...` 矩阵路径。
+`exp_ablation` 中的 GCA YAML 含有 Linux 下的 `/nfsv4/...` 矩阵路径。
 传入 `--com-path` 后，脚本只在 `project/_generated_configs/` 生成替换后的副本，
 不会改写原 YAML；不传时会主动报错，避免训练读到错误矩阵。
 
@@ -98,7 +98,7 @@ E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一
 python scripts/train_mdet_experiments.py ho `
   --label E2_4_HO `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
-  --variant ho_gca=ultralytics/cfg/models/exp_ablation0107/yolov10x_HO_GCA.yaml `
+  --variant ho_gca=ultralytics/cfg/models/exp_ablation/yolov10x_HO_GCA.yaml `
   --w4 0.5 --com-path path/to/co_occurrence_matrix6.csv `
   --project runs/experiments/E2_4_HO
 

@@ -180,13 +180,13 @@ if __name__ == '__main__':
     # # # endregion
     #
     # # # region ablation experiment
-    # model_val('runs/exp_results/exp_ablation0107_GIA/weights/best.pt')
+    # model_val('runs/exp_results/exp_ablation_GIA/weights/best.pt')
     # model_val_single('runs/exp_results/exp_yolo10x/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_ablation0107_GCA/weights/best.pt')
+    # model_val(r'runs/exp_results/exp_ablation_GCA/weights/best.pt')
     #
-    # model_val(r'runs/exp_results/exp_ablation0107_HO_GCA/weights/best.pt')
-    # model_val(r'runs/exp_results/exp_ablation0107_GIA_GCA/weights/best.pt')
-    # model_val_single('runs/exp_results/exp_ablation0107_GIA/weights/best.pt')
+    # model_val(r'runs/exp_results/exp_ablation_HO_GCA/weights/best.pt')
+    # model_val(r'runs/exp_results/exp_ablation_GIA_GCA/weights/best.pt')
+    # model_val_single('runs/exp_results/exp_ablation_GIA/weights/best.pt')
     # # # endregion
 
     # model_val(r'runs/exp_results/exp_yolo10x/weights/best.pt')

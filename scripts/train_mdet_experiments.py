@@ -95,7 +95,7 @@ def _resolve_config(config: str) -> Path:
 def _materialize_config(config: str, com_path: Optional[str], project: str) -> str:
     """Return a runnable config, optionally replacing an inaccessible GCA CSV.
 
-    The ablation YAMLs in ``exp_ablation0107`` contain an absolute Linux path
+    The ablation YAMLs in ``exp_ablation`` contain an absolute Linux path
     to the co-occurrence matrix.  Replacing it in a generated copy keeps the
     experiment reproducible and avoids changing the checked-in configuration.
     """
