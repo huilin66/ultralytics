@@ -191,6 +191,32 @@ python scripts/train_mdet_experiments.py versions `
 当前仓库未必包含每个版本、每个 size 的 YAML 和 `.pt` 权重；脚本不会伪造缺失
 配置，按实际存在的文件增删 `--variant` 即可。
 
+正式开始 E3 全量训练前，建议先用最大版本做 GPU memory smoke test。该脚本只
+测试 mdet，不调用 segmentation；默认覆盖 YOLOv8x、YOLOv9e、YOLOv10x、
+YOLOv11x、YOLOv12x、YOLOv13x、YOLO26x、MAYOLOx 和 RT-DETR-L，每个模型真实
+训练 2 epochs，并将峰值显存写入 `gpu_memory_smoke_summary.csv`。建议先用
+`batch=1`，确认所有模型都能跑通后，再据峰值为正式训练统一确定 batch size：
+
+```bash
+python scripts/gpu_memory_smoke_test.py \
+  --data path/to/billboard_mdet.yaml \
+  --device 0 --imgsz 640 --batch 1 --epochs 2 \
+  --project runs/gpu_memory_smoke
+```
+
+如果预训练权重不在默认搜索路径，用重复的
+`--pretrain-map NAME=CHECKPOINT` 覆盖，例如：
+
+```bash
+python scripts/gpu_memory_smoke_test.py \
+  --data path/to/billboard_mdet.yaml \
+  --pretrain-map yolov13x=/path/to/yolov13x.pt \
+  --pretrain-map mayolox=/path/to/mayolovx.pt
+```
+
+脚本会在单个模型 OOM 或权重缺失时记录状态并继续后续模型；`max_memory_allocated`
+和 `max_memory_reserved` 均按每个模型单独清空缓存、重置峰值后统计。
+
 如果只做 YOLO26 的完整多规模实验，可以由脚本自动加入 n/s/m/l/x 配置和对应的
 `yolo26n.pt`–`yolo26x.pt` 预训练权重：
 
