@@ -44,6 +44,11 @@ Examples (PowerShell):
         --stage1-epochs 200 `
         --stage2-values 50 100 200
 
+    python scripts/train_mdet_experiments.py versions `
+        --data path/to/billboard_mdet.yaml `
+        --include-yolo26 `
+        --yolo26-sizes n s m l x
+
 For GCA configurations copied from a Linux training machine, pass
 ``--com-path`` to replace the embedded ``/nfsv4/...co_occurrence_matrix*.csv``
 path in a generated copy.  The source YAML is never modified.
@@ -63,6 +68,11 @@ from typing import Dict, Optional, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+YOLO26_MDET_CONFIGS = {
+    f"yolov26{size}": f"ultralytics/cfg/models/experiments/yolov26{size}-mdetect.yaml"
+    for size in "nsmlx"
+}
 
 from scripts.cli_compat import add_bool_argument
 
@@ -184,14 +194,16 @@ def _add_train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--stage2-epochs", type=int, default=100)
 
 
-def _add_variant_arguments(parser: argparse.ArgumentParser, default_network: str = "yolo") -> None:
+def _add_variant_arguments(
+    parser: argparse.ArgumentParser, default_network: str = "yolo", require_variant: bool = True
+) -> None:
     """Add arguments for a set of named model/config variants."""
     _add_train_arguments(parser)
     parser.add_argument("--label", default=None, help="experiment label used in run names")
     parser.add_argument(
         "--variant",
         action="append",
-        required=True,
+        required=require_variant,
         metavar="NAME=CONFIG_YAML",
         help="repeat for every ablation/model variant",
     )
@@ -471,11 +483,22 @@ def _run_stage2_sweep(args: argparse.Namespace) -> None:
 
 def _run_variants(args: argparse.Namespace) -> None:
     """Run ablation, architecture-size, or RT-DETR variant experiments."""
-    variants = _parse_key_value(args.variant, "--variant")
+    variants = _parse_key_value(args.variant or [], "--variant")
     checkpoints = _parse_key_value(args.pretrain_map, "--pretrain-map")
+    if getattr(args, "include_yolo26", False):
+        sizes = args.yolo26_sizes or tuple("nsmlx")
+        for size in sizes:
+            name = f"yolov26{size}"
+            if name not in variants:
+                variants[name] = YOLO26_MDET_CONFIGS[name]
+    if not variants:
+        raise ValueError("No variants specified. Pass --variant NAME=CONFIG_YAML or --include-yolo26")
+
     label = args.label or args.experiment
     for name, config in variants.items():
         pretrain = checkpoints.get(name, args.pretrain)
+        if not pretrain and name in YOLO26_MDET_CONFIGS:
+            pretrain = f"yolo26{name[-1]}.pt"
         if not pretrain:
             raise ValueError(
                 f"No checkpoint for variant {name!r}. Pass --pretrain or --pretrain-map {name}=..."
@@ -575,11 +598,24 @@ def _build_parser() -> argparse.ArgumentParser:
         ("gca-structure", "E2.2: GCA structure ablation", "yolo"),
         ("gia-gca", "E2.3: joint GIA/GCA ablation", "yolo"),
         ("ho", "E2.4: train the HO checkpoint for inference comparison", "yolo"),
-        ("versions", "E3: YOLOv8-YOLOv13/MAYOLO sizes", "yolo"),
+        ("versions", "E3: YOLOv8-YOLOv13/YOLO26/MAYOLO sizes", "yolo"),
         ("rtdetr", "E4: RT-DETR attribute detector sizes", "rtdetr"),
     ):
         variant_parser = subparsers.add_parser(name, help=help_text)
-        _add_variant_arguments(variant_parser, default_network=default_network)
+        _add_variant_arguments(variant_parser, default_network=default_network, require_variant=name != "versions")
+        if name == "versions":
+            variant_parser.add_argument(
+                "--include-yolo26",
+                action="store_true",
+                help="append YOLO26 mdet n/s/m/l/x configs; missing checkpoints default to yolo26*.pt",
+            )
+            variant_parser.add_argument(
+                "--yolo26-sizes",
+                nargs="+",
+                choices=tuple("nsmlx"),
+                default=None,
+                help="YOLO26 sizes used with --include-yolo26 (default: n s m l x)",
+            )
 
     stability = subparsers.add_parser("stability", help="E7: repeated seeds for YOLOv10x/MAYOLOx")
     _add_variant_arguments(stability, default_network="yolo")

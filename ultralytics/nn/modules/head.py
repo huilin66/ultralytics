@@ -202,12 +202,14 @@ class Detect(nn.Module):
     strides = torch.empty(0)  # init
     legacy = False  # backward compatibility for v3/v5/v8/v9 models
 
-    def __init__(self, nc=80, ch=()):
-        """Initialize the YOLO detection layer with specified number of classes and channels."""
+    def __init__(self, nc=80, ch=(), reg_max=16, end2end=None):
+        """Initialize the YOLO detection layer with classes, channels, DFL bins, and optional end-to-end mode."""
         super().__init__()
         self.nc = nc  # number of classes
         self.nl = len(ch)  # number of detection layers
-        self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
+        self.reg_max = reg_max  # DFL channels (YOLO26 uses 1 to disable DFL)
+        if end2end is not None:
+            self.end2end = end2end
         self.no = nc + self.reg_max * 4  # number of outputs per anchor
         self.stride = torch.zeros(self.nl)  # strides computed during build
         c2, c3 = max((16, ch[0] // 4, self.reg_max * 4)), max(ch[0], min(self.nc, 100))  # channels
@@ -361,14 +363,16 @@ class MDetect(nn.Module):
     anchors = torch.empty(0)  # init
     strides = torch.empty(0)  # init
 
-    def __init__(self, nc=80, na=14, nal=2, params=(), ch=()):
-        """Initializes the YOLOv8 detection layer with specified number of classes and channels."""
+    def __init__(self, nc=80, na=14, nal=2, params=(), ch=(), reg_max=16, end2end=None):
+        """Initialize the multi-attribute detection layer with optional DFL and end-to-end settings."""
         super().__init__()
         self.nc = nc  # number of classes
         self.na = na  # number of attributes
         self.nal = nal
         self.nl = len(ch)  # number of detection layers
-        self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
+        self.reg_max = reg_max  # DFL channels (YOLO26 uses 1 to disable DFL)
+        if end2end is not None:
+            self.end2end = end2end
         # MSegment reuses MDetect but its ``cv4`` branch is replaced by mask coefficients.
         # Keep its legacy ``na``-channel layout while making the mdet head explicit about
         # producing ``nal`` logits for each of its ``na`` attributes.

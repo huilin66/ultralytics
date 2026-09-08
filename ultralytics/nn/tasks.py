@@ -1627,6 +1627,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if m in {MDetect, v10MDetect} and len(args) == 3 and isinstance(args[2], (list, tuple)):
                 args.insert(2, d.get("nal", 2))
             args.append([ch[x] for x in f])
+            # Keep this branch's historical [nc, ..., ch] constructor order while
+            # allowing YOLO26 YAMLs to request DFL-free, end-to-end detection.
+            if m is Detect and ("reg_max" in d or "end2end" in d):
+                args.extend((d.get("reg_max", 16), d.get("end2end", False)))
+            elif m is MDetect and ("reg_max" in d or "end2end" in d):
+                args.extend((d.get("reg_max", 16), d.get("end2end", False)))
             if m is Segment or m is v10Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             elif m is MSegment:

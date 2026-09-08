@@ -162,7 +162,7 @@ python scripts/eval_mdet_experiments.py ho `
 head 后影响后一次结果。E2.5 直接复用选定的最佳 GIA+GCA+HO checkpoint，
 不需要再人为增加一组训练。
 
-## E3：YOLOv8–YOLOv13 与 MAYOLO 多规模
+## E3：YOLOv8–YOLOv13、YOLO26 与 MAYOLO 多规模
 
 使用 `versions`，每个变体一个 `--variant`。不同版本通常需要不同预训练权重，
 用 `--pretrain-map NAME=CHECKPOINT` 绑定：
@@ -176,18 +176,30 @@ python scripts/train_mdet_experiments.py versions `
   --variant yolov11x=ultralytics/cfg/models/experiments/yolov11x-mdetect.yaml `
   --variant yolov12x=ultralytics/cfg/models/experiments/yolov12x-mdetect.yaml `
   --variant yolov13x=ultralytics/cfg/models/experiments/yolov13x-mdetect.yaml `
+  --variant yolov26x=ultralytics/cfg/models/experiments/yolov26x-mdetect.yaml `
   --variant mayolox=ultralytics/cfg/models/mayolo/mayolovx.yaml `
   --pretrain-map yolov8n=yolov8n.pt `
   --pretrain-map yolov10x=yolov10x.pt `
   --pretrain-map yolov11x=path/to/yolo11x.pt `
   --pretrain-map yolov12x=path/to/yolo12x.pt `
   --pretrain-map yolov13x=path/to/yolo13x.pt `
+  --pretrain-map yolov26x=yolo26x.pt `
   --pretrain-map mayolox=path/to/mayolovx.pt `
   --w4 0.5 --project runs/experiments/E3_versions
 ```
 
 当前仓库未必包含每个版本、每个 size 的 YAML 和 `.pt` 权重；脚本不会伪造缺失
 配置，按实际存在的文件增删 `--variant` 即可。
+
+如果只做 YOLO26 的完整多规模实验，可以由脚本自动加入 n/s/m/l/x 配置和对应的
+`yolo26n.pt`–`yolo26x.pt` 预训练权重：
+
+```bash
+python scripts/train_mdet_experiments.py versions \
+  --data path/to/billboard_mdet.yaml \
+  --include-yolo26 --yolo26-sizes n s m l x \
+  --w4 0.5 --project runs/experiments/E3_yolo26
+```
 
 ## E4：RT-DETR 属性检测多规模
 

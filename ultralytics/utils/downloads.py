@@ -19,6 +19,7 @@ GITHUB_ASSETS_NAMES = (
     [f"yolov8{k}{suffix}.pt" for k in "nsmlx" for suffix in ("", "-cls", "-seg", "-pose", "-obb", "-oiv7")]
     + [f"yolo11{k}{suffix}.pt" for k in "nsmlx" for suffix in ("", "-cls", "-seg", "-pose", "-obb")]
     + [f"yolo12{k}{suffix}.pt" for k in "nsmlx" for suffix in ("",)]  # detect models only currently
+    + [f"yolo26{k}.pt" for k in "nsmlx"]  # YOLO26 detection models
     + [f"yolov13{k}.pt" for k in "nsmlx"]  # YOLOv13 detect models from iMoonLab/yolov13
     + [f"yolov5{k}{resolution}u.pt" for k in "nsmlx" for resolution in ("", "6")]
     + [f"yolov3{k}u.pt" for k in ("", "-spp", "-tiny")]
@@ -414,9 +415,12 @@ def attempt_download_asset(file, repo="ultralytics/assets", release="v8.3.0", **
     """
     from ultralytics.utils import SETTINGS  # scoped for circular import
 
+    # YOLO26 was introduced in the v8.4.0 assets release.
+    if "yolo26" in str(file).lower():
+        release = "v8.4.0"
     # YOLOv13 weights are released by the YOLOv13 project rather than the
     # standard Ultralytics assets repository.
-    if "yolov13" in str(file).lower():
+    elif "yolov13" in str(file).lower():
         repo = "iMoonLab/yolov13"
         release = "yolov13"
 

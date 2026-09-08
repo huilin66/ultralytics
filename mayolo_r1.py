@@ -21,9 +21,11 @@ FREEZE_NUMS = {
     "yolov11": 23,
     "yolov12": 21,
     "yolov13": 32,
+    "yolov26": 23,
     "yolo11": 23,
     "yolo12": 21,
     "yolo13": 32,
+    "yolo26": 23,
     "mayolo": 23,
 }
 # MLOSS_ENLARGE = 0.3
@@ -124,7 +126,7 @@ def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain
                 {
                     "freeze": get_freeze_num(cfg_path),
                     "freeze_head": [".cv2", ".cv3"]
-                    if "yolov10" not in cfg_path and "mayolo" not in cfg_path
+                    if all(name not in str(cfg_path).lower() for name in ("yolov10", "mayolo", "yolov26", "yolo26"))
                     else [".cv2", ".cv3", ".one2one_cv2", ".one2one_cv3"],
                     "freeze_bn": True,
                 }
@@ -361,6 +363,22 @@ def myolo13(cfg_path, weight_path="yolov13x.pt", auto_optim=False, **kwargs):
         auto_optim=auto_optim,
         stage1_name=f"yolov13{scale}_stage1",
         stage2_name=f"yolov13{scale}_stage2",
+        **kwargs,
+    )
+
+
+def myolo26(cfg_path, weight_path="yolo26x.pt", auto_optim=False, **kwargs):
+    """Train a YOLO26 multi-attribute model with the standard 100+100 stage protocol."""
+    assert "yolo26" in str(cfg_path).lower() or "yolov26" in str(cfg_path).lower(), ValueError(
+        cfg_path, "is not yolov26 config!"
+    )
+    scale = weight_path[-4]
+    myolo_train_full(
+        cfg_path,
+        pretrain_path=weight_path,
+        auto_optim=auto_optim,
+        stage1_name=f"yolo26{scale}_stage1",
+        stage2_name=f"yolo26{scale}_stage2",
         **kwargs,
     )
 
