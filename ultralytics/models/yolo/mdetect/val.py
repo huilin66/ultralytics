@@ -91,6 +91,7 @@ class MDetectionValidator(BaseValidator):
         self.metrics.nc = self.nc
         self.metrics.na = self.na
         self.metrics.nal = self.nal
+        self.metrics.reset_attribute_metrics()
         self.confusion_matrix = MConfusionMatrix(
             nc=self.nc,
             na=self.na,
@@ -232,7 +233,10 @@ class MDetectionValidator(BaseValidator):
         if len(stats) and stats["tp"].any():
             self.metrics.process(**stats)
         else:
-            self.metrics.attributes.all_ap = np.zeros(self.metrics.na)
+            # A short smoke test or an early training epoch may have no
+            # prediction with IoU >= 0.5.  Keep all attribute metrics defined
+            # so results_dict can still return valid zero-valued metrics.
+            self.metrics.reset_attribute_metrics()
         return self.metrics.results_dict
 
     def print_results(self):

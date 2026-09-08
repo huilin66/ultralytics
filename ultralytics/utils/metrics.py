@@ -1367,6 +1367,18 @@ class MDetMetrics(SimpleClass):
         self.nc = nc
         self.na = na
         self.nal = nal
+        self.reset_attribute_metrics()
+
+    def reset_attribute_metrics(self):
+        """Initialize attribute statistics, including the no-correct-detection case."""
+        self.attributes.nc = self.na
+        # Attribute AP is stored per attribute.  The confusion matrix keeps
+        # one nal x nal matrix for each attribute.
+        self.attributes.all_ap = np.zeros(self.na, dtype=np.float64)
+        self.attributes.all_conf_mat = np.zeros((self.na, self.nal, self.nal), dtype=np.float64)
+        self.attributes.all_f1_macro = np.zeros(self.na, dtype=np.float64)
+        self.attributes.all_precision = np.zeros(self.na, dtype=np.float64)
+        self.attributes.all_recall = np.zeros(self.na, dtype=np.float64)
 
     def get_attribute_names(self):
         attribute_dict = self.attribute_names
@@ -1397,7 +1409,8 @@ class MDetMetrics(SimpleClass):
         self.box.nc = self.nc
         self.box.update(results)
         self.attributes.nc = self.na
-        self.attributes.all_ap = np.mean(ap, axis=0)
+        ap = np.asarray(ap)
+        self.attributes.all_ap = np.mean(ap, axis=0) if ap.size else np.zeros(self.na, dtype=np.float64)
         self.attributes.all_conf_mat = np.sum(conf_mat, axis=0)
 
 
