@@ -50,7 +50,22 @@ __all__ = (
     "PSA",
     "SCDown",
     "TorchVision",
+    "DSC3k2",  # compatibility symbol for YOLOv13 checkpoints serialized from block.py
 )
+
+
+def __getattr__(name):
+    """Lazily expose symbols moved to task-specific modules.
+
+    Some YOLOv13 checkpoints were serialized when ``DSC3k2`` lived in this
+    module.  Keep that import path valid without importing ``v13`` eagerly and
+    creating a circular import during normal module initialization.
+    """
+    if name == "DSC3k2":
+        from .v13 import DSC3k2
+
+        return DSC3k2
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class DFL(nn.Module):

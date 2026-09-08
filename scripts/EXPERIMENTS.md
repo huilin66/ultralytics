@@ -195,12 +195,12 @@ python scripts/train_mdet_experiments.py versions `
 测试 mdet，不调用 segmentation；默认覆盖 YOLOv8x、YOLOv9e、YOLOv10x、
 YOLOv11x、YOLOv12x、YOLOv13x、YOLO26x、MAYOLOx 和 RT-DETR-L，每个模型真实
 训练 2 epochs，并将峰值显存写入 `gpu_memory_smoke_summary.csv`。建议先用
-`batch=1`，确认所有模型都能跑通后，再据峰值为正式训练统一确定 batch size：
+`batch=16`，确认所有模型都能跑通后，再据峰值为正式训练统一确定 batch size：
 
 ```bash
 python scripts/gpu_memory_smoke_test.py \
   --data path/to/billboard_mdet.yaml \
-  --device 0 --imgsz 640 --batch 1 --epochs 2 \
+  --device 0 --imgsz 640 --batch 16 --epochs 2 \
   --project runs/gpu_memory_smoke
 ```
 

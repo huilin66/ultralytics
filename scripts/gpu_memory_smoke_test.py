@@ -10,7 +10,7 @@ Example (Linux/bash):
 
     python scripts/gpu_memory_smoke_test.py \
       --data path/to/billboard_mdet.yaml \
-      --batch 1 --imgsz 640 --device 0 \
+      --batch 16 --imgsz 640 --device 0 \
       --project runs/gpu_memory_smoke
 
 Use ``--pretrain-map NAME=CHECKPOINT`` when a checkpoint is not in the
@@ -278,7 +278,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--pretrain-map", action="append", default=[], metavar="NAME=CHECKPOINT")
     parser.add_argument("--epochs", type=int, default=2, help="epochs per model (default: 2)")
-    parser.add_argument("--batch", type=int, default=1, help="batch size; start with 1 for the smoke test")
+    parser.add_argument("--batch", type=int, default=16, help="batch size (default: 16)")
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--device", default="0", help="one CUDA device, e.g. 0 or cuda:0")
@@ -344,7 +344,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             key=lambda record: float(record["max_memory_reserved_gib"]),
             reverse=True,
         )
-        print("\nPeak reserved-memory ranking:")
+        print(f"\nPeak reserved-memory ranking (batch={args.batch}, imgsz={args.imgsz}):")
         for rank, record in enumerate(ranked, start=1):
             print(
                 f"{rank}. {record['model']}: "

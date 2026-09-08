@@ -170,7 +170,7 @@ def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--data", required=True, help="mdet dataset YAML")
     parser.add_argument("--project", default="runs/experiments", help="output root")
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--batch", type=int, default=32)
+    parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--device", default="0", help="CUDA index, cpu, or device string")
     parser.add_argument("--seed", type=int, default=0)

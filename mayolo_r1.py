@@ -6,7 +6,7 @@ import torch
 
 from ultralytics import RTDETR, YOLO
 
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 EPOCHS = 500
 IMGSZ = 640
 CONF = 0.5

@@ -31,7 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ho.add_argument("--mode", choices=("native", "one2many", "both"), default="both")
     ho.add_argument("--device", default="0")
     ho.add_argument("--imgsz", type=int, default=640)
-    ho.add_argument("--batch", type=int, default=32)
+    ho.add_argument("--batch", type=int, default=16)
     ho.add_argument("--workers", type=int, default=8)
     ho.add_argument("--conf", type=float, default=None, help="optional validation confidence threshold")
     ho.add_argument("--project", default="runs/experiments")
