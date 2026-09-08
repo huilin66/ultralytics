@@ -50,21 +50,47 @@ __all__ = (
     "PSA",
     "SCDown",
     "TorchVision",
-    "DSC3k2",  # compatibility symbol for YOLOv13 checkpoints serialized from block.py
+    # Compatibility symbols for YOLOv13 checkpoints serialized from block.py.
+    "DSBottleneck",
+    "DSC3k",
+    "DSC3k2",
+    "AdaHyperedgeGen",
+    "AdaHGConv",
+    "AdaHGComputation",
+    "C3AH",
+    "FuseModule",
+    "HyperACE",
+    "DownsampleConv",
+    "FullPAD_Tunnel",
 )
+
+
+_V13_COMPAT_NAMES = {
+    "DSBottleneck",
+    "DSC3k",
+    "DSC3k2",
+    "AdaHyperedgeGen",
+    "AdaHGConv",
+    "AdaHGComputation",
+    "C3AH",
+    "FuseModule",
+    "HyperACE",
+    "DownsampleConv",
+    "FullPAD_Tunnel",
+}
 
 
 def __getattr__(name):
     """Lazily expose symbols moved to task-specific modules.
 
-    Some YOLOv13 checkpoints were serialized when ``DSC3k2`` lived in this
-    module.  Keep that import path valid without importing ``v13`` eagerly and
+    Some YOLOv13 checkpoints were serialized when these symbols lived in this
+    module. Keep those import paths valid without importing ``v13`` eagerly and
     creating a circular import during normal module initialization.
     """
-    if name == "DSC3k2":
-        from .v13 import DSC3k2
+    if name in _V13_COMPAT_NAMES:
+        from . import v13
 
-        return DSC3k2
+        return getattr(v13, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
