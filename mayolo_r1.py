@@ -7,7 +7,10 @@ import torch
 from ultralytics import RTDETR, YOLO
 
 BATCH_SIZE = 16
-EPOCHS = 500
+STAGE1_EPOCHS = 100
+STAGE2_EPOCHS = 100
+# Default epoch budget for direct single-stage calls.
+EPOCHS = STAGE1_EPOCHS
 IMGSZ = 640
 CONF = 0.5
 TASK = "mdetect"
@@ -71,8 +74,8 @@ def myolo_train_full(
     pretrain_path,
     network=YOLO,
     auto_optim=False,
-    stage1_epochs=100,
-    stage2_epochs=100,
+    stage1_epochs=STAGE1_EPOCHS,
+    stage2_epochs=STAGE2_EPOCHS,
     stage1_name="stage1",
     stage2_name="stage2",
     **kwargs,

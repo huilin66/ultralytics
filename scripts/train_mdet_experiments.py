@@ -81,6 +81,8 @@ YOLO26_MDET_CONFIGS = {
 HSV_ABLATION_CURRENT = (0.015, 0.7, 0.4)
 HSV_ABLATION_REDUCED = (0.0, 0.2, 0.2)
 HSV_ABLATION_DISABLED = (0.0, 0.0, 0.0)
+DEFAULT_STAGE1_EPOCHS = 100
+DEFAULT_STAGE2_EPOCHS = 100
 
 from scripts.cli_compat import add_bool_argument
 
@@ -201,8 +203,8 @@ def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_train_arguments(parser: argparse.ArgumentParser) -> None:
     """Add arguments for the standard two-stage mdet protocol."""
     _add_common_train_arguments(parser)
-    parser.add_argument("--stage1-epochs", type=int, default=100)
-    parser.add_argument("--stage2-epochs", type=int, default=100)
+    parser.add_argument("--stage1-epochs", type=int, default=DEFAULT_STAGE1_EPOCHS)
+    parser.add_argument("--stage2-epochs", type=int, default=DEFAULT_STAGE2_EPOCHS)
 
 
 def _add_variant_arguments(
