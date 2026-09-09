@@ -1087,10 +1087,13 @@ class Metric(SimpleClass):
     @property
     def mf1_macro(self):
         """
-        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        Return the mean attribute macro-F1 across attributes.
+
+        Each attribute's class-level F1 scores are averaged first, and the
+        resulting per-attribute values are averaged equally across attributes.
 
         Returns:
-            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+            (float): The mean macro-F1 across attributes.
         """
         conf_mats = self.all_conf_mat
         all_f1_macro = []
@@ -1117,10 +1120,10 @@ class Metric(SimpleClass):
     @property
     def moa(self):
         """
-        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        Return overall attribute accuracy (OA) across all matched attributes.
 
         Returns:
-            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+            (float): Overall attribute accuracy.
         """
         conf_mat = self.all_conf_mat
         conf_mat = np.sum(conf_mat, axis=0)
@@ -1139,12 +1142,16 @@ class Metric(SimpleClass):
         return mao
 
     @property
-    def mf1_micro(self):
+    def mf1_macro_global(self):
         """
-        Return the mean Average Precision (mAP) over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+        Return macro-F1 after pooling all attribute confusion matrices.
+
+        The confusion matrices are pooled across attributes, then F1 is
+        calculated for each attribute level and averaged across levels. This
+        is a global/pooled macro-F1, not the standard micro-F1.
 
         Returns:
-            (float): The mAP over IoU thresholds of 0.5 - 0.95 in steps of 0.05.
+            (float): Global pooled macro-F1.
         """
         conf_mat = self.all_conf_mat
         conf_mat = np.sum(conf_mat, axis=0)
@@ -1152,10 +1159,15 @@ class Metric(SimpleClass):
         FP = conf_mat.sum(0) - TP
         FN = conf_mat.sum(1) - TP
 
-        precision_micro = TP / (TP + FP + 1e-8)
-        recall_micro = TP / (TP + FN + 1e-8)
-        f1_micro = 2 * precision_micro * recall_micro / (precision_micro + recall_micro + 1e-8)
-        return f1_micro.mean()
+        precision_level = TP / (TP + FP + 1e-8)
+        recall_level = TP / (TP + FN + 1e-8)
+        f1_level = 2 * precision_level * recall_level / (precision_level + recall_level + 1e-8)
+        return f1_level.mean()
+
+    @property
+    def mf1_micro(self):
+        """Backward-compatible alias for :attr:`mf1_macro_global`."""
+        return self.mf1_macro_global
 
     def mean_results(self):
         """Return mean of results, mp, mr, map50, map."""
@@ -1424,15 +1436,15 @@ class MDetMetrics(SimpleClass):
             "metrics/mAP50-95(B)",
             "metrics/OA(A)",
             "metrics/f1_macro(A)",
-            "metrics/f1_micro(A)",
-            "metrics/precision(A)",
-            "metrics/recall(A)",
+            "metrics/f1_macro_global(A)",
+            "metrics/P_macro(A)",
+            "metrics/R_macro(A)",
         ]
 
 
     def mean_results(self):
         """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results() + [self.attributes.moa, self.attributes.mf1_macro, self.attributes.mf1_micro, self.attributes.mprecision, self.attributes.mrecall]
+        return self.box.mean_results() + [self.attributes.moa, self.attributes.mf1_macro, self.attributes.mf1_macro_global, self.attributes.mprecision, self.attributes.mrecall]
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
@@ -1449,7 +1461,7 @@ class MDetMetrics(SimpleClass):
     @property
     def fitness(self):
         """Returns the fitness of box object."""
-        return self.box.fitness()*100 + self.box.fitness() * (self.attributes.mf1_macro*10 + self.attributes.mf1_micro*0)
+        return self.box.fitness()*100 + self.box.fitness() * (self.attributes.mf1_macro*10 + self.attributes.mf1_macro_global*0)
 
     @property
     def ap_class_index(self):
@@ -1710,9 +1722,9 @@ class MSegmentMetrics(SimpleClass):
             "metrics/mAP50-95(M)",
             "metrics/OA(A)",
             "metrics/f1_macro(A)",
-            "metrics/f1_micro(A)",
-            "metrics/precision(A)",
-            "metrics/recall(A)",
+            "metrics/f1_macro_global(A)",
+            "metrics/P_macro(A)",
+            "metrics/R_macro(A)",
         ]
 
     def mean_results(self):
@@ -1720,7 +1732,7 @@ class MSegmentMetrics(SimpleClass):
         return self.box.mean_results() + self.seg.mean_results() + [
             self.attributes.moa,
             self.attributes.mf1_macro,
-            self.attributes.mf1_micro,
+            self.attributes.mf1_macro_global,
             self.attributes.mprecision,
             self.attributes.mrecall,
         ]
@@ -1746,7 +1758,7 @@ class MSegmentMetrics(SimpleClass):
     @property
     def fitness(self):
         """Get the fitness score for both segmentation and bounding box models."""
-        return (self.seg.fitness() + self.box.fitness())*100 + (self.attributes.mf1_macro*10 + self.attributes.mf1_micro*0)
+        return (self.seg.fitness() + self.box.fitness())*100 + (self.attributes.mf1_macro*10 + self.attributes.mf1_macro_global*0)
 
     @property
     def ap_class_index(self):

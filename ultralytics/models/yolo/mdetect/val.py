@@ -118,9 +118,9 @@ class MDetectionValidator(BaseValidator):
             "mAP50-95)",
             "OA",
             "F1_macro",
-            "F1_micro",
-            "P_att",
-            "R_att",
+            "F1_macro_global",
+            "P_macro",
+            "R_macro",
         )
 
     def postprocess(self, preds):
