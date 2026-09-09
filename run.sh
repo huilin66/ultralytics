@@ -45,8 +45,27 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 #   COM_PATH=/path/to/co_occurrence_matrix6.csv bash run.sh
 COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}
 
-# E2.1 GIA-position ablation is not launched here because the current branch
-# has no current-compatible GIA-only or multi-position YAML configuration.
+# E2.1 GIA-position ablation: single positions 5/7/8/9/10 and the 5+7
+# combination, each with the ordinary and residual GIA variants.  The
+# baseline is intentionally not repeated here; it is already trained by the
+# other ablation jobs.
+python scripts/train_mdet_experiments.py gia-position \
+  --label E2_1_GIA_position \
+  --data "$DATA" \
+  --pretrain yolov10x.pt \
+  --variant gia5=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5.yaml \
+  --variant gia5_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_Res.yaml \
+  --variant gia7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_7.yaml \
+  --variant gia7_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_7_Res.yaml \
+  --variant gia8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_8.yaml \
+  --variant gia8_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_8_Res.yaml \
+  --variant gia9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_9.yaml \
+  --variant gia9_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_9_Res.yaml \
+  --variant gia10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_10.yaml \
+  --variant gia10_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_10_Res.yaml \
+  --variant gia5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7.yaml \
+  --variant gia5_7_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7_Res.yaml \
+  --project runs/experiments/E2_1_GIA_position
 
 # E2.2 GCA structure ablation: baseline vs GCA.
 python scripts/train_mdet_experiments.py gca-structure \

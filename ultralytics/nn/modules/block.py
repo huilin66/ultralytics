@@ -48,6 +48,7 @@ __all__ = (
     "C2fCIB",
     "Attention",
     "PSA",
+    "GIA",
     "SCDown",
     "TorchVision",
     # Compatibility symbols for YOLOv13 checkpoints serialized from block.py.
@@ -397,6 +398,8 @@ class SPPF(nn.Module):
                  add_module=None,
                  res_module=False,
                  pos_module=None,
+                 gia_module=False,
+                 gia_res=False,
                  ):
         """
         Initialize the SPPF layer with given input/output channels and kernel size.
@@ -405,6 +408,8 @@ class SPPF(nn.Module):
             c1 (int): Input channels.
             c2 (int): Output channels.
             k (int): Kernel size.
+            gia_module (bool): Whether to append the current GIA block.
+            gia_res (bool): Whether the appended GIA uses a residual connection.
 
         Notes:
             This module is equivalent to SPP(k=(5, 9, 13)).
@@ -418,6 +423,8 @@ class SPPF(nn.Module):
         self.add_module = add_module
         self.res_module = res_module
         self.pos_module = pos_module
+        self.gia_module = gia_module
+        self.gia_res = gia_res
         if self.pos_module == 1:
             self.c1_module, self.c2_module = c1, c1
         elif self.pos_module == 2:
@@ -443,6 +450,11 @@ class SPPF(nn.Module):
         else:
             self.layer_module = None
 
+        # Keep the original SPPF parameters at the same names and append GIA
+        # after the complete SPPF output. This lets detector checkpoints load
+        # the original SPPF weights while initializing only the new branch.
+        self.gia = GIA(c2, c2, res_module=gia_res) if gia_module else None
+
     def forward(self, x):
         """Apply sequential pooling operations to input and return concatenated feature maps."""
         if hasattr(self, 'pos_module') and self.pos_module==1:
@@ -462,6 +474,8 @@ class SPPF(nn.Module):
         if hasattr(self, 'pos_module') and self.pos_module==3:
             memory = self.layer_module(z)
             z = memory + z if self.res_module else memory
+        if self.gia is not None:
+            z = self.gia(z)
         return z
 
 
@@ -1879,12 +1893,14 @@ class CIB(nn.Module):
     """
     Conditional Identity Block (CIB) module.
 
-    Args:
-        c1 (int): Number of input channels.
-        c2 (int): Number of output channels.
-        shortcut (bool, optional): Whether to add a shortcut connection. Defaults to True.
-        e (float, optional): Scaling factor for the hidden channels. Defaults to 0.5.
-        lk (bool, optional): Whether to use RepVGGDW for the third convolutional layer. Defaults to False.
+        Args:
+            c1 (int): Number of input channels.
+            c2 (int): Number of output channels.
+            shortcut (bool, optional): Whether to add a shortcut connection. Defaults to True.
+            e (float, optional): Scaling factor for the hidden channels. Defaults to 0.5.
+            lk (bool, optional): Whether to use RepVGGDW for the third convolutional layer. Defaults to False.
+            gia_module (bool, optional): Whether to append the current GIA block. Defaults to False.
+            gia_res (bool, optional): Whether the appended GIA uses a residual connection. Defaults to False.
     """
 
     def __init__(self, c1, c2, shortcut=True, e=0.5, lk=False):
@@ -1935,9 +1951,22 @@ class C2fCIB(C2f):
         lk (bool, optional): Whether to use local key connection. Defaults to False.
         g (int, optional): Number of groups for grouped convolution. Defaults to 1.
         e (float, optional): Expansion ratio for CIB modules. Defaults to 0.5.
+        gia_module (bool, optional): Whether to append the current GIA block. Defaults to False.
+        gia_res (bool, optional): Whether the appended GIA uses a residual connection. Defaults to False.
     """
 
-    def __init__(self, c1, c2, n=1, shortcut=False, lk=False, g=1, e=0.5):
+    def __init__(
+        self,
+        c1,
+        c2,
+        n=1,
+        shortcut=False,
+        lk=False,
+        g=1,
+        e=0.5,
+        gia_module=False,
+        gia_res=False,
+    ):
         """
         Initialize C2fCIB module.
 
@@ -1949,9 +1978,19 @@ class C2fCIB(C2f):
             lk (bool): Whether to use local key connection.
             g (int): Groups for convolutions.
             e (float): Expansion ratio.
+            gia_module (bool): Whether to append the current GIA block.
+            gia_res (bool): Whether the appended GIA uses a residual connection.
         """
         super().__init__(c1, c2, n, shortcut, g, e)
         self.m = nn.ModuleList(CIB(self.c, self.c, shortcut, e=1.0, lk=lk) for _ in range(n))
+        self.gia_module = gia_module
+        self.gia_res = gia_res
+        self.gia = GIA(c2, c2, res_module=gia_res) if gia_module else None
+
+    def forward(self, x):
+        """Apply C2fCIB and, optionally, a post-C2f GIA block."""
+        x = super().forward(x)
+        return self.gia(x) if self.gia is not None else x
 
 
 class Attention(nn.Module):
@@ -2216,6 +2255,28 @@ class PSA(nn.Module):
         return z
 
 
+class GIA(nn.Module):
+    """Global Information Aggregation branch used by the mdet position ablations.
+
+    The current GIA design adds the ``C3STRCP`` Swin branch after the feature
+    block under test. The layer-10 implementation keeps the historical
+    ``PSA(..., add_module='c3strcp')`` form, which is equivalent. This wrapper
+    is used for layers 5, 7, 8, and 9 so their original module parameters keep
+    the same names and can be loaded from a detector checkpoint.
+    """
+
+    def __init__(self, c1, c2, res_module=False):
+        """Initialize the post-block C3STRCP branch."""
+        super().__init__()
+        self.layer_module = C3STRCP(c1, c2)
+        self.res_module = res_module
+
+    def forward(self, x):
+        """Apply the Swin branch and optionally add the original feature."""
+        memory = self.layer_module(x)
+        return memory + x if self.res_module else memory
+
+
 class C2PSA(nn.Module):
     """
     C2PSA module with attention mechanism for enhanced feature extraction and processing.
@@ -2377,7 +2438,7 @@ class SCDown(nn.Module):
         torch.Size([1, 128, 64, 64])
     """
 
-    def __init__(self, c1, c2, k, s):
+    def __init__(self, c1, c2, k, s, gia_module=False, gia_res=False):
         """
         Initialize SCDown module.
 
@@ -2386,10 +2447,15 @@ class SCDown(nn.Module):
             c2 (int): Output channels.
             k (int): Kernel size.
             s (int): Stride.
+            gia_module (bool): Whether to append the current GIA block.
+            gia_res (bool): Whether the appended GIA uses a residual connection.
         """
         super().__init__()
         self.cv1 = Conv(c1, c2, 1, 1)
         self.cv2 = Conv(c2, c2, k=k, s=s, g=c2, act=False)
+        self.gia_module = gia_module
+        self.gia_res = gia_res
+        self.gia = GIA(c2, c2, res_module=gia_res) if gia_module else None
 
     def forward(self, x):
         """
@@ -2401,7 +2467,8 @@ class SCDown(nn.Module):
         Returns:
             (torch.Tensor): Downsampled output tensor.
         """
-        return self.cv2(self.cv1(x))
+        x = self.cv2(self.cv1(x))
+        return self.gia(x) if self.gia is not None else x
 
 
 class TorchVision(nn.Module):

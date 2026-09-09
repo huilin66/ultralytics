@@ -25,13 +25,13 @@ Examples (PowerShell):
         --pretrain yolov10x.pt `
         --w4-values 0.25 0.5 1.0
 
-    python scripts/train_mdet_experiments.py variants `
+    python scripts/train_mdet_experiments.py gia-position `
         --label E2_1_GIA_position `
         --data path/to/billboard_mdet.yaml `
         --pretrain yolov10x.pt `
-        --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
-        --variant gia_p3=path/to/yolov10x_gia_p3.yaml `
-        --w4 0.5
+        --variant gia5=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5.yaml `
+        --variant gia5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7.yaml `
+        --variant gia5_7_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7_Res.yaml
 
     python scripts/train_mdet_experiments.py stage1-sweep `
         --data path/to/billboard_mdet.yaml `

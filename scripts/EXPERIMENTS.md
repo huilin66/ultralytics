@@ -118,7 +118,7 @@ python scripts/train_mdet_experiments.py w4 `
 ## E2.1–E2.3：GIA/GCA 消融
 
 三个命令的参数形式相同，使用重复的 `--variant NAME=CONFIG_YAML` 指定变体。
-这样不会假定某个尚未提交的 GIA 位置或 GCA 结构配置；每个变体都必须提供真实 YAML。
+每个变体都必须提供真实 YAML；E2.1 的完整 12 个变体已经写入 `run.sh`。
 
 例如 E2.1：
 
@@ -127,12 +127,16 @@ python scripts/train_mdet_experiments.py gia-position `
   --label E2_1_GIA_position `
   --data path/to/billboard_mdet.yaml `
   --pretrain yolov10x.pt `
-  --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
-  --variant gia_p3=path/to/yolov10x_gia_p3.yaml `
-  --variant gia_neck=path/to/yolov10x_gia_neck.yaml `
-  --w4 0.5 `
-  --project runs/experiments/E2_1_GIA
+  --variant gia5=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5.yaml `
+  --variant gia7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_7.yaml `
+  --variant gia8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_8.yaml `
+  --variant gia9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_9.yaml `
+  --variant gia10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_10.yaml `
+  --variant gia5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7.yaml `
+  --project runs/experiments/E2_1_GIA_position
 ```
+
+每个普通 GIA 位置都有对应的 `_Res.yaml` 版本。E2.1 不重复训练 baseline；训练轮数、`w4` 和 HSV 参数使用脚本默认值（当前为 100+100、0.5、0/0.2/0.2）。
 
 E2.2 和 E2.3 只需替换子命令、`--label` 和 `--variant`：
 
