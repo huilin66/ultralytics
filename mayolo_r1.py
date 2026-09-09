@@ -236,6 +236,42 @@ def model_val_dir(
     _save_stats_csv(records, splits, save_txt)
 
 
+MDET_ABLATION_DIRS = (
+    ("E2.2_GCA", r"runs/experiments/E2_2_GCA"),
+    ("E2.3_GIA_GCA", r"runs/experiments/E2_3_GIA_GCA"),
+    ("E2.4_HO", r"runs/experiments/E2_4_HO"),
+)
+
+
+def model_val_ablation_dirs(
+    experiment_dirs=MDET_ABLATION_DIRS,
+    network=YOLO,
+    names=("best.pt",),
+    run_test=True,
+    **kwargs,
+):
+    """Validate the configured mdet ablation directories and write summaries.
+
+    Each experiment keeps its own ``summary.csv`` so that the stage-1/stage-2
+    checkpoints and the val/test columns remain easy to trace back to the
+    corresponding ablation.  Missing experiment directories are skipped,
+    which allows this helper to be called before all jobs finish.
+    """
+    for label, folder in experiment_dirs:
+        if not os.path.isdir(folder):
+            print(f"=== skip {label}: directory not found: {folder} ===")
+            continue
+        print(f"\n=== {label}: validation summary ===")
+        model_val_dir(
+            folder,
+            network=network,
+            names=names,
+            run_test=run_test,
+            save_txt=os.path.join(folder, "summary.csv"),
+            **kwargs,
+        )
+
+
 def model_gat_val(weight_path, com_path, network=YOLO):
     model = _build_model(network, weight_path)
     model.model.model[-1].added_gat_head(com_path)
@@ -437,4 +473,5 @@ if __name__ == "__main__":
     # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
     # model_val_dir(r"runs/mdetect")  # validates best.pt & last.pt under every exp dir
     # model_val_dir(r"runs/mdetect", save_txt=r"runs/mdetect/mdetect_stats.csv")  # val+test in one row, CSV
-    model_val_dir(r"runs/experiments/E0_stage1_sweep")
+    # model_val_dir(r"runs/experiments/E0_stage1_sweep")
+    model_val_ablation_dirs()
