@@ -42,9 +42,9 @@ Examples (PowerShell):
     python scripts/train_mdet_experiments.py stage2-sweep `
         --data path/to/billboard_mdet.yaml `
         --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
-        --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_200_w4_0p5_seed_0/weights/best.pt `
-        --stage1-epochs 200 `
-        --stage2-values 50 100 200
+        --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_100_w4_0p5_seed_0/weights/best.pt `
+        --stage1-epochs 100 `
+        --stage2-values 50 100 150 200
 
     python scripts/train_mdet_experiments.py versions `
         --data path/to/billboard_mdet.yaml `
@@ -668,7 +668,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--stage2-values",
         nargs="+",
         type=int,
-        default=[50, 100, 200],
+        default=[50, 100, 150, 200],
         help="independent stage-2 epoch budgets",
     )
 

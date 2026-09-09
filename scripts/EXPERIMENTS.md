@@ -69,22 +69,22 @@ python scripts/train_mdet_experiments.py hsv-ablation \
 
 ### E0.3：固定 Stage1 checkpoint 的 Stage2-only epoch 敏感性
 
-先根据 E0.1 的验证集 `mAP50` 选择一个 Stage1 epoch，例如 `N*=200`，再把该组的
-`best.pt` 作为唯一初始化权重，独立运行 Stage2 的 50、100、200 epochs：
+根据 E0.1 的结果，后续固定 Stage1 为 `N*=100`，再把该组的 `best.pt` 作为唯一
+初始化权重，独立运行 Stage2 的 50、100、150、200 epochs：
 
 ```bash
 python scripts/train_mdet_experiments.py stage2-sweep \
   --data path/to/billboard_mdet.yaml \
   --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
-  --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_200_w4_0p5_seed_0/weights/best.pt \
-  --stage1-epochs 200 \
-  --stage2-values 50 100 200 \
+  --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_100_w4_0p5_seed_0/weights/best.pt \
+  --stage1-epochs 100 \
+  --stage2-values 50 100 150 200 \
   --w4 0.5 \
   --project runs/experiments/E0_stage2_sweep
 ```
 
 上面的 checkpoint 路径仅是命名示例，需要替换为远程服务器上实际生成的路径。
-三组 Stage2 都从同一个 `N*` checkpoint 开始，且每组独立配置自己的 Stage2 总
+四组 Stage2 都从同一个 `N*` checkpoint 开始，且每组独立配置自己的 Stage2 总
 epoch 数；不能用 Stage2=200 的第 50/100 epoch 代替 Stage2=50/100 的独立训练。
 
 最终至少保留以下对照：Stage1-only 的最佳时长、固定该 Stage1 checkpoint 后的最佳
