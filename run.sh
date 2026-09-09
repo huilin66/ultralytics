@@ -36,7 +36,7 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 
 
 python scripts/train_mdet_experiments.py w4 \
-  --data ultralytics/cfg/mayolo_r1/mayolo_v3.yaml \
+  --data "$DATA" \
   --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
   --pretrain yolov10x.pt \
   --w4-values 0.25 0.5 1.0 \
