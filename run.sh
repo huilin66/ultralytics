@@ -26,7 +26,7 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 
 
 python scripts/train_mdet_experiments.py stage2-sweep \
-  --data ultralytics/cfg/mayolo_r1/mayolo_v3.yaml \
+  --data "$DATA" \
   --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
   --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_100_w4_0p5_seed_0/weights/best.pt \
   --stage1-epochs 100 \
