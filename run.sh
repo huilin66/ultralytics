@@ -40,9 +40,4 @@ python scripts/train_mdet_experiments.py w4 \
   --model ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
   --pretrain yolov10x.pt \
   --w4-values 0.25 0.5 1.0 \
-  --stage1-epochs 100 \
-  --stage2-epochs 100 \
-  --hsv-h 0 \
-  --hsv-s 0.2 \
-  --hsv-v 0.2 \
   --project runs/experiments/E1_w4
