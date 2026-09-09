@@ -1,4 +1,4 @@
-"""Run a short GPU-memory smoke test for the largest mdet model variants.
+"""Run a short GPU-memory smoke test for mdet model variants.
 
 The test intentionally uses the real mdet training entry point from
 ``mayolo_r1.py``.  It runs each selected model for two epochs, records the
@@ -12,6 +12,9 @@ Example (Linux/bash):
       --data path/to/billboard_mdet.yaml \
       --batch 16 --imgsz 640 --device 0 \
       --project runs/gpu_memory_smoke
+
+For the E2.1 residual-GIA checks, select the six ``e2_1_*_res`` names and
+set ``--epochs 1``.
 
 Use ``--pretrain-map NAME=CHECKPOINT`` when a checkpoint is not in the
 standard Ultralytics search path.  The default model list contains the
@@ -88,6 +91,41 @@ MAX_MDET_MODELS = {
         "network": "rtdetr",
     },
 }
+
+E21_GIA_RES_MODELS = {
+    "e2_1_gia5_res": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_Res.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia7_res": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_7_Res.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia8_res": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_8_Res.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia9_res": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_9_Res.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia10_res": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_10_Res.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia5_7_res": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7_Res.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+}
+
+SMOKE_MODELS = {**MAX_MDET_MODELS, **E21_GIA_RES_MODELS}
 
 SUMMARY_FIELDS = (
     "model",
@@ -184,7 +222,7 @@ def _report_path(project: Path, stem: str) -> Path:
 
 
 def _run_one(args, name: str, spec: Dict[str, str], checkpoint: str, torch, device, index: int) -> Dict[str, object]:
-    """Run one two-epoch mdet smoke test and return its memory record."""
+    """Run one short mdet smoke test and return its memory record."""
     from mayolo_r1 import myolo_train
     from ultralytics import RTDETR, YOLO
 
@@ -266,13 +304,13 @@ def _run_one(args, name: str, spec: Dict[str, str], checkpoint: str, torch, devi
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run a two-epoch GPU-memory smoke test for the largest mdet model variants"
+        description="Run a short GPU-memory smoke test for mdet model variants"
     )
     parser.add_argument("--data", required=True, help="mdet dataset YAML")
     parser.add_argument(
         "--models",
         nargs="+",
-        choices=tuple(MAX_MDET_MODELS),
+        choices=tuple(SMOKE_MODELS),
         default=list(MAX_MDET_MODELS),
         help="models to test (default: every largest configured mdet variant)",
     )
@@ -304,7 +342,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         raise ValueError("--w4 must be non-negative")
 
     checkpoints = _parse_key_value(args.pretrain_map)
-    unknown = set(checkpoints) - set(MAX_MDET_MODELS)
+    unknown = set(checkpoints) - set(SMOKE_MODELS)
     if unknown:
         raise ValueError(f"Unknown --pretrain-map model(s): {', '.join(sorted(unknown))}")
 
@@ -325,7 +363,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS)
         writer.writeheader()
         for name in args.models:
-            spec = MAX_MDET_MODELS[name]
+            spec = SMOKE_MODELS[name]
             checkpoint = checkpoints.get(name, spec["pretrain"])
             record = _run_one(args, name, spec, checkpoint, torch, device, index)
             records.append(record)
