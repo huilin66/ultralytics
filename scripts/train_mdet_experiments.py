@@ -5,6 +5,8 @@ The launcher supports the normal two-stage protocol and two schedule studies:
 * ``stage1-sweep`` independently trains stage 1 for several epoch budgets;
 * ``stage2-sweep`` independently trains stage 2 from one fixed stage-1
   checkpoint for several epoch budgets.
+* ``hsv-ablation`` independently trains stage 1 for three HSV augmentation
+  settings at a fixed epoch budget.
 
 The schedule studies deliberately do not reuse intermediate checkpoints from a
 longer run, because the learning-rate and augmentation schedules depend on the
@@ -73,6 +75,9 @@ YOLO26_MDET_CONFIGS = {
     f"yolov26{size}": f"ultralytics/cfg/models/experiments/yolov26{size}-mdetect.yaml"
     for size in "nsmlx"
 }
+
+HSV_ABLATION_REDUCED = (0.0, 0.2, 0.2)
+HSV_ABLATION_DISABLED = (0.0, 0.0, 0.0)
 
 from scripts.cli_compat import add_bool_argument
 
@@ -175,6 +180,9 @@ def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--device", default="0", help="CUDA index, cpu, or device string")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--w4", type=float, default=0.5, help="attribute loss gain; mapped to mdet")
+    parser.add_argument("--hsv-h", type=float, default=0.015, help="HSV hue augmentation gain")
+    parser.add_argument("--hsv-s", type=float, default=0.7, help="HSV saturation augmentation gain")
+    parser.add_argument("--hsv-v", type=float, default=0.4, help="HSV value/brightness augmentation gain")
     parser.add_argument("--close-mosaic", type=int, default=None)
     add_bool_argument(parser, "--auto-optim", default=False)
     add_bool_argument(parser, "--amp", default=True)
@@ -235,8 +243,26 @@ def _append_manifest(project: str, record: Dict[str, object]) -> None:
         file.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _training_kwargs(args: argparse.Namespace, w4: float, seed: int) -> Dict[str, object]:
+def _get_hsv_values(
+    args: argparse.Namespace, override: Optional[Sequence[float]] = None
+) -> tuple[float, float, float]:
+    """Return validated HSV gains, optionally using an ablation override."""
+    values = tuple(
+        float(x) for x in (override if override is not None else (args.hsv_h, args.hsv_s, args.hsv_v))
+    )
+    if len(values) != 3 or any(value < 0 for value in values):
+        raise ValueError(f"HSV gains must contain three non-negative values, got: {values}")
+    return values
+
+
+def _training_kwargs(
+    args: argparse.Namespace,
+    w4: float,
+    seed: int,
+    hsv: Optional[Sequence[float]] = None,
+) -> Dict[str, object]:
     """Build kwargs accepted by the existing mdet trainer."""
+    hsv_h, hsv_s, hsv_v = _get_hsv_values(args, hsv)
     kwargs: Dict[str, object] = {
         "data": args.data,
         "device": args.device,
@@ -246,6 +272,9 @@ def _training_kwargs(args: argparse.Namespace, w4: float, seed: int) -> Dict[str
         "seed": seed,
         "amp": args.amp,
         "exist_ok": args.exist_ok,
+        "hsv_h": hsv_h,
+        "hsv_s": hsv_s,
+        "hsv_v": hsv_v,
         # Current code names the paper's w4 coefficient `mdet`.
         "mdet": float(w4),
     }
@@ -273,6 +302,7 @@ def _train_one(
     if w4 < 0:
         raise ValueError("w4/mdet must be non-negative")
 
+    hsv_h, hsv_s, hsv_v = _get_hsv_values(args)
     resolved_config = _materialize_config(config, args.com_path, args.project)
     run_base = f"{_slug(label)}_{_slug(variant_name)}_w4_{_slug(w4)}_seed_{seed}"
     record: Dict[str, object] = {
@@ -290,6 +320,7 @@ def _train_one(
         "project": args.project,
         "stage1_name": f"{run_base}_stage1",
         "stage2_name": f"{run_base}_stage2",
+        "hsv": {"h": hsv_h, "s": hsv_s, "v": hsv_v},
         "status": "dry-run" if args.dry_run else "started",
     }
     _append_manifest(args.project, record)
@@ -352,6 +383,7 @@ def _train_direct_stage(
     retrain: bool,
     stage1_epochs: int,
     run_name: str,
+    hsv: Optional[Sequence[float]] = None,
 ) -> Optional[str]:
     """Run one independent stage-only experiment and record its provenance."""
     if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
@@ -361,6 +393,7 @@ def _train_direct_stage(
     if retrain and not args.dry_run and not Path(pretrain).expanduser().is_file():
         raise FileNotFoundError(f"Stage1 checkpoint not found: {pretrain}")
 
+    hsv_h, hsv_s, hsv_v = _get_hsv_values(args, hsv)
     resolved_config = _materialize_config(config, args.com_path, args.project)
     record: Dict[str, object] = {
         "protocol": "stage2_only" if retrain else "stage1_only",
@@ -378,6 +411,7 @@ def _train_direct_stage(
         "data": args.data,
         "project": args.project,
         "run_name": run_name,
+        "hsv": {"h": hsv_h, "s": hsv_s, "v": hsv_v},
         "status": "dry-run" if args.dry_run else "started",
     }
     _append_manifest(args.project, record)
@@ -389,7 +423,7 @@ def _train_direct_stage(
     from mayolo_r1 import myolo_train
     from ultralytics import YOLO
 
-    train_kwargs = _training_kwargs(args, w4, seed)
+    train_kwargs = _training_kwargs(args, w4, seed, hsv=hsv)
     # Match myolo_train_full's semantics: stage 1 uses the trainer default
     # patience, while the original stage-2 path explicitly uses its own
     # epoch budget as patience.
@@ -454,6 +488,35 @@ def _run_stage1_sweep(args: argparse.Namespace) -> None:
             retrain=False,
             stage1_epochs=int(epochs),
             run_name=run_name,
+        )
+
+
+def _run_hsv_ablation(args: argparse.Namespace) -> None:
+    """Run E0.2: compare current, disabled, and reduced HSV augmentation."""
+    _validate_epoch_values([args.epochs], "--epochs")
+    variants = (
+        ("current", _get_hsv_values(args)),
+        ("disabled", HSV_ABLATION_DISABLED),
+        ("reduced", HSV_ABLATION_REDUCED),
+    )
+    for variant_name, hsv in variants:
+        run_name = (
+            f"{_slug(args.label)}_{variant_name}_stage1_{args.epochs}"
+            f"_w4_{_slug(args.w4)}_seed_{args.seed}"
+        )
+        _train_direct_stage(
+            args,
+            label=args.label,
+            variant_name=f"{variant_name}_hsv",
+            config=args.model,
+            pretrain=args.pretrain,
+            w4=args.w4,
+            seed=args.seed,
+            epochs=int(args.epochs),
+            retrain=False,
+            stage1_epochs=int(args.epochs),
+            run_name=run_name,
+            hsv=hsv,
         )
 
 
@@ -567,8 +630,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="independent stage-1 epoch budgets",
     )
 
+    hsv = subparsers.add_parser(
+        "hsv-ablation", help="E0.2: fixed-epoch HSV augmentation ablation"
+    )
+    _add_common_train_arguments(hsv)
+    hsv.add_argument("--label", default="E0_hsv")
+    hsv.add_argument("--model", required=True, help="one mdet model YAML")
+    hsv.add_argument("--pretrain", required=True, help="pretrained detector checkpoint")
+    hsv.add_argument(
+        "--epochs",
+        type=int,
+        default=100,
+        help="stage-1 epoch budget for each HSV variant (default: 100)",
+    )
+
     stage2 = subparsers.add_parser(
-        "stage2-sweep", help="E0.2: independent stage-2 epoch sensitivity"
+        "stage2-sweep", help="E0.3: independent stage-2 epoch sensitivity"
     )
     _add_common_train_arguments(stage2)
     stage2.add_argument("--label", default="E0_stage2")
@@ -630,6 +707,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         _run_w4(args)
     elif args.experiment == "stage1-sweep":
         _run_stage1_sweep(args)
+    elif args.experiment == "hsv-ablation":
+        _run_hsv_ablation(args)
     elif args.experiment == "stage2-sweep":
         _run_stage2_sweep(args)
     elif args.experiment == "stability":
