@@ -165,18 +165,18 @@ MDETECT_METRIC_KEYS = [
     "metrics/mAP50-95(B)",
     "metrics/OA(A)",
     "metrics/f1_macro(A)",
-    "metrics/f1_micro(A)",
-    "metrics/precision(A)",
-    "metrics/recall(A)",
+    "metrics/f1_macro_global(A)",
+    "metrics/P_macro(A)",
+    "metrics/R_macro(A)",
 ]
 MDETECT_METRIC_LABELS = {
     "metrics/mAP50(B)": "mAP50",
     "metrics/mAP50-95(B)": "mAP50-95",
     "metrics/OA(A)": "OA",
     "metrics/f1_macro(A)": "F1_macro",
-    "metrics/f1_micro(A)": "F1_micro",
-    "metrics/precision(A)": "P_att",
-    "metrics/recall(A)": "R_att",
+    "metrics/f1_macro_global(A)": "F1_macro_global",
+    "metrics/P_macro(A)": "P_macro",
+    "metrics/R_macro(A)": "R_macro",
 }
 
 
