@@ -76,6 +76,9 @@ YOLO26_MDET_CONFIGS = {
     for size in "nsmlx"
 }
 
+# Keep the previously tested configuration fixed for the HSV ablation, even
+# though the project-wide default below is now the reduced setting.
+HSV_ABLATION_CURRENT = (0.015, 0.7, 0.4)
 HSV_ABLATION_REDUCED = (0.0, 0.2, 0.2)
 HSV_ABLATION_DISABLED = (0.0, 0.0, 0.0)
 
@@ -180,9 +183,9 @@ def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--device", default="0", help="CUDA index, cpu, or device string")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--w4", type=float, default=0.5, help="attribute loss gain; mapped to mdet")
-    parser.add_argument("--hsv-h", type=float, default=0.015, help="HSV hue augmentation gain")
-    parser.add_argument("--hsv-s", type=float, default=0.7, help="HSV saturation augmentation gain")
-    parser.add_argument("--hsv-v", type=float, default=0.4, help="HSV value/brightness augmentation gain")
+    parser.add_argument("--hsv-h", type=float, default=0.0, help="HSV hue augmentation gain")
+    parser.add_argument("--hsv-s", type=float, default=0.2, help="HSV saturation augmentation gain")
+    parser.add_argument("--hsv-v", type=float, default=0.2, help="HSV value/brightness augmentation gain")
     parser.add_argument("--close-mosaic", type=int, default=None)
     add_bool_argument(parser, "--auto-optim", default=False)
     add_bool_argument(parser, "--amp", default=True)
@@ -495,7 +498,7 @@ def _run_hsv_ablation(args: argparse.Namespace) -> None:
     """Run E0.2: compare current, disabled, and reduced HSV augmentation."""
     _validate_epoch_values([args.epochs], "--epochs")
     variants = (
-        ("current", _get_hsv_values(args)),
+        ("current", HSV_ABLATION_CURRENT),
         ("disabled", HSV_ABLATION_DISABLED),
         ("reduced", HSV_ABLATION_REDUCED),
     )
