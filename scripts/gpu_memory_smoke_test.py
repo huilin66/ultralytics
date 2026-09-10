@@ -13,8 +13,7 @@ Example (Linux/bash):
       --batch 16 --imgsz 640 --device 0 \
       --project runs/gpu_memory_smoke
 
-For the E2.1 residual-GIA checks, select the six ``e2_1_*_res`` names and
-set ``--epochs 1``.
+For the E2.1 GIA checks, select the ``e2_1_*`` names and set ``--epochs 1``.
 
 Use ``--pretrain-map NAME=CHECKPOINT`` when a checkpoint is not in the
 standard Ultralytics search path.  The default model list contains the
@@ -125,7 +124,35 @@ E21_GIA_RES_MODELS = {
     },
 }
 
-SMOKE_MODELS = {**MAX_MDET_MODELS, **E21_GIA_RES_MODELS}
+E21_GIA_V2_MODELS = {
+    "e2_1_gia_v2_7": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_8": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_9": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_10": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_5_7": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+}
+
+SMOKE_MODELS = {**MAX_MDET_MODELS, **E21_GIA_RES_MODELS, **E21_GIA_V2_MODELS}
 
 SUMMARY_FIELDS = (
     "model",

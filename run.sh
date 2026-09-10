@@ -57,24 +57,29 @@ COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_tr
 #   --project runs/gpu_memory_smoke/E2_1_GIA_position_res \
 #   --name e2_1_res
 
-# E2.1 GIA-position ablation: single positions 5/7/8/9/10 and the 5+7
-# combination, each with the ordinary and residual GIA variants.  The
-# baseline is intentionally not repeated here; it is already trained by the
-# other ablation jobs.
+# E2.1 GIA-v2 smoke test: the zero-gated upgraded GIA is identity-initialized,
+# so verify memory and construction before the 100-epoch position ablation.
+# python scripts/gpu_memory_smoke_test.py \
+#   --data "$DATA" \
+#   --models e2_1_gia_v2_7 e2_1_gia_v2_8 e2_1_gia_v2_9 e2_1_gia_v2_10 e2_1_gia_v2_5_7 \
+#   --device 0 \
+#   --imgsz 640 \
+#   --batch 16 \
+#   --epochs 1 \
+#   --project runs/gpu_memory_smoke/E2_1_GIA_v2_position \
+#   --name e2_1_gia_v2
+
+# E2.1 GIA-v2 position ablation: positions 7/8/9/10 and the 5+7
+# combination.  The baseline and the old GIA position runs are not repeated.
 python scripts/train_mdet_experiments.py gia-position \
-  --label E2_1_GIA_position \
+  --label E2_1_GIA_v2_position \
   --data "$DATA" \
   --pretrain yolov10x.pt \
-  --variant gia5=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5.yaml \
-  --variant gia5_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_Res.yaml \
-  --variant gia7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_7.yaml \
-  --variant gia7_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_7_Res.yaml \
-  --variant gia8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_8.yaml \
-  --variant gia8_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_8_Res.yaml \
-  --variant gia9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_9.yaml \
-  --variant gia9_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_9_Res.yaml \
-  --variant gia10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_10.yaml \
-  --variant gia10_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_10_Res.yaml \
-  --variant gia5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7.yaml \
-  --variant gia5_7_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7_Res.yaml \
-  --project runs/experiments/E2_1_GIA_position
+  --stage1-only \
+  --stage1-epochs 100 \
+  --variant gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml \
+  --variant gia_v2_8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml \
+  --variant gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml \
+  --variant gia_v2_10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml \
+  --variant gia_v2_5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml \
+  --project runs/experiments/E2_1_GIA_v2_position

@@ -49,6 +49,7 @@ __all__ = (
     "Attention",
     "PSA",
     "GIA",
+    "GIAv2",
     "SCDown",
     "TorchVision",
     # Compatibility symbols for YOLOv13 checkpoints serialized from block.py.
@@ -400,6 +401,7 @@ class SPPF(nn.Module):
                  pos_module=None,
                  gia_module=False,
                  gia_res=False,
+                 gia_v2=False,
                  ):
         """
         Initialize the SPPF layer with given input/output channels and kernel size.
@@ -410,6 +412,7 @@ class SPPF(nn.Module):
             k (int): Kernel size.
             gia_module (bool): Whether to append the current GIA block.
             gia_res (bool): Whether the appended GIA uses a residual connection.
+            gia_v2 (bool): Whether to append the gated GIA-v2 block.
 
         Notes:
             This module is equivalent to SPP(k=(5, 9, 13)).
@@ -425,6 +428,7 @@ class SPPF(nn.Module):
         self.pos_module = pos_module
         self.gia_module = gia_module
         self.gia_res = gia_res
+        self.gia_v2 = gia_v2
         if self.pos_module == 1:
             self.c1_module, self.c2_module = c1, c1
         elif self.pos_module == 2:
@@ -453,7 +457,12 @@ class SPPF(nn.Module):
         # Keep the original SPPF parameters at the same names and append GIA
         # after the complete SPPF output. This lets detector checkpoints load
         # the original SPPF weights while initializing only the new branch.
-        self.gia = GIA(c2, c2, res_module=gia_res) if gia_module else None
+        if gia_v2:
+            self.gia = GIAv2(c2, c2)
+        elif gia_module:
+            self.gia = GIA(c2, c2, res_module=gia_res)
+        else:
+            self.gia = None
 
     def forward(self, x):
         """Apply sequential pooling operations to input and return concatenated feature maps."""
@@ -1953,6 +1962,7 @@ class C2fCIB(C2f):
         e (float, optional): Expansion ratio for CIB modules. Defaults to 0.5.
         gia_module (bool, optional): Whether to append the current GIA block. Defaults to False.
         gia_res (bool, optional): Whether the appended GIA uses a residual connection. Defaults to False.
+        gia_v2 (bool, optional): Whether to append the gated GIA-v2 block. Defaults to False.
     """
 
     def __init__(
@@ -1966,6 +1976,7 @@ class C2fCIB(C2f):
         e=0.5,
         gia_module=False,
         gia_res=False,
+        gia_v2=False,
     ):
         """
         Initialize C2fCIB module.
@@ -1980,12 +1991,19 @@ class C2fCIB(C2f):
             e (float): Expansion ratio.
             gia_module (bool): Whether to append the current GIA block.
             gia_res (bool): Whether the appended GIA uses a residual connection.
+            gia_v2 (bool): Whether to append the gated GIA-v2 block.
         """
         super().__init__(c1, c2, n, shortcut, g, e)
         self.m = nn.ModuleList(CIB(self.c, self.c, shortcut, e=1.0, lk=lk) for _ in range(n))
         self.gia_module = gia_module
         self.gia_res = gia_res
-        self.gia = GIA(c2, c2, res_module=gia_res) if gia_module else None
+        self.gia_v2 = gia_v2
+        if gia_v2:
+            self.gia = GIAv2(c2, c2)
+        elif gia_module:
+            self.gia = GIA(c2, c2, res_module=gia_res)
+        else:
+            self.gia = None
 
     def forward(self, x):
         """Apply C2fCIB and, optionally, a post-C2f GIA block."""
@@ -2190,6 +2208,10 @@ class PSA(nn.Module):
             self.layer_module = C3TRCP(self.c1_module, self.c2_module)
         elif self.add_module == 'c3strcpn2':
             self.layer_module = C3STRCP(self.c1_module, self.c2_module, n=2)
+        elif self.add_module == 'giav2':
+            # GIA-v2 is a complete gated residual block.  Its internal
+            # residual path preserves the PSA output when the gate is zero.
+            self.layer_module = GIAv2(self.c1_module, self.c2_module)
         elif self.add_module == 'c4str':
             self.layer_module = C4STR(self.c1_module, self.c2_module)
         elif self.add_module == 'c4strn2':
@@ -2275,6 +2297,51 @@ class GIA(nn.Module):
         """Apply the Swin branch and optionally add the original feature."""
         memory = self.layer_module(x)
         return memory + x if self.res_module else memory
+
+
+class GIAv2(nn.Module):
+    """Gated global-information aggregation block for mdet experiments.
+
+    GIA-v2 keeps the original GIA idea of parallel global and local feature
+    processing, but makes the update a zero-initialized residual.  The
+    transformer branch uses two Swin layers (regular then shifted windows),
+    while the local branch uses a depthwise convolution to retain spatial
+    details useful for detection.
+
+    Args:
+        c1 (int): Number of input channels.
+        c2 (int): Number of output channels.
+        n (int): Number of Swin layers.  ``2`` gives one regular and one
+            shifted-window layer.
+    """
+
+    def __init__(self, c1, c2, n=2):
+        super().__init__()
+        if c2 < 2:
+            raise ValueError(f"GIAv2 requires at least 2 output channels, got {c2}")
+
+        c_ = c2 // 2
+        self.shortcut = nn.Identity() if c1 == c2 else Conv(c1, c2, 1, 1, act=False)
+        self.pre = Conv(c1, c2, 1, 1)
+        self.global_branch = SwinTransformerBlock(c_, c_, max(c_ // 32, 1), n)
+        self.local_branch = nn.Sequential(
+            DWConv(c_, c_, 3, 1),
+            Conv(c_, c_, 1, 1),
+        )
+        self.fuse = Conv(c2, c2, 1, 1, act=False)
+
+        # Start exactly as the identity mapping so loading a detector
+        # checkpoint cannot immediately disturb its learned features.
+        self.gamma = nn.Parameter(torch.zeros(1, c2, 1, 1))
+
+    def forward(self, x):
+        """Enhance ``x`` with gated global and local context."""
+        y = self.pre(x)
+        y_global, y_local = y.chunk(2, dim=1)
+        y_global = self.global_branch(y_global)
+        y_local = self.local_branch(y_local)
+        update = self.fuse(torch.cat((y_global, y_local), dim=1))
+        return self.shortcut(x) + self.gamma * update
 
 
 class C2PSA(nn.Module):
@@ -2438,7 +2505,7 @@ class SCDown(nn.Module):
         torch.Size([1, 128, 64, 64])
     """
 
-    def __init__(self, c1, c2, k, s, gia_module=False, gia_res=False):
+    def __init__(self, c1, c2, k, s, gia_module=False, gia_res=False, gia_v2=False):
         """
         Initialize SCDown module.
 
@@ -2449,13 +2516,20 @@ class SCDown(nn.Module):
             s (int): Stride.
             gia_module (bool): Whether to append the current GIA block.
             gia_res (bool): Whether the appended GIA uses a residual connection.
+            gia_v2 (bool): Whether to append the gated GIA-v2 block.
         """
         super().__init__()
         self.cv1 = Conv(c1, c2, 1, 1)
         self.cv2 = Conv(c2, c2, k=k, s=s, g=c2, act=False)
         self.gia_module = gia_module
         self.gia_res = gia_res
-        self.gia = GIA(c2, c2, res_module=gia_res) if gia_module else None
+        self.gia_v2 = gia_v2
+        if gia_v2:
+            self.gia = GIAv2(c2, c2)
+        elif gia_module:
+            self.gia = GIA(c2, c2, res_module=gia_res)
+        else:
+            self.gia = None
 
     def forward(self, x):
         """

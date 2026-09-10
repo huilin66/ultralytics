@@ -7,6 +7,8 @@ The launcher supports the normal two-stage protocol and two schedule studies:
   checkpoint for several epoch budgets.
 * ``hsv-ablation`` independently trains stage 1 for three HSV augmentation
   settings at a fixed epoch budget.
+* variant experiments accept ``--stage1-only`` for position/structure tests
+  that intentionally stop after stage 1.
 
 The schedule studies deliberately do not reuse intermediate checkpoints from a
 longer run, because the learning-rate and augmentation schedules depend on the
@@ -29,6 +31,7 @@ Examples (PowerShell):
         --label E2_1_GIA_position `
         --data path/to/billboard_mdet.yaml `
         --pretrain yolov10x.pt `
+        --stage1-only `
         --variant gia5=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5.yaml `
         --variant gia5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7.yaml `
         --variant gia5_7_res=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_5_7_Res.yaml
@@ -233,6 +236,12 @@ def _add_variant_arguments(
         help="variant-specific checkpoint, repeat as needed",
     )
     parser.add_argument("--network", choices=("yolo", "rtdetr"), default=default_network)
+    add_bool_argument(
+        parser,
+        "--stage1-only",
+        default=False,
+        help="train each variant for stage 1 only; skip the stage-2 fine-tuning pass",
+    )
 
 
 def _record_path(project: str) -> Path:
@@ -389,6 +398,7 @@ def _train_direct_stage(
     stage1_epochs: int,
     run_name: str,
     hsv: Optional[Sequence[float]] = None,
+    network_name: str = "yolo",
 ) -> Optional[str]:
     """Run one independent stage-only experiment and record its provenance."""
     if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
@@ -407,7 +417,7 @@ def _train_direct_stage(
         "config": resolved_config,
         "pretrain": pretrain,
         "stage1_checkpoint": pretrain if retrain else None,
-        "network": "yolo",
+        "network": network_name,
         "w4": float(w4),
         "ultralytics_argument": {"mdet": float(w4)},
         "seed": seed,
@@ -426,7 +436,7 @@ def _train_direct_stage(
         return None
 
     from mayolo_r1 import myolo_train
-    from ultralytics import YOLO
+    from ultralytics import RTDETR, YOLO
 
     train_kwargs = _training_kwargs(args, w4, seed, hsv=hsv)
     # Match myolo_train_full's semantics: stage 1 uses the trainer default
@@ -438,7 +448,7 @@ def _train_direct_stage(
         best = myolo_train(
             resolved_config,
             pretrain_path=pretrain,
-            network=YOLO,
+            network=RTDETR if network_name == "rtdetr" else YOLO,
             auto_optim=args.auto_optim,
             retrain=retrain,
             epochs=epochs,
@@ -571,16 +581,36 @@ def _run_variants(args: argparse.Namespace) -> None:
             raise ValueError(
                 f"No checkpoint for variant {name!r}. Pass --pretrain or --pretrain-map {name}=..."
             )
-        _train_one(
-            args,
-            label=label,
-            variant_name=name,
-            config=config,
-            pretrain=pretrain,
-            w4=args.w4,
-            seed=args.seed,
-            network_name=args.network,
-        )
+        if args.stage1_only:
+            run_name = (
+                f"{_slug(label)}_{_slug(name)}_stage1_{args.stage1_epochs}"
+                f"_w4_{_slug(args.w4)}_seed_{args.seed}"
+            )
+            _train_direct_stage(
+                args,
+                label=label,
+                variant_name=name,
+                config=config,
+                pretrain=pretrain,
+                w4=args.w4,
+                seed=args.seed,
+                epochs=args.stage1_epochs,
+                retrain=False,
+                stage1_epochs=args.stage1_epochs,
+                run_name=run_name,
+                network_name=args.network,
+            )
+        else:
+            _train_one(
+                args,
+                label=label,
+                variant_name=name,
+                config=config,
+                pretrain=pretrain,
+                w4=args.w4,
+                seed=args.seed,
+                network_name=args.network,
+            )
 
 
 def _run_stability(args: argparse.Namespace) -> None:

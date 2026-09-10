@@ -59,6 +59,7 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    GIAv2,
 )
 from .conv import (
     CBAM,
@@ -124,6 +125,7 @@ __all__ = (
     "SCDown",
     "C2fPSA",
     "GIA",
+    "GIAv2",
     "C2PSA",
     "C2fAttn",
     "C3x",
