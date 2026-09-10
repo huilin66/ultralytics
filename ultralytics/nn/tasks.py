@@ -635,8 +635,9 @@ class MDetectionModel(BaseModel):
             m.bias_init()  # only run once
         else:
             self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
-        # Init weights, biases
-        initialize_weights(self)
+        # Init weights, biases. Keep identity-initialized GIA-v2 additions from
+        # shifting the random initialization of the mdet task heads.
+        initialize_weights(self, preserve_rng_types=(GIAv2,))
         if verbose:
             self.info()
             LOGGER.info("")
