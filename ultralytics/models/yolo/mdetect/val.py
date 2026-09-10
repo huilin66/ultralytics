@@ -425,7 +425,10 @@ class MDetectionValidator(BaseValidator):
     def get_dataloader(self, dataset_path, batch_size):
         """Construct and return dataloader."""
         dataset = self.build_dataset(dataset_path, batch=batch_size, mode="val")
-        return build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1)  # return dataloader
+        loader_seed = self.args.seed if getattr(self.args, "task", None) == "mdetect" else None
+        return build_dataloader(
+            dataset, batch_size, self.args.workers, shuffle=False, rank=-1, seed=loader_seed
+        )  # return dataloader
 
     def plot_val_samples(self, batch, ni):
         """Plot validation image samples."""

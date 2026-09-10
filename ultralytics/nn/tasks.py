@@ -581,7 +581,9 @@ class DetectionModel(BaseModel):
 class MDetectionModel(BaseModel):
     """YOLOv8 mdetection model."""
 
-    def __init__(self, cfg="yolov8n.yaml", ch=3, nc=None, na=None, nal=None, verbose=True):  # model, input channels, number of classes
+    def __init__(
+        self, cfg="yolov8n.yaml", ch=3, nc=None, na=None, nal=None, verbose=True, model_seed=None
+    ):  # model, input channels, number of classes
         """Initialize the YOLOv8 detection model with the given config and parameters."""
         super().__init__()
         self.yaml = cfg if isinstance(cfg, dict) else yaml_model_load(cfg)  # cfg dict
@@ -637,7 +639,7 @@ class MDetectionModel(BaseModel):
             self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
         # Init weights, biases. Keep identity-initialized GIA-v2 additions from
         # shifting the random initialization of the mdet task heads.
-        initialize_weights(self, preserve_rng_types=(GIAv2,))
+        initialize_weights(self, preserve_rng_types=(GIAv2,), seed=model_seed)
         if verbose:
             self.info()
             LOGGER.info("")

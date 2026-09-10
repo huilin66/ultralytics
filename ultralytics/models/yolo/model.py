@@ -12,7 +12,7 @@ from huggingface_hub import PyTorchModelHubMixin
 class YOLO(Model):
     """YOLO (You Only Look Once) object detection model."""
 
-    def __init__(self, model="yolo11n.pt", task=None, verbose=False):
+    def __init__(self, model="yolo11n.pt", task=None, verbose=False, model_seed=None):
         """Initialize YOLO model, switching to YOLOWorld if model filename contains '-world'."""
         path = Path(model)
         if "-world" in path.stem and path.suffix in {".pt", ".yaml", ".yml"}:  # if YOLOWorld PyTorch model
@@ -21,7 +21,7 @@ class YOLO(Model):
             self.__dict__ = new_instance.__dict__
         else:
             # Continue with default YOLO initialization
-            super().__init__(model=model, task=task, verbose=verbose)
+            super().__init__(model=model, task=task, verbose=verbose, model_seed=model_seed)
 
     @property
     def task_map(self):

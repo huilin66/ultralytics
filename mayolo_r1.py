@@ -40,9 +40,13 @@ def _is_rtdetr(network):
     return network is RTDETR
 
 
-def _build_model(network, model_path):
+def _build_model(network, model_path, model_seed=None):
     """Build a model while keeping the YOLO and RT-DETR constructor signatures separate."""
-    return network(model_path) if _is_rtdetr(network) else network(model_path, task=TASK)
+    return (
+        network(model_path)
+        if _is_rtdetr(network)
+        else network(model_path, task=TASK, model_seed=model_seed)
+    )
 
 
 def _rtdetr_attribute_only_params(model):
@@ -105,7 +109,9 @@ def myolo_train_full(
 
 
 def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain=False, **kwargs):
-    model = _build_model(network, cfg_path)
+    input_seed = kwargs.get("seed")
+    model_seed = None if input_seed is None else int(input_seed)
+    model = _build_model(network, cfg_path, model_seed=model_seed)
     model.load(pretrain_path)
 
     train_params = {

@@ -35,6 +35,12 @@ try:
 except ImportError:
     thop = None  # conda support without 'ultralytics-thop' installed
 
+
+# Preserve the historical random streams as bases and add the user-provided
+# experiment seed on top. The DataLoader base is shared with the mdet loader.
+MODEL_INIT_BASE_SEED = 0
+DATALOADER_BASE_SEED = 6148914691236517205
+
 # Version checks (all default to version>=min_version)
 TORCH_1_9 = check_version(torch.__version__, "1.9.0")
 TORCH_1_13 = check_version(torch.__version__, "1.13.0")
@@ -451,7 +457,7 @@ def get_flops_with_torch_profiler(model, imgsz=640):
     return flops
 
 
-def initialize_weights(model, preserve_rng_types=()):
+def initialize_weights(model, preserve_rng_types=(), seed=None):
     """Initialize model weights to random values.
 
     Args:
@@ -461,8 +467,11 @@ def initialize_weights(model, preserve_rng_types=()):
             initialized in place and the RNG state is restored afterwards.
             This is useful for mdet ablations that add an identity-initialized
             branch before a task-specific randomly initialized head.
+        seed (int, optional): Experiment seed added to ``MODEL_INIT_BASE_SEED``.
+            ``None`` preserves the historical fixed initialization stream.
     """
-    init_seeds()
+    effective_seed = MODEL_INIT_BASE_SEED if seed is None else MODEL_INIT_BASE_SEED + int(seed)
+    init_seeds(effective_seed)
 
     def _initialize_module(m):
         """Initialize one module using the project's historical rules."""

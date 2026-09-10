@@ -23,6 +23,7 @@ from ultralytics.data.loaders import (
 from ultralytics.data.utils import IMG_FORMATS, PIN_MEMORY, VID_FORMATS
 from ultralytics.utils import RANK, colorstr
 from ultralytics.utils.checks import check_file
+from ultralytics.utils.torch_utils import DATALOADER_BASE_SEED
 
 
 class InfiniteDataLoader(dataloader.DataLoader):
@@ -168,7 +169,7 @@ def build_grounding(cfg, img_path, json_file, batch, mode="train", rect=False, s
     )
 
 
-def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
+def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1, seed=None):
     """
     Create and return an InfiniteDataLoader or DataLoader for training or validation.
 
@@ -178,6 +179,8 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
         workers (int): Number of worker threads for loading data.
         shuffle (bool): Whether to shuffle the dataset.
         rank (int): Process rank in distributed training. -1 for single-GPU training.
+        seed (int, optional): Experiment seed added to the historical DataLoader
+            base seed. ``None`` preserves the historical stream.
 
     Returns:
         (InfiniteDataLoader): A dataloader that can be used for training or validation.
@@ -187,7 +190,8 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
     nw = min(os.cpu_count() // max(nd, 1), workers)  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     generator = torch.Generator()
-    generator.manual_seed(6148914691236517205 + RANK)
+    effective_seed = DATALOADER_BASE_SEED if seed is None else DATALOADER_BASE_SEED + int(seed)
+    generator.manual_seed(effective_seed + RANK)
     return InfiniteDataLoader(
         dataset=dataset,
         batch_size=batch,

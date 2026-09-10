@@ -84,6 +84,7 @@ class Model(torch.nn.Module):
         model: Union[str, Path] = "yolo11n.pt",
         task: str = None,
         verbose: bool = False,
+        model_seed: int = None,
     ) -> None:
         """
         Initialize a new instance of the YOLO model class.
@@ -99,6 +100,8 @@ class Model(torch.nn.Module):
             task (str | None): The task type associated with the YOLO model, specifying its application domain.
             verbose (bool): If True, enables verbose output during the model's initialization and subsequent
                 operations.
+            model_seed (int | None): Optional experiment seed used by task-specific model initialization.
+                Currently consumed by the mdetect model only.
 
         Raises:
             FileNotFoundError: If the specified model file does not exist or is inaccessible.
@@ -122,6 +125,7 @@ class Model(torch.nn.Module):
         self.metrics = None  # validation/training metrics
         self.session = None  # HUB session
         self.task = task  # task type
+        self.model_seed = model_seed
         self.model_name = None  # model name
         model = str(model).strip()
 
@@ -253,7 +257,11 @@ class Model(torch.nn.Module):
         cfg_dict = yaml_model_load(cfg)
         self.cfg = cfg
         self.task = task or guess_model_task(cfg_dict)
-        self.model = (model or self._smart_load("model"))(cfg_dict, verbose=verbose and RANK == -1)  # build model
+        model_cls = model or self._smart_load("model")
+        model_kwargs = {"verbose": verbose and RANK == -1}
+        if self.task == "mdetect" and self.model_seed is not None:
+            model_kwargs["model_seed"] = self.model_seed
+        self.model = model_cls(cfg_dict, **model_kwargs)  # build model
         self.overrides["model"] = self.cfg
         self.overrides["task"] = self.task
 

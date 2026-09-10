@@ -53,7 +53,10 @@ class MDetectionTrainer(BaseTrainer):
             LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with DataLoader shuffle, setting shuffle=False")
             shuffle = False
         workers = self.args.workers if mode == "train" else self.args.workers * 2
-        return build_dataloader(dataset, batch_size, workers, shuffle, rank)  # return dataloader
+        # Keep segmentation on the historical stream; only mdetect consumes
+        # the experiment seed here.
+        loader_seed = self.args.seed if getattr(self.args, "task", None) == "mdetect" else None
+        return build_dataloader(dataset, batch_size, workers, shuffle, rank, seed=loader_seed)  # return dataloader
 
     def preprocess_batch(self, batch):
         """Preprocesses a batch of images by scaling and converting to float."""
@@ -179,6 +182,7 @@ class MDetectionTrainer(BaseTrainer):
             na=self.data.get("na"),
             nal=self.data.get("nal"),
             verbose=verbose and RANK == -1,
+            model_seed=self.args.seed,
         )
         if weights:
             model.load(weights)
