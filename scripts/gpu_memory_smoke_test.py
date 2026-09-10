@@ -125,6 +125,11 @@ E21_GIA_RES_MODELS = {
 }
 
 E21_GIA_V2_MODELS = {
+    "e2_1_gia_v2_6": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
     "e2_1_gia_v2_7": {
         "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml",
         "pretrain": "yolov10x.pt",
@@ -142,6 +147,26 @@ E21_GIA_V2_MODELS = {
     },
     "e2_1_gia_v2_10": {
         "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_13": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_13.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_16": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_16.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_19": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_19.yaml",
+        "pretrain": "yolov10x.pt",
+        "network": "yolo",
+    },
+    "e2_1_gia_v2_22": {
+        "config": "ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_22.yaml",
         "pretrain": "yolov10x.pt",
         "network": "yolo",
     },
