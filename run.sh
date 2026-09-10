@@ -72,20 +72,37 @@ COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_tr
 # E2.1 GIA-v2 position ablation: the previously selected backbone positions
 # 7/8/9/10 and 5+7, plus the suggested neck/head positions 6/13/16/19/22.
 # The baseline and the old GIA position runs are not repeated.
+# python scripts/train_mdet_experiments.py gia-position \
+#   --label E2_1_GIA_v2_position \
+#   --data "$DATA" \
+#   --pretrain yolov10x.pt \
+#   --stage1-only \
+#   --stage1-epochs 100 \
+#   --variant gia_v2_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml \
+#   --variant gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml \
+#   --variant gia_v2_8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml \
+#   --variant gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml \
+#   --variant gia_v2_10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml \
+#   --variant gia_v2_13=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_13.yaml \
+#   --variant gia_v2_16=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_16.yaml \
+#   --variant gia_v2_19=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_19.yaml \
+#   --variant gia_v2_22=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_22.yaml \
+#   --variant gia_v2_5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml \
+#   --project runs/experiments/E2_1_GIA_v2_position
+
+
+# E2.1 confirmation seed: run only baseline and the promising GIA@5+7
+# candidate. Both runs use stage 1 only (100 epochs), seed=1 and w4=0.5.
 python scripts/train_mdet_experiments.py gia-position \
-  --label E2_1_GIA_v2_position \
+  --label E2_1_GIA_v2_confirm \
   --data "$DATA" \
   --pretrain yolov10x.pt \
+  --seed 1 \
   --stage1-only \
   --stage1-epochs 100 \
-  --variant gia_v2_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml \
-  --variant gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml \
-  --variant gia_v2_8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml \
-  --variant gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml \
-  --variant gia_v2_10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml \
-  --variant gia_v2_13=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_13.yaml \
-  --variant gia_v2_16=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_16.yaml \
-  --variant gia_v2_19=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_19.yaml \
-  --variant gia_v2_22=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_22.yaml \
+  --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
   --variant gia_v2_5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml \
-  --project runs/experiments/E2_1_GIA_v2_position
+  --project runs/experiments/E2_1_GIA_v2_confirm
+
+# The completed 10-position GIA-v2 matrix is retained below for reference;
+# leave it commented to avoid retraining those experiments.
