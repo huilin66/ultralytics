@@ -201,6 +201,13 @@ python scripts/train_mdet_experiments.py gca-stage2 \
 当前仓库已有的 `com_gat` 的门控版本，而 `gca_com_residual` 使用固定共现矩阵的
 门控版本，便于区分历史实现与残差稳定化后的实现。
 
+如果六个旧的逐 logit 残差 GCA/GNN 变体均未改变 hard argmax 指标，使用固定的 E1
+Stage1 checkpoint 运行新的 multiclass-aware 比较。`run.sh` 会一次启动以下五个
+Stage2=100 变体：`GCA`、`GCN`、feature-dependent `GAT`、`GraphSAGE` 和 `GIN`。
+它们都在每个属性的两类 logit 之间构造风险边际，在 train-only 共现图上进行图聚合，
+再以相同的非零可学习残差门控回写；因此比较只改变 GNN 聚合器。它们仍然位于属性头，
+不会改变检测分支或 segmentation，也不会重复已经完成的旧六组实验。
+
 ## E2.4–E2.5：HO
 
 E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一次 100+100

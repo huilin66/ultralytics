@@ -313,6 +313,148 @@ class GraphGIN(nn.Module):
         return inputs + self.gamma * outputs if self.res else outputs
 
 
+class GCAMarginResidual(nn.Module):
+    """Multi-class-aware residual graph propagation for mdet attributes.
+
+    The current mdet layout represents each attribute with ``nal`` mutually
+    exclusive logits.  With ``nal == 2`` the decision variable is the risk
+    margin ``logit(1) - logit(0)``.  This module propagates that margin through
+    a train-only attribute graph and reconstructs the logits while preserving
+    their mean.  ``gnn_type`` selects the graph aggregator so GCA and the
+    reviewer-requested GCN/GAT/GraphSAGE/GIN comparison share exactly the same
+    multiclass-aware residual interface.
+    """
+
+    expects_multiclass = True
+    supported_gnn_types = {"gca", "gcn", "gat", "graphsage", "gin"}
+
+    def __init__(self, na, nal, com_path=None, hidden_chs=None, gate_init=0.1, gnn_type="gca"):
+        super().__init__()
+        self.na = int(na)
+        self.nal = int(nal)
+        self.gnn_type = gnn_type
+        if self.na < 1 or self.nal < 2:
+            raise ValueError("GCAMarginResidual requires at least one attribute and nal >= 2")
+        if self.gnn_type not in self.supported_gnn_types:
+            raise ValueError(f"Unsupported margin graph type: {self.gnn_type}")
+
+        hidden_chs = hidden_chs or max(16, self.na * 2)
+        graph = _load_attribute_graph(com_path, self.na)
+        eye = torch.eye(self.na, dtype=graph.dtype)
+
+        if self.gnn_type == "gca":
+            # Paper-style fixed GCA: row-wise softmax over the train-only
+            # conditional co-occurrence matrix, including self information.
+            self.register_buffer("adjacency", torch.softmax(graph + eye, dim=-1))
+            self.node_in = nn.Linear(1, hidden_chs)
+            self.node_out = nn.Linear(hidden_chs, 1)
+            self.activation = nn.GELU()
+        elif self.gnn_type == "gcn":
+            normalized = graph + eye
+            degree = normalized.sum(dim=-1).clamp_min(1e-6)
+            normalized = degree.rsqrt().unsqueeze(1) * normalized * degree.rsqrt().unsqueeze(0)
+            self.register_buffer("adjacency", normalized)
+            self.node_in = nn.Linear(1, hidden_chs)
+            self.node_out = nn.Linear(hidden_chs, 1)
+            self.activation = nn.GELU()
+        elif self.gnn_type == "gat":
+            edge_mask = graph > 0
+            edge_mask.fill_diagonal_(True)
+            self.register_buffer("edge_mask", edge_mask)
+            self.node_proj = nn.Linear(1, hidden_chs, bias=False)
+            self.att_src = nn.Linear(hidden_chs, 1, bias=False)
+            self.att_dst = nn.Linear(hidden_chs, 1, bias=False)
+            self.node_out = nn.Linear(hidden_chs, 1)
+            self.activation = nn.GELU()
+            self.leaky_relu = nn.LeakyReLU(0.2)
+        elif self.gnn_type == "graphsage":
+            neighbors = graph.clone()
+            degree = neighbors.sum(dim=-1).clamp_min(1e-6)
+            self.register_buffer("adjacency", neighbors / degree.unsqueeze(-1))
+            self.self_proj = nn.Linear(1, hidden_chs)
+            self.neighbor_proj = nn.Linear(1, hidden_chs)
+            self.node_out = nn.Linear(hidden_chs, 1)
+            self.activation = nn.GELU()
+        else:  # gin
+            self.register_buffer("adjacency", (graph > 0).to(graph.dtype))
+            self.eps = nn.Parameter(torch.zeros(1))
+            self.mlp = nn.Sequential(
+                nn.Linear(1, hidden_chs),
+                nn.GELU(),
+                nn.Linear(hidden_chs, 1),
+            )
+
+        # A non-zero gate lets both the graph module and its gate receive
+        # useful gradients from the first stage-2 update.
+        self.gamma = nn.Parameter(torch.full((1, self.na, 1, 1), float(gate_init)))
+
+    def _graph_message(self, values):
+        """Return one graph message for BCHW scalar attribute values."""
+        batch, channels, height, width = values.shape
+        if channels != self.na:
+            raise RuntimeError(f"Expected {self.na} attribute channels, got {channels}")
+
+        nodes = values.permute(0, 2, 3, 1).reshape(batch, height * width, self.na)
+        if self.gnn_type in {"gca", "gcn"}:
+            adjacency = self.adjacency.to(device=values.device, dtype=values.dtype)
+            hidden = self.activation(self.node_in(nodes.unsqueeze(-1)))
+            # Keep the direct Eq. (10)-style graph message as a strong prior;
+            # the learned projection refines it for this dataset.
+            direct_message = torch.einsum("ij,bnj->bni", adjacency, nodes)
+            aggregated = torch.einsum("ij,bnjd->bnid", adjacency, hidden)
+            message = direct_message + self.node_out(aggregated).squeeze(-1)
+        elif self.gnn_type == "gat":
+            hidden = self.activation(self.node_proj(nodes.unsqueeze(-1)))
+            src = self.att_src(hidden).squeeze(-1)
+            dst = self.att_dst(hidden).squeeze(-1)
+            scores = self.leaky_relu(src.unsqueeze(-1) + dst.unsqueeze(-2))
+            mask = self.edge_mask.view(1, 1, self.na, self.na)
+            scores = scores.masked_fill(~mask, torch.finfo(scores.dtype).min)
+            attention = torch.softmax(scores, dim=-1)
+            direct_message = torch.einsum("bnij,bnj->bni", attention, nodes)
+            aggregated = torch.einsum("bnij,bnjd->bnid", attention, hidden)
+            message = direct_message + self.node_out(aggregated).squeeze(-1)
+        elif self.gnn_type == "graphsage":
+            adjacency = self.adjacency.to(device=values.device, dtype=values.dtype)
+            neighbors = torch.einsum("ij,bnj->bni", adjacency, nodes)
+            hidden = self.activation(
+                self.self_proj(nodes.unsqueeze(-1)) + self.neighbor_proj(neighbors.unsqueeze(-1))
+            )
+            message = neighbors + self.node_out(hidden).squeeze(-1)
+        else:  # gin
+            adjacency = self.adjacency.to(device=values.device, dtype=values.dtype)
+            neighbors = torch.einsum("ij,bnj->bni", adjacency, nodes)
+            message = neighbors + self.mlp(((1 + self.eps) * nodes + neighbors).unsqueeze(-1)).squeeze(-1)
+        return message.reshape(batch, height, width, self.na).permute(0, 3, 1, 2).contiguous()
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+
+        logits = inputs.reshape(batch, self.na, self.nal, height, width)
+        center = logits.mean(dim=2, keepdim=True)
+
+        if self.nal == 2:
+            margin = logits[:, :, 1] - logits[:, :, 0]
+            message = self._graph_message(margin)
+            updated_margin = margin + self.gamma * message
+            outputs = torch.stack(
+                (center[:, :, 0] - 0.5 * updated_margin, center[:, :, 0] + 0.5 * updated_margin), dim=2
+            )
+        else:
+            # General nal fallback: center each attribute's logits and apply
+            # the same graph independently to every level.
+            centered = logits - center
+            level_values = centered.permute(0, 2, 1, 3, 4).reshape(batch * self.nal, self.na, height, width)
+            messages = self._graph_message(level_values)
+            messages = messages.reshape(batch, self.nal, self.na, height, width).permute(0, 2, 1, 3, 4)
+            outputs = logits + self.gamma.unsqueeze(2) * messages
+
+        return outputs.reshape(batch, expected_channels, height, width)
+
+
 class TextureAttention(nn.Module):
     """ """
 
@@ -795,6 +937,26 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(
                 GraphGIN(self.na, self.na, com_path=self.com_path, res=True) for x in ch
             )
+        elif self.gat in {
+            "com_gat_margin_residual",
+            "gcn_margin_residual",
+            "gat_margin_residual",
+            "graphsage_margin_residual",
+            "gin_margin_residual",
+        }:
+            # These variants consume all na*nal logits at once so they can
+            # propagate the two-class risk margin for every attribute.
+            gnn_type = {
+                "com_gat_margin_residual": "gca",
+                "gcn_margin_residual": "gcn",
+                "gat_margin_residual": "gat",
+                "graphsage_margin_residual": "graphsage",
+                "gin_margin_residual": "gin",
+            }[self.gat]
+            self.gat_head = nn.ModuleList(
+                GCAMarginResidual(self.na, self.nal, com_path=self.com_path, gate_init=0.1, gnn_type=gnn_type)
+                for x in ch
+            )
         else:
             self.gat_head = None
 
@@ -815,6 +977,9 @@ class MDetect(nn.Module):
 
     def _apply_attribute_gat(self, attribute_logits, gat_head):
         """Apply an attribute-level GAT to each of the ``nal`` class-logit slices."""
+        if getattr(gat_head, "expects_multiclass", False):
+            return gat_head(attribute_logits)
+
         if not self.multiclass_attributes:
             return gat_head(attribute_logits)
 

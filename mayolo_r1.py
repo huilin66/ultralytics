@@ -247,6 +247,7 @@ MDET_ABLATION_DIRS = (
     ("E2.2_GCA", r"runs/experiments/E2_2_GCA"),
     ("E2.2_GCA_stage2", r"runs/experiments/E2_2_GCA_stage2"),
     ("E2.2_GCA_stage2_residual", r"runs/experiments/E2_2_GCA_stage2_residual"),
+    ("E2.2_GCA_GNN_margin_residual", r"runs/experiments/E2_2_GCA_GNN_margin_residual"),
     ("E2.3_GIA_GCA", r"runs/experiments/E2_3_GIA_GCA"),
     ("E2.4_HO", r"runs/experiments/E2_4_HO"),
 )

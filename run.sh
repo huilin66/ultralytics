@@ -113,30 +113,30 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 #   COM_PATH=/path/to/co_occurrence_matrix_train.csv bash run.sh
 COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}
 
-# E2.2 GCA/GNN structure comparison from the fixed E1 Stage1 checkpoint.
-# The GNN variants use GIA-v2-style zero-initialized residual gates.
-# This is the active next experiment block. It is Stage2-only for every
-# variant. The baseline stage2 result already exists in E1/E2.2 and is not
-# repeated here.
+# E2.2 multiclass-aware GCA/GNN comparison from the fixed E1 Stage1
+# checkpoint. The earlier six per-logit residual variants are complete and
+# are not repeated. Every variant below propagates the two-class attribute
+# risk margin and uses the same non-zero residual gate, so only the GNN
+# aggregator changes: paper-style GCA, GCN, feature-dependent GAT,
+# GraphSAGE, and GIN.
 
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
 python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA_stage2_residual \
+  --label E2_2_GCA_GNN_margin_residual \
   --data "$DATA" \
   --stage1-checkpoint "$STAGE1_CKPT" \
   --stage1-epochs 100 \
   --stage2-epochs 100 \
-  --variant gca_current_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_residual.yaml \
-  --variant gca_com_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_com_residual.yaml \
-  --variant gcn=ultralytics/cfg/models/exp_ablation/yolov10x_GCN.yaml \
-  --variant gat_learned=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml \
-  --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml \
-  --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml \
+  --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+  --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+  --variant gat_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_margin_residual.yaml \
+  --variant graphsage_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE_margin_residual.yaml \
+  --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
   --w4 0.5 \
   --batch 16 \
   --seed 0 \
   --com-path "$COM_PATH" \
-  --project runs/experiments/E2_2_GCA_stage2_residual
+  --project runs/experiments/E2_2_GCA_GNN_margin_residual
 
 
 # The completed 10-position GIA-v2 matrix is retained below for reference;
