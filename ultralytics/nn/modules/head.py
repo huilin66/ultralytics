@@ -150,6 +150,162 @@ class GAT(nn.Module):
         return outputs
 
 
+def _load_attribute_graph(com_path, num_nodes):
+    """Load a non-negative attribute graph and remove self-edges.
+
+    The graph is defined over attributes, not over spatial locations. When no
+    co-occurrence file is supplied, a fully connected graph is used so the
+    learned GAT variant remains usable as a feature-only label-dependency
+    model.
+    """
+    if com_path is None:
+        graph = torch.ones((num_nodes, num_nodes), dtype=torch.float32)
+    else:
+        import pandas as pd
+
+        graph = torch.tensor(pd.read_csv(com_path, header=0, index_col=0).to_numpy()).float()
+        if graph.shape != (num_nodes, num_nodes):
+            raise ValueError(
+                f"Expected an attribute graph with shape {(num_nodes, num_nodes)}, got {tuple(graph.shape)}"
+            )
+        graph = graph.clamp_min(0)
+    graph.fill_diagonal_(0)
+    return graph
+
+
+def _attribute_nodes(inputs, num_nodes):
+    """Convert BCHW attribute logits to per-pixel graph node features."""
+    batch, channels, height, width = inputs.shape
+    if channels != num_nodes:
+        raise RuntimeError(f"Expected {num_nodes} attribute channels, got {channels}")
+    return inputs.permute(0, 2, 3, 1).reshape(batch, height * width, num_nodes, 1)
+
+
+def _attribute_map(nodes, batch, channels, height, width):
+    """Convert per-pixel graph node features back to BCHW logits."""
+    return nodes.reshape(batch, height, width, channels).permute(0, 3, 1, 2).contiguous()
+
+
+class GraphGCN(nn.Module):
+    """Fixed-graph GCN over the attribute logits at every spatial location."""
+
+    def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False):
+        super().__init__()
+        if input_chs != output_chs:
+            raise ValueError("GraphGCN requires input_chs == output_chs")
+        hidden_chs = hidden_chs or max(16, input_chs * 2)
+        graph = _load_attribute_graph(com_path, input_chs)
+        graph = graph + torch.eye(input_chs, dtype=graph.dtype)
+        degree = graph.sum(dim=-1).clamp_min(1e-6)
+        graph = degree.rsqrt().unsqueeze(1) * graph * degree.rsqrt().unsqueeze(0)
+        self.register_buffer("adjacency", graph)
+        self.node_in = nn.Linear(1, hidden_chs)
+        self.node_out = nn.Linear(hidden_chs, 1)
+        self.activation = nn.ReLU(inplace=True)
+        self.res = res
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        nodes = _attribute_nodes(inputs, channels)
+        adjacency = self.adjacency.to(device=inputs.device, dtype=inputs.dtype)
+        aggregated = torch.einsum("ij,bsjf->bsif", adjacency, nodes)
+        outputs = self.node_out(self.activation(self.node_in(aggregated)))
+        outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
+        return outputs + inputs if self.res else outputs
+
+
+class GraphGAT(nn.Module):
+    """Feature-dependent GAT using the co-occurrence graph as an edge mask."""
+
+    def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False, drop_rate=0.0):
+        super().__init__()
+        if input_chs != output_chs:
+            raise ValueError("GraphGAT requires input_chs == output_chs")
+        hidden_chs = hidden_chs or max(16, input_chs * 2)
+        graph = _load_attribute_graph(com_path, input_chs)
+        edge_mask = graph > 0
+        edge_mask.fill_diagonal_(True)
+        self.register_buffer("edge_mask", edge_mask)
+        self.node_proj = nn.Linear(1, hidden_chs, bias=False)
+        self.att_src = nn.Linear(hidden_chs, 1, bias=False)
+        self.att_dst = nn.Linear(hidden_chs, 1, bias=False)
+        self.node_out = nn.Linear(hidden_chs, 1)
+        self.leaky_relu = nn.LeakyReLU(0.2)
+        self.dropout = nn.Dropout(drop_rate)
+        self.res = res
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        nodes = _attribute_nodes(inputs, channels)
+        hidden = self.node_proj(nodes)
+        scores = self.att_src(hidden).squeeze(-1).unsqueeze(-1) + self.att_dst(hidden).squeeze(-1).unsqueeze(-2)
+        scores = self.leaky_relu(scores)
+        mask = self.edge_mask.view(1, 1, channels, channels)
+        scores = scores.masked_fill(~mask, torch.finfo(scores.dtype).min)
+        attention = self.dropout(torch.softmax(scores, dim=-1))
+        aggregated = torch.einsum("bsij,bsjd->bsid", attention, hidden)
+        outputs = self.node_out(aggregated)
+        outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
+        return outputs + inputs if self.res else outputs
+
+
+class GraphSAGE(nn.Module):
+    """Mean-aggregation GraphSAGE over the attribute dependency graph."""
+
+    def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False):
+        super().__init__()
+        if input_chs != output_chs:
+            raise ValueError("GraphSAGE requires input_chs == output_chs")
+        hidden_chs = hidden_chs or max(16, input_chs * 2)
+        graph = _load_attribute_graph(com_path, input_chs)
+        degree = graph.sum(dim=-1).clamp_min(1e-6)
+        graph = graph / degree.unsqueeze(-1)
+        self.register_buffer("adjacency", graph)
+        self.self_proj = nn.Linear(1, hidden_chs)
+        self.neighbor_proj = nn.Linear(1, hidden_chs)
+        self.node_out = nn.Linear(hidden_chs, 1)
+        self.activation = nn.ReLU(inplace=True)
+        self.res = res
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        nodes = _attribute_nodes(inputs, channels)
+        adjacency = self.adjacency.to(device=inputs.device, dtype=inputs.dtype)
+        neighbors = torch.einsum("ij,bsjf->bsif", adjacency, nodes)
+        hidden = self.activation(self.self_proj(nodes) + self.neighbor_proj(neighbors))
+        outputs = self.node_out(hidden)
+        outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
+        return outputs + inputs if self.res else outputs
+
+
+class GraphGIN(nn.Module):
+    """GIN-style sum aggregation over the attribute dependency graph."""
+
+    def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False):
+        super().__init__()
+        if input_chs != output_chs:
+            raise ValueError("GraphGIN requires input_chs == output_chs")
+        hidden_chs = hidden_chs or max(16, input_chs * 2)
+        graph = (_load_attribute_graph(com_path, input_chs) > 0).to(torch.float32)
+        self.register_buffer("adjacency", graph)
+        self.eps = nn.Parameter(torch.zeros(1))
+        self.mlp = nn.Sequential(
+            nn.Linear(1, hidden_chs),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_chs, 1),
+        )
+        self.res = res
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        nodes = _attribute_nodes(inputs, channels)
+        adjacency = self.adjacency.to(device=inputs.device, dtype=inputs.dtype)
+        neighbors = torch.einsum("ij,bsjf->bsif", adjacency, nodes)
+        outputs = self.mlp((1 + self.eps) * nodes + neighbors)
+        outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
+        return outputs + inputs if self.res else outputs
+
+
 class TextureAttention(nn.Module):
     """ """
 
@@ -597,6 +753,22 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(
                 GAT(self.na, self.na, "com", res=True, add_softmax=False, com_path=self.com_path, proj=False)
                 for x in ch
+            )
+        elif self.gat == "gcn":
+            self.gat_head = nn.ModuleList(
+                GraphGCN(self.na, self.na, com_path=self.com_path) for x in ch
+            )
+        elif self.gat == "gat_learned":
+            self.gat_head = nn.ModuleList(
+                GraphGAT(self.na, self.na, com_path=self.com_path) for x in ch
+            )
+        elif self.gat == "graphsage":
+            self.gat_head = nn.ModuleList(
+                GraphSAGE(self.na, self.na, com_path=self.com_path) for x in ch
+            )
+        elif self.gat == "gin":
+            self.gat_head = nn.ModuleList(
+                GraphGIN(self.na, self.na, com_path=self.com_path) for x in ch
             )
         else:
             self.gat_head = None

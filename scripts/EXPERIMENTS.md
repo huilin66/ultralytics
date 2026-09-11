@@ -146,7 +146,7 @@ python scripts/train_mdet_experiments.py gca-structure `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
   --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
   --variant gat=ultralytics/cfg/models/exp_ablation/yolov10x_GCA.yaml `
-  --w4 0.5 --com-path path/to/co_occurrence_matrix6.csv `
+  --w4 0.5 --com-path path/to/co_occurrence_matrix_train.csv `
   --project runs/experiments/E2_2_GCA
 
 python scripts/train_mdet_experiments.py gia-gca `
@@ -154,13 +154,52 @@ python scripts/train_mdet_experiments.py gia-gca `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
   --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
   --variant gia_gca=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_GCA.yaml `
-  --w4 0.5 --com-path path/to/co_occurrence_matrix6.csv `
+  --w4 0.5 --com-path path/to/co_occurrence_matrix_train.csv `
   --project runs/experiments/E2_3_GIA_GCA
 ```
 
 `exp_ablation` 中的 GCA YAML 含有 Linux 下的 `/nfsv4/...` 矩阵路径。
 传入 `--com-path` 后，脚本只在 `project/_generated_configs/` 生成替换后的副本，
 不会改写原 YAML；不传时会主动报错，避免训练读到错误矩阵。
+
+### E2.2：基于固定 Stage1 的 GCA/GNN 结构比较
+
+审稿人要求比较不同图模型时，使用下面的 `gca-stage2`。它不会为每个 GNN
+重新训练 Stage1，而是统一加载已经确定的 baseline checkpoint：
+
+`runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt`。
+
+baseline、现有实现 `com_gat`、论文式固定矩阵 `com`、标准 GCN、学习型 GAT、
+GraphSAGE 和 GIN 都从这个 checkpoint 开始，并使用相同的 Stage2=100、w4=0.5
+和随机种子。所有含图结构的变体读取仅由 train split 生成的
+`co_occurrence_matrix_train.csv`；`--com-path` 会把 YAML 中的 Linux 路径替换为
+当前机器上的实际路径。
+
+```bash
+python scripts/train_mdet_experiments.py gca-stage2 \
+  --label E2_2_GCA_stage2 \
+  --data ultralytics/cfg/mayolo_r1/mayolo_v3.yaml \
+  --stage1-checkpoint runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt \
+  --stage1-epochs 100 \
+  --stage2-epochs 100 \
+  --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
+  --variant gca_current=ultralytics/cfg/models/exp_ablation/yolov10x_GCA.yaml \
+  --variant gca_com=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_com.yaml \
+  --variant gcn=ultralytics/cfg/models/exp_ablation/yolov10x_GCN.yaml \
+  --variant gat_learned=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml \
+  --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml \
+  --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml \
+  --w4 0.5 \
+  --batch 16 \
+  --seed 0 \
+  --com-path /path/to/co_occurrence_matrix_train.csv \
+  --project runs/experiments/E2_2_GCA_stage2
+```
+
+`gca-structure` 保留用于历史的完整两阶段结构实验；本节的 `gca-stage2` 才是
+针对 reviewer 要求、控制 Stage1 初始化一致的 GNN 比较入口。`gca_current` 使用
+当前仓库已有的 `com_gat`，而 `gca_com` 使用固定共现矩阵并进行 softmax，便于
+区分历史实现与论文公式对应的实现。
 
 ## E2.4–E2.5：HO
 
@@ -172,7 +211,7 @@ python scripts/train_mdet_experiments.py ho `
   --label E2_4_HO `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
   --variant ho_gca=ultralytics/cfg/models/exp_ablation/yolov10x_HO_GCA.yaml `
-  --w4 0.5 --com-path path/to/co_occurrence_matrix6.csv `
+  --w4 0.5 --com-path path/to/co_occurrence_matrix_train.csv `
   --project runs/experiments/E2_4_HO
 
 python scripts/eval_mdet_experiments.py ho `

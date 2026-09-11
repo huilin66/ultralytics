@@ -245,6 +245,7 @@ def model_val_dir(
 MDET_ABLATION_DIRS = (
     ("E2.1_GIA_position", r"runs/experiments/E2_1_GIA_position"),
     ("E2.2_GCA", r"runs/experiments/E2_2_GCA"),
+    ("E2.2_GCA_stage2", r"runs/experiments/E2_2_GCA_stage2"),
     ("E2.3_GIA_GCA", r"runs/experiments/E2_3_GIA_GCA"),
     ("E2.4_HO", r"runs/experiments/E2_4_HO"),
 )

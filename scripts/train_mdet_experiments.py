@@ -5,6 +5,7 @@ The launcher supports the normal two-stage protocol and two schedule studies:
 * ``stage1-sweep`` independently trains stage 1 for several epoch budgets;
 * ``stage2-sweep`` independently trains stage 2 from one fixed stage-1
   checkpoint for several epoch budgets.
+* ``gca-stage2`` compares GCA/GNN variants from one fixed stage-1 checkpoint;
 * ``hsv-ablation`` independently trains stage 1 for three HSV augmentation
   settings at a fixed epoch budget.
 * variant experiments accept ``--stage1-only`` for position/structure tests
@@ -48,6 +49,16 @@ Examples (PowerShell):
         --stage1-checkpoint runs/experiments/E0_stage1_sweep/E0_stage1_stage1_100_w4_0p5_seed_0/weights/best.pt `
         --stage1-epochs 100 `
         --stage2-values 50 100 150 200
+
+    python scripts/train_mdet_experiments.py gca-stage2 `
+        --data path/to/billboard_mdet.yaml `
+        --stage1-checkpoint runs/experiments/E1_w4/.../weights/best.pt `
+        --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
+        --variant gcn=ultralytics/cfg/models/exp_ablation/yolov10x_GCN.yaml `
+        --variant gat=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml `
+        --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml `
+        --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml `
+        --com-path path/to/co_occurrence_matrix_train.csv
 
     python scripts/train_mdet_experiments.py versions `
         --data path/to/billboard_mdet.yaml `
@@ -559,6 +570,39 @@ def _run_stage2_sweep(args: argparse.Namespace) -> None:
         )
 
 
+def _run_gca_stage2(args: argparse.Namespace) -> None:
+    """Run the GCA/GNN structure comparison from one fixed stage-1 checkpoint.
+
+    Every variant receives the same stage-1 checkpoint and is trained only in
+    stage 2.  ``retrain=True`` uses the existing mdet freeze policy, which
+    keeps the object-detection branches fixed and leaves the attribute/GNN
+    branch trainable.  This deliberately does not toggle the YOLOv10
+    one-to-one/one-to-many head; HO remains a separate experiment.
+    """
+    _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
+    _validate_epoch_values([args.stage2_epochs], "--stage2-epochs")
+    variants = _parse_key_value(args.variant, "--variant")
+    for name, config in variants.items():
+        run_name = (
+            f"{_slug(args.label)}_{_slug(name)}_stage1_{args.stage1_epochs}"
+            f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
+        )
+        _train_direct_stage(
+            args,
+            label=args.label,
+            variant_name=name,
+            config=config,
+            pretrain=args.stage1_checkpoint,
+            w4=args.w4,
+            seed=args.seed,
+            epochs=args.stage2_epochs,
+            retrain=True,
+            stage1_epochs=args.stage1_epochs,
+            run_name=run_name,
+            network_name="yolo",
+        )
+
+
 def _run_variants(args: argparse.Namespace) -> None:
     """Run ablation, architecture-size, or RT-DETR variant experiments."""
     variants = _parse_key_value(args.variant or [], "--variant")
@@ -704,6 +748,37 @@ def _build_parser() -> argparse.ArgumentParser:
         help="independent stage-2 epoch budgets",
     )
 
+    gca_stage2 = subparsers.add_parser(
+        "gca-stage2",
+        help="E2.2: stage-2-only comparison of fixed GCA and alternative GNN heads",
+    )
+    _add_common_train_arguments(gca_stage2)
+    gca_stage2.add_argument("--label", default="E2_2_GCA_stage2")
+    gca_stage2.add_argument(
+        "--stage1-checkpoint",
+        required=True,
+        help="one fixed baseline stage-1 best.pt used to initialize every variant",
+    )
+    gca_stage2.add_argument(
+        "--stage1-epochs",
+        type=int,
+        default=DEFAULT_STAGE1_EPOCHS,
+        help="stage-1 epoch budget that produced --stage1-checkpoint",
+    )
+    gca_stage2.add_argument(
+        "--stage2-epochs",
+        type=int,
+        default=DEFAULT_STAGE2_EPOCHS,
+        help="stage-2 epoch budget for every GCA/GNN variant",
+    )
+    gca_stage2.add_argument(
+        "--variant",
+        action="append",
+        required=True,
+        metavar="NAME=CONFIG_YAML",
+        help="repeat for the baseline and each GCA/GNN configuration",
+    )
+
     for name, help_text, default_network in (
         ("variants", "Run named ablation/model variants", "yolo"),
         ("gia-position", "E2.1: GIA position ablation", "yolo"),
@@ -746,6 +821,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         _run_hsv_ablation(args)
     elif args.experiment == "stage2-sweep":
         _run_stage2_sweep(args)
+    elif args.experiment == "gca-stage2":
+        _run_gca_stage2(args)
     elif args.experiment == "stability":
         _run_stability(args)
     else:
