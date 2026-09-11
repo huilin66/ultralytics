@@ -205,8 +205,8 @@ python scripts/train_mdet_experiments.py gca-stage2 \
 Stage1 checkpoint 运行新的 multiclass-aware 比较。此前的五个 Stage2=100 GNN 结果
 已经完成，保留在 `E2_2_GCA_GNN_margin_residual`，不会被当前 `run.sh` 重复训练。
 
-当前 `run.sh` 运行的不是两组互不对应的比较，而是完整的 5×5 结构矩阵。
-五个 structural variant 为：
+当前 `run.sh` 保留此前定义的五个 variant，并分别在两种 train-only
+共现矩阵上运行完整的 5×5 矩阵。五个 variant 为：
 
 1. `GCAContextResidual + cross`：原有 cross-normalized 共现矩阵；
 2. `GCAContextResidual + conditional`：train-only、有向条件矩阵
@@ -215,8 +215,9 @@ Stage1 checkpoint 运行新的 multiclass-aware 比较。此前的五个 Stage2=
 4. `GCATwoHopResidual`：同时使用一跳和二跳图上下文；
 5. `GCAConvAdapterResidual`：在图上下文旁增加轻量的 `1×1` 属性适配器。
 
-每一个 variant 都分别替换为五种 GNN operator：GCA、GCN、GAT、GraphSAGE、GIN，
-因此共得到 25 个 Stage2-only run。`--gnn-types` 会在项目的
+每一个 variant 都分别替换为五种 GNN operator：GCA、GCN、GAT、GraphSAGE、GIN。
+原始 cross 矩阵和 conditional 矩阵各运行一次，因此得到 25+25=50 个
+Stage2-only run。`--gnn-types` 会在项目的
 `_generated_configs/` 中生成对应 YAML；它不会修改原始配置，也不会把不同
 variant 错误地合并成只有一个 context wrapper 的比较。
 
@@ -236,12 +237,18 @@ python generate_com.py \
   --output /localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv
 ```
 
-然后设置 `COM_CONDITIONAL_PATH` 后运行 `bash run.sh`。脚本会启动五条
-`gca-stage2` 命令，每条命令再由 `--gnn-types gca gcn gat graphsage gin`
-展开为五个 run。所有 25 个 run 均从同一个 E1 Stage1 checkpoint 开始，固定
-Stage2=100、w4=0.5、batch=16、seed=0；结果分别保存在
-`E2_2_GCA5x5_*` 目录中。每个 run 的 `manifest.jsonl` 会记录实际的
+然后设置 `COM_CONDITIONAL_PATH` 后运行 `bash run.sh`。脚本会对两种矩阵各
+启动一条包含五个 variant 的 `gca-stage2` 命令，每条命令再由
+`--gnn-types gca gcn gat graphsage gin` 展开为 25 个 run。所有 50 个 run
+均从同一个 E1 Stage1 checkpoint 开始，固定 Stage2=100、w4=0.5、batch=16、
+seed=0；结果分别保存在 `E2_2_GCA5x5_cross` 和
+`E2_2_GCA5x5_conditional` 目录中。每个 run 的 `manifest.jsonl` 会记录实际的
 `gnn_type` 和生成后的配置路径，便于论文表格追溯。
+
+此外，脚本还在 conditional 矩阵上重新评估上一轮五个
+`margin_residual` GNN 模型，结果保存在
+`E2_2_GCA_GNN_margin_residual_conditional`。这 5 个补充结果不并入新的
+5×5 主表，因为它们使用的是不同的 margin-level 融合机制。
 
 ## E2.4–E2.5：HO
 

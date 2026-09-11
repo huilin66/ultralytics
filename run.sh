@@ -135,11 +135,11 @@ COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3
 #   --project runs/experiments/E2_2_GCA_GNN_margin_residual
 
 
-# E2.2 true 5x5 matrix: five structural variants crossed with five GNN
-# operators.  Each command below expands to five Stage2-only runs through
-# --gnn-types: GCA, GCN, GAT, GraphSAGE, and GIN.  All 25 runs use the same
-# fixed Stage1 checkpoint, 100-epoch Stage2 budget, w4, batch size, seed, and
-# train-only co-occurrence matrix policy.  Only mdet code is involved.
+# E2.2 matrix-controlled 5x5 study.  The five previously designed variant
+# entries are crossed with five GNN operators twice: once with the original
+# train-only matrix and once with the train-only conditional matrix.  Each
+# invocation of run_gca_5x5 expands to 25 Stage2-only runs.  The old commands
+# above remain commented for visual comparison.
 
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
 if [ ! -f "$STAGE1_CKPT" ]; then
@@ -156,75 +156,55 @@ if [ ! -f "$COM_CONDITIONAL_PATH" ]; then
   exit 1
 fi
 
-python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA5x5_context_cross \
-  --data "$DATA" \
-  --stage1-checkpoint "$STAGE1_CKPT" \
-  --stage1-epochs 100 \
-  --stage2-epochs 100 \
-  --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-  --gnn-types gca gcn gat graphsage gin \
-  --w4 0.5 \
-  --batch 16 \
-  --seed 0 \
-  --com-path "$COM_PATH" \
-  --project runs/experiments/E2_2_GCA5x5_context_cross
+run_gca_5x5() {
+  local label="$1"
+  local matrix_path="$2"
+  local project="runs/experiments/${label}"
 
+  python scripts/train_mdet_experiments.py gca-stage2 \
+    --label "$label" \
+    --data "$DATA" \
+    --stage1-checkpoint "$STAGE1_CKPT" \
+    --stage1-epochs 100 \
+    --stage2-epochs 100 \
+    --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+    --variant twohop=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_twohop_residual.yaml \
+    --variant conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
+    --gnn-types gca gcn gat graphsage gin \
+    --w4 0.5 \
+    --batch 16 \
+    --seed 0 \
+    --com-path "$matrix_path" \
+    --project "$project"
+}
+
+# 25 runs: the original train-only cross-normalized matrix.
+run_gca_5x5 E2_2_GCA5x5_cross "$COM_PATH"
+
+# 25 runs: the train-only directed conditional matrix generated separately.
+run_gca_5x5 E2_2_GCA5x5_conditional "$COM_CONDITIONAL_PATH"
+
+# Supplementary conditional-matrix comparison using the five previously
+# completed margin-residual GNN configurations.  These are kept separate from
+# the new 5x5 table because their fusion mechanism is different.
 python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA5x5_context_conditional \
+  --label E2_2_GCA_GNN_margin_residual_conditional \
   --data "$DATA" \
   --stage1-checkpoint "$STAGE1_CKPT" \
   --stage1-epochs 100 \
   --stage2-epochs 100 \
-  --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-  --gnn-types gca gcn gat graphsage gin \
+  --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+  --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+  --variant gat_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_margin_residual.yaml \
+  --variant graphsage_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE_margin_residual.yaml \
+  --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
   --w4 0.5 \
   --batch 16 \
   --seed 0 \
   --com-path "$COM_CONDITIONAL_PATH" \
-  --project runs/experiments/E2_2_GCA5x5_context_conditional
-
-python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA5x5_adaptive_conditional \
-  --data "$DATA" \
-  --stage1-checkpoint "$STAGE1_CKPT" \
-  --stage1-epochs 100 \
-  --stage2-epochs 100 \
-  --variant adaptive_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-  --gnn-types gca gcn gat graphsage gin \
-  --w4 0.5 \
-  --batch 16 \
-  --seed 0 \
-  --com-path "$COM_CONDITIONAL_PATH" \
-  --project runs/experiments/E2_2_GCA5x5_adaptive_conditional
-
-python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA5x5_twohop_conditional \
-  --data "$DATA" \
-  --stage1-checkpoint "$STAGE1_CKPT" \
-  --stage1-epochs 100 \
-  --stage2-epochs 100 \
-  --variant twohop_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_twohop_residual.yaml \
-  --gnn-types gca gcn gat graphsage gin \
-  --w4 0.5 \
-  --batch 16 \
-  --seed 0 \
-  --com-path "$COM_CONDITIONAL_PATH" \
-  --project runs/experiments/E2_2_GCA5x5_twohop_conditional
-
-python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA5x5_conv_adapter_conditional \
-  --data "$DATA" \
-  --stage1-checkpoint "$STAGE1_CKPT" \
-  --stage1-epochs 100 \
-  --stage2-epochs 100 \
-  --variant conv_adapter_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
-  --gnn-types gca gcn gat graphsage gin \
-  --w4 0.5 \
-  --batch 16 \
-  --seed 0 \
-  --com-path "$COM_CONDITIONAL_PATH" \
-  --project runs/experiments/E2_2_GCA5x5_conv_adapter_conditional
+  --project runs/experiments/E2_2_GCA_GNN_margin_residual_conditional
 
 
 # The completed 10-position GIA-v2 matrix is retained below for reference;

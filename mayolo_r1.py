@@ -259,6 +259,12 @@ MDET_ABLATION_DIRS = (
     ("E2.2_GCA5x5_adaptive_conditional", r"runs/experiments/E2_2_GCA5x5_adaptive_conditional"),
     ("E2.2_GCA5x5_twohop_conditional", r"runs/experiments/E2_2_GCA5x5_twohop_conditional"),
     ("E2.2_GCA5x5_conv_adapter_conditional", r"runs/experiments/E2_2_GCA5x5_conv_adapter_conditional"),
+    ("E2.2_GCA5x5_cross", r"runs/experiments/E2_2_GCA5x5_cross"),
+    ("E2.2_GCA5x5_conditional", r"runs/experiments/E2_2_GCA5x5_conditional"),
+    (
+        "E2.2_GCA_GNN_margin_residual_conditional",
+        r"runs/experiments/E2_2_GCA_GNN_margin_residual_conditional",
+    ),
     ("E2.3_GIA_GCA", r"runs/experiments/E2_3_GIA_GCA"),
     ("E2.4_HO", r"runs/experiments/E2_4_HO"),
 )
