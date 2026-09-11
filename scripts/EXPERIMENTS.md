@@ -169,22 +169,22 @@ python scripts/train_mdet_experiments.py gia-gca `
 
 `runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt`。
 
-baseline、现有实现 `com_gat`、论文式固定矩阵 `com`、标准 GCN、学习型 GAT、
-GraphSAGE 和 GIN 都从这个 checkpoint 开始，并使用相同的 Stage2=100、w4=0.5
-和随机种子。所有含图结构的变体读取仅由 train split 生成的
+门控 `com_gat`、门控固定矩阵 `com`、标准 GCN、学习型 GAT、GraphSAGE 和 GIN
+都从这个 checkpoint 开始，并使用相同的 Stage2=100、w4=0.5
+和随机种子。新增 GNN 变体使用与 GIA-v2 相同的逐通道零初始化残差门控，确保
+stage2 初始状态等价于 baseline。所有含图结构的变体读取仅由 train split 生成的
 `co_occurrence_matrix_train.csv`；`--com-path` 会把 YAML 中的 Linux 路径替换为
 当前机器上的实际路径。
 
 ```bash
 python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA_stage2 \
+  --label E2_2_GCA_stage2_residual \
   --data ultralytics/cfg/mayolo_r1/mayolo_v3.yaml \
   --stage1-checkpoint runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt \
   --stage1-epochs 100 \
   --stage2-epochs 100 \
-  --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
-  --variant gca_current=ultralytics/cfg/models/exp_ablation/yolov10x_GCA.yaml \
-  --variant gca_com=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_com.yaml \
+  --variant gca_current_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_residual.yaml \
+  --variant gca_com_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_com_residual.yaml \
   --variant gcn=ultralytics/cfg/models/exp_ablation/yolov10x_GCN.yaml \
   --variant gat_learned=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml \
   --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml \
@@ -193,13 +193,13 @@ python scripts/train_mdet_experiments.py gca-stage2 \
   --batch 16 \
   --seed 0 \
   --com-path /path/to/co_occurrence_matrix_train.csv \
-  --project runs/experiments/E2_2_GCA_stage2
+  --project runs/experiments/E2_2_GCA_stage2_residual
 ```
 
 `gca-structure` 保留用于历史的完整两阶段结构实验；本节的 `gca-stage2` 才是
-针对 reviewer 要求、控制 Stage1 初始化一致的 GNN 比较入口。`gca_current` 使用
-当前仓库已有的 `com_gat`，而 `gca_com` 使用固定共现矩阵并进行 softmax，便于
-区分历史实现与论文公式对应的实现。
+针对 reviewer 要求、控制 Stage1 初始化一致的 GNN 比较入口。`gca_current_residual` 使用
+当前仓库已有的 `com_gat` 的门控版本，而 `gca_com_residual` 使用固定共现矩阵的
+门控版本，便于区分历史实现与残差稳定化后的实现。
 
 ## E2.4–E2.5：HO
 

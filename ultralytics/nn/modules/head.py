@@ -37,6 +37,7 @@ class GAT(nn.Module):
         com_path=None,
         proj=True,
         res=False,
+        gated_res=False,
         add_softmax=True,
         drop_rate=0,
         leaky_rate=0.1,
@@ -49,6 +50,7 @@ class GAT(nn.Module):
         self.com_path = com_path
         self.proj = proj
         self.res = res
+        self.gated_res = gated_res
         self.add_softmax = add_softmax
         self.drop_rate = drop_rate
         self.leaky_rate = leaky_rate
@@ -75,6 +77,7 @@ class GAT(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         self.feature_down = nn.MaxPool1d(kernel_size=4, stride=4)
         self.feature_up = nn.Upsample(scale_factor=4, mode="nearest")
+        self.gamma = nn.Parameter(torch.zeros(1, output_chs, 1, 1)) if gated_res else None
 
     def load_com(self, com_path):
         import pandas as pd
@@ -146,7 +149,7 @@ class GAT(nn.Module):
 
         outputs = outputs.permute((0, 2, 1)).view((b, c, h, w))
         if self.res:
-            outputs = outputs + inputs
+            outputs = inputs + self.gamma * outputs if self.gated_res else outputs + inputs
         return outputs
 
 
@@ -187,7 +190,7 @@ def _attribute_map(nodes, batch, channels, height, width):
 
 
 class GraphGCN(nn.Module):
-    """Fixed-graph GCN over the attribute logits at every spatial location."""
+    """Fixed-graph GCN over attribute logits with a zero-initialized residual gate."""
 
     def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False):
         super().__init__()
@@ -203,6 +206,7 @@ class GraphGCN(nn.Module):
         self.node_out = nn.Linear(hidden_chs, 1)
         self.activation = nn.ReLU(inplace=True)
         self.res = res
+        self.gamma = nn.Parameter(torch.zeros(1, output_chs, 1, 1))
 
     def forward(self, inputs):
         batch, channels, height, width = inputs.shape
@@ -211,11 +215,11 @@ class GraphGCN(nn.Module):
         aggregated = torch.einsum("ij,bsjf->bsif", adjacency, nodes)
         outputs = self.node_out(self.activation(self.node_in(aggregated)))
         outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
-        return outputs + inputs if self.res else outputs
+        return inputs + self.gamma * outputs if self.res else outputs
 
 
 class GraphGAT(nn.Module):
-    """Feature-dependent GAT using the co-occurrence graph as an edge mask."""
+    """Feature-dependent GAT with a zero-initialized residual gate."""
 
     def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False, drop_rate=0.0):
         super().__init__()
@@ -233,6 +237,7 @@ class GraphGAT(nn.Module):
         self.leaky_relu = nn.LeakyReLU(0.2)
         self.dropout = nn.Dropout(drop_rate)
         self.res = res
+        self.gamma = nn.Parameter(torch.zeros(1, output_chs, 1, 1))
 
     def forward(self, inputs):
         batch, channels, height, width = inputs.shape
@@ -246,11 +251,11 @@ class GraphGAT(nn.Module):
         aggregated = torch.einsum("bsij,bsjd->bsid", attention, hidden)
         outputs = self.node_out(aggregated)
         outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
-        return outputs + inputs if self.res else outputs
+        return inputs + self.gamma * outputs if self.res else outputs
 
 
 class GraphSAGE(nn.Module):
-    """Mean-aggregation GraphSAGE over the attribute dependency graph."""
+    """Mean-aggregation GraphSAGE with a zero-initialized residual gate."""
 
     def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False):
         super().__init__()
@@ -266,6 +271,7 @@ class GraphSAGE(nn.Module):
         self.node_out = nn.Linear(hidden_chs, 1)
         self.activation = nn.ReLU(inplace=True)
         self.res = res
+        self.gamma = nn.Parameter(torch.zeros(1, output_chs, 1, 1))
 
     def forward(self, inputs):
         batch, channels, height, width = inputs.shape
@@ -275,11 +281,11 @@ class GraphSAGE(nn.Module):
         hidden = self.activation(self.self_proj(nodes) + self.neighbor_proj(neighbors))
         outputs = self.node_out(hidden)
         outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
-        return outputs + inputs if self.res else outputs
+        return inputs + self.gamma * outputs if self.res else outputs
 
 
 class GraphGIN(nn.Module):
-    """GIN-style sum aggregation over the attribute dependency graph."""
+    """GIN-style sum aggregation with a zero-initialized residual gate."""
 
     def __init__(self, input_chs, output_chs, com_path=None, hidden_chs=None, res=False):
         super().__init__()
@@ -295,6 +301,7 @@ class GraphGIN(nn.Module):
             nn.Linear(hidden_chs, 1),
         )
         self.res = res
+        self.gamma = nn.Parameter(torch.zeros(1, output_chs, 1, 1))
 
     def forward(self, inputs):
         batch, channels, height, width = inputs.shape
@@ -303,7 +310,7 @@ class GraphGIN(nn.Module):
         neighbors = torch.einsum("ij,bsjf->bsif", adjacency, nodes)
         outputs = self.mlp((1 + self.eps) * nodes + neighbors)
         outputs = _attribute_map(outputs.squeeze(-1), batch, channels, height, width)
-        return outputs + inputs if self.res else outputs
+        return inputs + self.gamma * outputs if self.res else outputs
 
 
 class TextureAttention(nn.Module):
@@ -727,8 +734,26 @@ class MDetect(nn.Module):
             self.gat_head = nn.ModuleList(
                 GAT(self.na, self.na, "com", com_path=self.com_path, proj=True, add_softmax=False) for x in ch
             )
+        elif self.gat == "com_gat_residual":
+            self.gat_head = nn.ModuleList(
+                GAT(
+                    self.na,
+                    self.na,
+                    "com",
+                    com_path=self.com_path,
+                    proj=True,
+                    res=True,
+                    gated_res=True,
+                    add_softmax=False,
+                )
+                for x in ch
+            )
         elif self.gat == "com":
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, "com", com_path=self.com_path) for x in ch)
+        elif self.gat == "com_residual":
+            self.gat_head = nn.ModuleList(
+                GAT(self.na, self.na, "com", com_path=self.com_path, res=True, gated_res=True) for x in ch
+            )
         elif self.gat == "com_res":
             self.gat_head = nn.ModuleList(GAT(self.na, self.na, "com", res=True, com_path=self.com_path) for x in ch)
         elif self.gat == "com_nosf":
@@ -756,19 +781,19 @@ class MDetect(nn.Module):
             )
         elif self.gat == "gcn":
             self.gat_head = nn.ModuleList(
-                GraphGCN(self.na, self.na, com_path=self.com_path) for x in ch
+                GraphGCN(self.na, self.na, com_path=self.com_path, res=True) for x in ch
             )
         elif self.gat == "gat_learned":
             self.gat_head = nn.ModuleList(
-                GraphGAT(self.na, self.na, com_path=self.com_path) for x in ch
+                GraphGAT(self.na, self.na, com_path=self.com_path, res=True) for x in ch
             )
         elif self.gat == "graphsage":
             self.gat_head = nn.ModuleList(
-                GraphSAGE(self.na, self.na, com_path=self.com_path) for x in ch
+                GraphSAGE(self.na, self.na, com_path=self.com_path, res=True) for x in ch
             )
         elif self.gat == "gin":
             self.gat_head = nn.ModuleList(
-                GraphGIN(self.na, self.na, com_path=self.com_path) for x in ch
+                GraphGIN(self.na, self.na, com_path=self.com_path, res=True) for x in ch
             )
         else:
             self.gat_head = None

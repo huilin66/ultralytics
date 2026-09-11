@@ -114,20 +114,20 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}
 
 # E2.2 GCA/GNN structure comparison from the fixed E1 Stage1 checkpoint.
-# This block is intentionally opt-in: set RUN_E2_2_GCA=1 to run it, otherwise
-# re-running this file will not launch the reviewer comparison accidentally.
-# It is Stage2-only for every variant (including the baseline control).
+# The GNN variants use GIA-v2-style zero-initialized residual gates.
+# This is the active next experiment block. It is Stage2-only for every
+# variant. The baseline stage2 result already exists in E1/E2.2 and is not
+# repeated here.
 
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
 python scripts/train_mdet_experiments.py gca-stage2 \
-  --label E2_2_GCA_stage2 \
+  --label E2_2_GCA_stage2_residual \
   --data "$DATA" \
   --stage1-checkpoint "$STAGE1_CKPT" \
   --stage1-epochs 100 \
   --stage2-epochs 100 \
-  --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml \
-  --variant gca_current=ultralytics/cfg/models/exp_ablation/yolov10x_GCA.yaml \
-  --variant gca_com=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_com.yaml \
+  --variant gca_current_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_residual.yaml \
+  --variant gca_com_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_com_residual.yaml \
   --variant gcn=ultralytics/cfg/models/exp_ablation/yolov10x_GCN.yaml \
   --variant gat_learned=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml \
   --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml \
@@ -136,7 +136,7 @@ python scripts/train_mdet_experiments.py gca-stage2 \
   --batch 16 \
   --seed 0 \
   --com-path "$COM_PATH" \
-  --project runs/experiments/E2_2_GCA_stage2
+  --project runs/experiments/E2_2_GCA_stage2_residual
 
 
 # The completed 10-position GIA-v2 matrix is retained below for reference;
