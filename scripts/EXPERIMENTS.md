@@ -202,11 +202,46 @@ python scripts/train_mdet_experiments.py gca-stage2 \
 门控版本，便于区分历史实现与残差稳定化后的实现。
 
 如果六个旧的逐 logit 残差 GCA/GNN 变体均未改变 hard argmax 指标，使用固定的 E1
-Stage1 checkpoint 运行新的 multiclass-aware 比较。`run.sh` 会一次启动以下五个
-Stage2=100 变体：`GCA`、`GCN`、feature-dependent `GAT`、`GraphSAGE` 和 `GIN`。
-它们都在每个属性的两类 logit 之间构造风险边际，在 train-only 共现图上进行图聚合，
-再以相同的非零可学习残差门控回写；因此比较只改变 GNN 聚合器。它们仍然位于属性头，
-不会改变检测分支或 segmentation，也不会重复已经完成的旧六组实验。
+Stage1 checkpoint 运行新的 multiclass-aware 比较。此前的五个 Stage2=100 GNN 结果
+已经完成，保留在 `E2_2_GCA_GNN_margin_residual`，不会被当前 `run.sh` 重复训练。
+
+当前 `run.sh` 运行的不是两组互不对应的比较，而是完整的 5×5 结构矩阵。
+五个 structural variant 为：
+
+1. `GCAContextResidual + cross`：原有 cross-normalized 共现矩阵；
+2. `GCAContextResidual + conditional`：train-only、有向条件矩阵
+   `P(attribute_j=1 | attribute_i=1)`，并加入 Laplace smoothing；
+3. `GCAAdaptiveResidual`：学习 local/context 的自适应混合比例；
+4. `GCATwoHopResidual`：同时使用一跳和二跳图上下文；
+5. `GCAConvAdapterResidual`：在图上下文旁增加轻量的 `1×1` 属性适配器。
+
+每一个 variant 都分别替换为五种 GNN operator：GCA、GCN、GAT、GraphSAGE、GIN，
+因此共得到 25 个 Stage2-only run。`--gnn-types` 会在项目的
+`_generated_configs/` 中生成对应 YAML；它不会修改原始配置，也不会把不同
+variant 错误地合并成只有一个 context wrapper 的比较。
+
+该结构在属性 margin 上使用“置信源聚合→上下文差异→两层融合 MLP→残差门控”：
+高置信度目标不会被图强行改写，降低固定矩阵造成的错误传播。它仍然位于 mdet 属性头，
+不会改变检测分支或 segmentation；因此该 Stage2 实验主要衡量属性指标，mAP50
+理论上应与固定 Stage1 checkpoint 一致。
+
+条件矩阵先用 `generate_com.py` 生成，例如：
+
+```bash
+python generate_com.py \
+  --data-root /localnvme/data/billboard/mayolo_v3 \
+  --split train \
+  --mode conditional \
+  --smoothing 1.0 \
+  --output /localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv
+```
+
+然后设置 `COM_CONDITIONAL_PATH` 后运行 `bash run.sh`。脚本会启动五条
+`gca-stage2` 命令，每条命令再由 `--gnn-types gca gcn gat graphsage gin`
+展开为五个 run。所有 25 个 run 均从同一个 E1 Stage1 checkpoint 开始，固定
+Stage2=100、w4=0.5、batch=16、seed=0；结果分别保存在
+`E2_2_GCA5x5_*` 目录中。每个 run 的 `manifest.jsonl` 会记录实际的
+`gnn_type` 和生成后的配置路径，便于论文表格追溯。
 
 ## E2.4–E2.5：HO
 

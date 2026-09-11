@@ -58,6 +58,7 @@ Examples (PowerShell):
         --variant gat=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml `
         --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml `
         --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml `
+        --gnn-types gca gcn gat graphsage gin `
         --com-path path/to/co_occurrence_matrix_train.csv
 
     python scripts/train_mdet_experiments.py versions `
@@ -144,41 +145,81 @@ def _resolve_config(config: str) -> Path:
     raise FileNotFoundError(f"Model YAML not found. Checked:\n  {formatted}")
 
 
-def _materialize_config(config: str, com_path: Optional[str], project: str) -> str:
-    """Return a runnable config, optionally replacing an inaccessible GCA CSV.
+def _materialize_config(
+    config: str,
+    com_path: Optional[str],
+    project: str,
+    gnn_type: Optional[str] = None,
+) -> str:
+    """Return a runnable config with optional GCA matrix/GNN substitutions.
 
     The ablation YAMLs in ``exp_ablation`` contain an absolute Linux path
     to the co-occurrence matrix.  Replacing it in a generated copy keeps the
     experiment reproducible and avoids changing the checked-in configuration.
+    For the 5x5 GCA study, the checked-in YAML keeps the ``com_gca_*`` token
+    and this function materializes the requested GNN-specific token in the
+    per-project generated copy.
     """
     source = _resolve_config(config)
     text = source.read_text(encoding="utf-8")
-    if "/nfsv4/" not in text:
+    updated = text
+    changed = False
+
+    if gnn_type is not None:
+        valid_gnn_types = {"gca", "gcn", "gat", "graphsage", "gin"}
+        if gnn_type not in valid_gnn_types:
+            raise ValueError(f"Unsupported --gnn-types value: {gnn_type!r}")
+
+        # The five GCA variants are defined once in YAML. Replace only the
+        # operator token, preserving the selected structural variant:
+        # com_gca_context_residual -> com_gcn_context_residual, etc.
+        gnn_pattern = re.compile(
+            r"(?P<quote>['\"]?)com_gca_"
+            r"(?P<variant>context|adaptive|twohop|conv_adapter)_residual"
+            r"(?P=quote)"
+        )
+        updated, count = gnn_pattern.subn(
+            lambda match: (
+                f"{match.group('quote')}com_{gnn_type}_"
+                f"{match.group('variant')}_residual{match.group('quote')}"
+            ),
+            updated,
+        )
+        if count == 0:
+            raise ValueError(
+                f"{source} does not contain one of the materializable "
+                "com_gca_{context,adaptive,twohop,conv_adapter}_residual tokens."
+            )
+        changed = True
+
+    if "/nfsv4/" in updated:
+        if not com_path:
+            raise ValueError(
+                f"{source} contains an /nfsv4/ path. Pass --com-path pointing to the "
+                "local co-occurrence matrix CSV."
+            )
+        matrix = Path(com_path).expanduser()
+        if not matrix.is_file():
+            raise FileNotFoundError(f"Co-occurrence matrix not found: {matrix}")
+        if matrix.suffix.lower() != ".csv":
+            raise ValueError(f"--com-path must point to a CSV file, got: {matrix}")
+
+        # The original path is a YAML list item and may or may not be quoted.
+        matrix_pattern = re.compile(
+            r"(?P<quote>['\"]?)/nfsv4/[^,\]\s'\"]*co_occurrence_matrix"
+            r"[^,\]\s'\"]*\.csv(?P=quote)"
+        )
+        replacement = repr(matrix.resolve().as_posix())
+        updated, count = matrix_pattern.subn(replacement, updated)
+        if count == 0:
+            raise ValueError(
+                f"{source} contains /nfsv4/ but no co_occurrence_matrix*.csv entry "
+                "could be replaced safely."
+            )
+        changed = True
+
+    if not changed:
         return str(source)
-
-    if not com_path:
-        raise ValueError(
-            f"{source} contains an /nfsv4/ path. Pass --com-path pointing to the "
-            "local co-occurrence matrix CSV."
-        )
-    matrix = Path(com_path).expanduser()
-    if not matrix.is_file():
-        raise FileNotFoundError(f"Co-occurrence matrix not found: {matrix}")
-    if matrix.suffix.lower() != ".csv":
-        raise ValueError(f"--com-path must point to a CSV file, got: {matrix}")
-
-    # The original path is a YAML list item and may or may not be quoted.
-    pattern = re.compile(
-        r"(?P<quote>['\"]?)/nfsv4/[^,\]\s'\"]*co_occurrence_matrix"
-        r"[^,\]\s'\"]*\.csv(?P=quote)"
-    )
-    replacement = repr(matrix.resolve().as_posix())
-    updated, count = pattern.subn(replacement, text)
-    if count == 0:
-        raise ValueError(
-            f"{source} contains /nfsv4/ but no co_occurrence_matrix*.csv entry "
-            "could be replaced safely."
-        )
 
     generated_dir = Path(project) / "_generated_configs"
     generated_dir.mkdir(parents=True, exist_ok=True)
@@ -410,6 +451,7 @@ def _train_direct_stage(
     run_name: str,
     hsv: Optional[Sequence[float]] = None,
     network_name: str = "yolo",
+    gnn_type: Optional[str] = None,
 ) -> Optional[str]:
     """Run one independent stage-only experiment and record its provenance."""
     if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
@@ -420,11 +462,12 @@ def _train_direct_stage(
         raise FileNotFoundError(f"Stage1 checkpoint not found: {pretrain}")
 
     hsv_h, hsv_s, hsv_v = _get_hsv_values(args, hsv)
-    resolved_config = _materialize_config(config, args.com_path, args.project)
+    resolved_config = _materialize_config(config, args.com_path, args.project, gnn_type=gnn_type)
     record: Dict[str, object] = {
         "protocol": "stage2_only" if retrain else "stage1_only",
         "label": label,
         "variant": variant_name,
+        "gnn_type": gnn_type,
         "config": resolved_config,
         "pretrain": pretrain,
         "stage1_checkpoint": pretrain if retrain else None,
@@ -582,25 +625,33 @@ def _run_gca_stage2(args: argparse.Namespace) -> None:
     _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
     _validate_epoch_values([args.stage2_epochs], "--stage2-epochs")
     variants = _parse_key_value(args.variant, "--variant")
-    for name, config in variants.items():
-        run_name = (
-            f"{_slug(args.label)}_{_slug(name)}_stage1_{args.stage1_epochs}"
-            f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
-        )
-        _train_direct_stage(
-            args,
-            label=args.label,
-            variant_name=name,
-            config=config,
-            pretrain=args.stage1_checkpoint,
-            w4=args.w4,
-            seed=args.seed,
-            epochs=args.stage2_epochs,
-            retrain=True,
-            stage1_epochs=args.stage1_epochs,
-            run_name=run_name,
-            network_name="yolo",
-        )
+    requested_gnn_types = getattr(args, "gnn_types", None)
+    # No --gnn-types keeps the historical behavior and uses the operator
+    # already encoded by each YAML. Supplying five values creates the full
+    # structural-variant x GNN-operator matrix.
+    gnn_types = requested_gnn_types or [None]
+    for gnn_type in gnn_types:
+        for name, config in variants.items():
+            combo_name = f"{gnn_type}_{name}" if gnn_type else name
+            run_name = (
+                f"{_slug(args.label)}_{_slug(combo_name)}_stage1_{args.stage1_epochs}"
+                f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
+            )
+            _train_direct_stage(
+                args,
+                label=args.label,
+                variant_name=combo_name,
+                config=config,
+                pretrain=args.stage1_checkpoint,
+                w4=args.w4,
+                seed=args.seed,
+                epochs=args.stage2_epochs,
+                retrain=True,
+                stage1_epochs=args.stage1_epochs,
+                run_name=run_name,
+                network_name="yolo",
+                gnn_type=gnn_type,
+            )
 
 
 def _run_variants(args: argparse.Namespace) -> None:
@@ -750,7 +801,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     gca_stage2 = subparsers.add_parser(
         "gca-stage2",
-        help="E2.2: stage-2-only comparison of fixed GCA and alternative GNN heads",
+        help="E2.2: stage-2-only GCA-variant x GNN comparison",
     )
     _add_common_train_arguments(gca_stage2)
     gca_stage2.add_argument("--label", default="E2_2_GCA_stage2")
@@ -776,7 +827,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         required=True,
         metavar="NAME=CONFIG_YAML",
-        help="repeat for the baseline and each GCA/GNN configuration",
+        help="repeat for each structural GCA variant; combine with --gnn-types for a matrix",
+    )
+    gca_stage2.add_argument(
+        "--gnn-types",
+        nargs="+",
+        choices=("gca", "gcn", "gat", "graphsage", "gin"),
+        default=None,
+        metavar="GNN",
+        help=(
+            "materialize each selected GNN operator for every structural variant; "
+            "omit to keep the operator encoded in each YAML"
+        ),
     )
 
     for name, help_text, default_network in (

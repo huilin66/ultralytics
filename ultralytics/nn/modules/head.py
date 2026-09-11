@@ -343,8 +343,9 @@ class GCAMarginResidual(nn.Module):
         eye = torch.eye(self.na, dtype=graph.dtype)
 
         if self.gnn_type == "gca":
-            # Paper-style fixed GCA: row-wise softmax over the train-only
-            # conditional co-occurrence matrix, including self information.
+            # Paper-style fixed GCA: row-wise softmax over a train-only
+            # co-occurrence matrix, including self information.  A directed
+            # conditional P(j|i) matrix can be supplied by generate_com.py.
             self.register_buffer("adjacency", torch.softmax(graph + eye, dim=-1))
             self.node_in = nn.Linear(1, hidden_chs)
             self.node_out = nn.Linear(hidden_chs, 1)
@@ -453,6 +454,275 @@ class GCAMarginResidual(nn.Module):
             outputs = logits + self.gamma.unsqueeze(2) * messages
 
         return outputs.reshape(batch, expected_channels, height, width)
+
+
+class GCAContextResidual(nn.Module):
+    """Confidence-gated graph-context residual correction for mdet logits.
+
+    ``GCAMarginResidual`` directly adds a graph message to the attribute
+    margin.  That can amplify a wrong but confident attribute and is
+    especially sensitive to noisy or overly dense co-occurrence matrices.
+    This variant treats the graph output as context instead:
+
+    1. convert each binary attribute margin to a bounded signal;
+    2. aggregate confident source attributes with the directed graph;
+    3. calculate a context-vs-self correction and suppress it for confident
+       target predictions;
+    4. refine the correction with a small two-layer fusion MLP; and
+    5. add the bounded correction through a learnable residual gate.
+
+    ``gnn_type`` selects the graph operator while all other parts remain
+    unchanged, making the reviewer-requested GCA/GCN/GAT/GraphSAGE/GIN
+    comparison controlled and directly comparable.  The row of the matrix is
+    the target attribute and the column is the source attribute, so a
+    conditional matrix ``P(source | target)`` can be used directly.
+    """
+
+    expects_multiclass = True
+    supported_gnn_types = {"gca", "gcn", "gat", "graphsage", "gin"}
+
+    def __init__(
+        self,
+        na,
+        nal,
+        com_path=None,
+        hidden_chs=None,
+        gate_init=0.1,
+        temperature=0.5,
+        margin_scale=2.0,
+        gnn_type="gca",
+    ):
+        super().__init__()
+        self.na = int(na)
+        self.nal = int(nal)
+        self.gnn_type = str(gnn_type)
+        self.margin_scale = float(margin_scale)
+        if self.na < 1 or self.nal < 2:
+            raise ValueError("GCAContextResidual requires at least one attribute and nal >= 2")
+        if self.gnn_type not in self.supported_gnn_types:
+            raise ValueError(f"Unsupported context graph type: {self.gnn_type}")
+        if temperature <= 0:
+            raise ValueError("GCAContextResidual temperature must be positive")
+        if self.margin_scale <= 0:
+            raise ValueError("GCAContextResidual margin_scale must be positive")
+
+        hidden_chs = hidden_chs or max(16, self.na * 2)
+        self.hidden_chs = int(hidden_chs)
+        self.temperature = float(temperature)
+        graph = _load_attribute_graph(com_path, self.na)
+        eye = torch.eye(self.na, dtype=graph.dtype)
+        if self.gnn_type == "gca":
+            adjacency = torch.softmax((graph + eye) / self.temperature, dim=-1)
+            self.register_buffer("adjacency", adjacency)
+        elif self.gnn_type == "gcn":
+            adjacency = graph + eye
+            degree = adjacency.sum(dim=-1).clamp_min(1e-6)
+            adjacency = degree.rsqrt().unsqueeze(1) * adjacency * degree.rsqrt().unsqueeze(0)
+            self.register_buffer("adjacency", adjacency)
+            self.gnn_in = nn.Linear(1, self.hidden_chs)
+            self.gnn_out = nn.Linear(self.hidden_chs, 1)
+            self.activation = nn.GELU()
+            nn.init.zeros_(self.gnn_out.weight)
+            nn.init.zeros_(self.gnn_out.bias)
+        elif self.gnn_type == "gat":
+            edge_mask = graph > 0
+            edge_mask.fill_diagonal_(True)
+            self.register_buffer("edge_mask", edge_mask)
+            self.gnn_proj = nn.Linear(1, self.hidden_chs, bias=False)
+            self.att_src = nn.Linear(self.hidden_chs, 1, bias=False)
+            self.att_dst = nn.Linear(self.hidden_chs, 1, bias=False)
+            self.gnn_out = nn.Linear(self.hidden_chs, 1)
+            self.activation = nn.GELU()
+            self.leaky_relu = nn.LeakyReLU(0.2)
+            nn.init.zeros_(self.gnn_out.weight)
+            nn.init.zeros_(self.gnn_out.bias)
+        elif self.gnn_type == "graphsage":
+            adjacency = graph
+            degree = adjacency.sum(dim=-1).clamp_min(1e-6)
+            self.register_buffer("adjacency", adjacency / degree.unsqueeze(-1))
+            self.self_proj = nn.Linear(1, self.hidden_chs)
+            self.neighbor_proj = nn.Linear(1, self.hidden_chs)
+            self.gnn_out = nn.Linear(self.hidden_chs, 1)
+            self.activation = nn.GELU()
+            nn.init.zeros_(self.gnn_out.weight)
+            nn.init.zeros_(self.gnn_out.bias)
+        else:  # gin
+            adjacency = (graph > 0).to(graph.dtype)
+            self.register_buffer("adjacency", adjacency)
+            self.eps = nn.Parameter(torch.zeros(1))
+            self.gin_mlp = nn.Sequential(
+                nn.Linear(1, self.hidden_chs),
+                nn.GELU(),
+                nn.Linear(self.hidden_chs, 1),
+            )
+            nn.init.zeros_(self.gin_mlp[-1].weight)
+            nn.init.zeros_(self.gin_mlp[-1].bias)
+
+        # [self signal, graph context, disagreement, source/target confidence]
+        # gives the module a small, explicit fusion stage without changing the
+        # detector or segmentation branches.
+        self.fusion = nn.Sequential(
+            nn.Linear(4, self.hidden_chs),
+            nn.GELU(),
+            nn.Linear(hidden_chs, 1),
+        )
+        # Start from the deterministic graph correction.  The learned part is
+        # introduced only after its last layer receives a useful gradient.
+        nn.init.zeros_(self.fusion[-1].weight)
+        nn.init.zeros_(self.fusion[-1].bias)
+        self.gamma = nn.Parameter(torch.full((1, self.na, 1, 1), float(gate_init)))
+
+    def _aggregate_context(self, signal, confidence):
+        """Apply the selected GNN operator to per-pixel attribute signals."""
+        if self.gnn_type in {"gca", "gcn", "graphsage"}:
+            adjacency = self.adjacency.to(device=signal.device, dtype=signal.dtype)
+            weights = adjacency.view(1, 1, self.na, self.na) * confidence.unsqueeze(-2)
+            context = (weights * signal.unsqueeze(-2)).sum(dim=-1) / weights.sum(dim=-1).clamp_min(1e-6)
+            if self.gnn_type == "gcn":
+                hidden = self.activation(self.gnn_in(signal.unsqueeze(-1)))
+                aggregated = torch.einsum("ij,bnjd->bnid", adjacency, hidden)
+                context = context + self.gnn_out(aggregated).squeeze(-1)
+            elif self.gnn_type == "graphsage":
+                neighbors = context
+                hidden = self.activation(
+                    self.self_proj(signal.unsqueeze(-1)) + self.neighbor_proj(neighbors.unsqueeze(-1))
+                )
+                context = context + self.gnn_out(hidden).squeeze(-1)
+            return torch.tanh(context)
+
+        if self.gnn_type == "gat":
+            hidden = self.activation(self.gnn_proj(signal.unsqueeze(-1)))
+            src = self.att_src(hidden).squeeze(-1)
+            dst = self.att_dst(hidden).squeeze(-1)
+            scores = self.leaky_relu(src.unsqueeze(-1) + dst.unsqueeze(-2))
+            mask = self.edge_mask.view(1, 1, self.na, self.na)
+            scores = scores.masked_fill(~mask, torch.finfo(scores.dtype).min)
+            attention = torch.softmax(scores, dim=-1) * confidence.unsqueeze(-2)
+            attention = attention / attention.sum(dim=-1, keepdim=True).clamp_min(1e-6)
+            direct = torch.einsum("bnij,bnj->bni", attention, signal)
+            aggregated = torch.einsum("bnij,bnjd->bnid", attention, hidden)
+            context = direct + self.gnn_out(aggregated).squeeze(-1)
+            return torch.tanh(context)
+
+        # GIN uses an unnormalized sum and a learnable epsilon, followed by a
+        # node MLP.  Scale the direct signal by node degree to keep its range
+        # comparable with the other operators before applying tanh.
+        adjacency = self.adjacency.to(device=signal.device, dtype=signal.dtype)
+        neighbors = torch.einsum("ij,bnj->bni", adjacency, signal * confidence)
+        degree = adjacency.sum(dim=-1).view(1, 1, self.na).clamp_min(1.0)
+        gin_input = (1.0 + self.eps) * signal + neighbors
+        direct = gin_input / (1.0 + degree)
+        context = direct + self.gin_mlp(gin_input.unsqueeze(-1)).squeeze(-1)
+        return torch.tanh(context)
+
+    def _context_components(self, values):
+        """Return bounded local/context signals and detached confidences."""
+        batch, channels, height, width = values.shape
+        if channels != self.na:
+            raise RuntimeError(f"Expected {self.na} attribute channels, got {channels}")
+
+        nodes = values.permute(0, 2, 3, 1).reshape(batch, height * width, self.na)
+        signal = torch.tanh(nodes / self.margin_scale)
+        # Confident source nodes should contribute more, while the detached
+        # confidence prevents the graph branch from gaming its own gate.
+        confidence = torch.sigmoid(nodes.abs() / self.margin_scale).detach()
+        context = self._aggregate_context(signal, confidence)
+        return signal, context, confidence, (batch, height, width)
+
+    def _graph_message(self, values):
+        """Return a bounded, confidence-gated graph correction for BCHW values."""
+        signal, context, target_confidence, (batch, height, width) = self._context_components(values)
+
+        # Only uncertain target margins should be corrected aggressively. This
+        # limits false-positive propagation from a noisy fixed graph.
+        disagreement = (context - signal) * (1.0 - target_confidence)
+        features = torch.stack((signal, context, disagreement, target_confidence), dim=-1)
+        learned = self.fusion(features).squeeze(-1)
+        message = torch.tanh(disagreement + learned)
+        return message.reshape(batch, height, width, self.na).permute(0, 3, 1, 2).contiguous()
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+
+        logits = inputs.reshape(batch, self.na, self.nal, height, width)
+        center = logits.mean(dim=2, keepdim=True)
+        if self.nal == 2:
+            margin = logits[:, :, 1] - logits[:, :, 0]
+            correction = self._graph_message(margin)
+            updated_margin = margin + self.gamma * correction
+            outputs = torch.stack(
+                (center[:, :, 0] - 0.5 * updated_margin, center[:, :, 0] + 0.5 * updated_margin), dim=2
+            )
+        else:
+            centered = logits - center
+            level_values = centered.permute(0, 2, 1, 3, 4).reshape(batch * self.nal, self.na, height, width)
+            corrections = self._graph_message(level_values)
+            corrections = corrections.reshape(batch, self.nal, self.na, height, width).permute(0, 2, 1, 3, 4)
+            outputs = logits + self.gamma.unsqueeze(2) * corrections
+
+        return outputs.reshape(batch, expected_channels, height, width)
+
+
+class GCAAdaptiveResidual(GCAContextResidual):
+    """Learn an attribute-wise local/context mixture before residual writing."""
+
+    def __init__(self, *args, initial_local_weight=0.75, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not 0.0 < initial_local_weight < 1.0:
+            raise ValueError("initial_local_weight must be in (0, 1)")
+        nn.init.zeros_(self.fusion[-1].weight)
+        nn.init.constant_(self.fusion[-1].bias, math.log(initial_local_weight / (1.0 - initial_local_weight)))
+
+    def _graph_message(self, values):
+        """Return an adaptive convex local/context correction."""
+        signal, context, confidence, (batch, height, width) = self._context_components(values)
+        disagreement = context - signal
+        features = torch.stack((signal, context, disagreement, confidence), dim=-1)
+        local_weight = torch.sigmoid(self.fusion(features).squeeze(-1))
+        fused = local_weight * signal + (1.0 - local_weight) * context
+        message = torch.tanh((fused - signal) * (1.0 - confidence))
+        return message.reshape(batch, height, width, self.na).permute(0, 3, 1, 2).contiguous()
+
+
+class GCATwoHopResidual(GCAContextResidual):
+    """Use one- and two-hop graph context while retaining a residual shortcut."""
+
+    def _graph_message(self, values):
+        """Return a bounded correction from a mixture of one- and two-hop context."""
+        signal, context_one, confidence, (batch, height, width) = self._context_components(values)
+        context_two = self._aggregate_context(context_one, confidence)
+        context = 0.5 * (context_one + context_two)
+        disagreement = (context - signal) * (1.0 - confidence)
+        features = torch.stack((signal, context_one, context_two, confidence), dim=-1)
+        learned = self.fusion(features).squeeze(-1)
+        message = torch.tanh(disagreement + learned)
+        return message.reshape(batch, height, width, self.na).permute(0, 3, 1, 2).contiguous()
+
+
+class GCAConvAdapterResidual(GCAContextResidual):
+    """Add a small 1x1 attribute adapter alongside confidence-gated GCA."""
+
+    def __init__(self, *args, hidden_chs=None, **kwargs):
+        super().__init__(*args, hidden_chs=hidden_chs, **kwargs)
+        hidden_chs = hidden_chs or max(16, self.na * 2)
+        self.local_adapter = nn.Sequential(
+            nn.Conv2d(self.na, hidden_chs, kernel_size=1),
+            nn.GELU(),
+            nn.Conv2d(hidden_chs, self.na, kernel_size=1),
+        )
+        nn.init.zeros_(self.local_adapter[-1].weight)
+        nn.init.zeros_(self.local_adapter[-1].bias)
+
+    def _graph_message(self, values):
+        """Return GCA correction plus a bounded local 1x1 attribute adapter."""
+        graph_message = super()._graph_message(values)
+        signal = torch.tanh(values / self.margin_scale)
+        confidence = torch.sigmoid(values.abs() / self.margin_scale).detach()
+        local_message = self.local_adapter(signal) * (1.0 - confidence)
+        return torch.tanh(graph_message + local_message)
 
 
 class TextureAttention(nn.Module):
@@ -957,6 +1227,35 @@ class MDetect(nn.Module):
                 GCAMarginResidual(self.na, self.nal, com_path=self.com_path, gate_init=0.1, gnn_type=gnn_type)
                 for x in ch
             )
+        elif isinstance(self.gat, str) and self.gat.startswith("com_") and self.gat.endswith("_residual"):
+            # The five structural GCA variants are crossed with the five graph
+            # operators by the experiment launcher.  Keeping this dispatch in
+            # one place ensures that every 5x5 combination uses the same
+            # multiclass-aware context/residual implementation and differs
+            # only where the selected variant explicitly requires it.
+            parts = self.gat.split("_")
+            gnn_type = parts[1] if len(parts) > 1 else None
+            variant = "_".join(parts[2:-1])
+            variant_class = {
+                "context": GCAContextResidual,
+                "adaptive": GCAAdaptiveResidual,
+                "twohop": GCATwoHopResidual,
+                "conv_adapter": GCAConvAdapterResidual,
+            }.get(variant)
+            if gnn_type not in GCAContextResidual.supported_gnn_types or variant_class is None:
+                self.gat_head = None
+            else:
+                self.gat_head = nn.ModuleList(
+                    variant_class(
+                        self.na,
+                        self.nal,
+                        com_path=self.com_path,
+                        gate_init=0.1,
+                        temperature=0.5,
+                        gnn_type=gnn_type,
+                    )
+                    for x in ch
+                )
         else:
             self.gat_head = None
 
