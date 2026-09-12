@@ -732,11 +732,27 @@ class AttributeFeatureGraph(nn.Module):
     rows/source columns. Cross matrices are symmetric. Keep cv4 keys intact.
     """
 
-    def __init__(self, channels, na, nal, com_path, operator="gca", conditional=False, dim=16):
+    def __init__(
+        self,
+        channels,
+        na,
+        nal,
+        com_path,
+        operator="gca",
+        conditional=False,
+        dim=16,
+        gain=1.0,
+    ):
         super().__init__()
         self.na, self.nal, self.dim = na, nal, dim
         self.operator = operator
         self.enabled = True
+        try:
+            self.feature_gain = float(gain)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"feature_gain must be a finite non-negative number, got {gain!r}") from error
+        if not math.isfinite(self.feature_gain) or self.feature_gain < 0:
+            raise ValueError(f"feature_gain must be a finite non-negative number, got {gain!r}")
         graph = _load_attribute_graph(com_path, na)
         if not torch.isfinite(graph).all():
             raise ValueError("Attribute matrix contains non-finite values")
@@ -795,7 +811,7 @@ class AttributeFeatureGraph(nn.Module):
                 elif self.operator == "graphsage":
                     context = self.sage_fusion(torch.cat((x, context), -1))
                 context = F.gelu(context)
-            delta = self.fusion(torch.cat((x, context), -1)) * self.gamma
+            delta = self.fusion(torch.cat((x, context), -1)) * (self.feature_gain * self.gamma)
             outputs.append(delta)
         delta = torch.cat(outputs, 1).permute(0, 2, 3, 1).reshape(b, self.na * self.nal, h, w)
         return logits + delta
@@ -1043,6 +1059,7 @@ class MDetect(nn.Module):
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
         params = [None if v == "None" else v for v in params]
+        feature_gain = 1.0
         if len(params) == 3:
             sep, c4, gat = params
             com_path = None
@@ -1052,6 +1069,8 @@ class MDetect(nn.Module):
             com_path = None
         elif len(params) == 5:
             sep, c4, gat, retrain, com_path = params
+        elif len(params) == 6:
+            sep, c4, gat, retrain, com_path, feature_gain = params
         else:
             raise ValueError("the length (%d) of params is not correct!" % len(params))
         self.sep = sep
@@ -1059,6 +1078,14 @@ class MDetect(nn.Module):
         if retrain:
             self.end2end = False
         self.com_path = com_path
+        if feature_gain is None:
+            feature_gain = 1.0
+        try:
+            self.feature_gain = float(feature_gain)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"feature_gain must be a finite non-negative number, got {feature_gain!r}") from error
+        if not math.isfinite(self.feature_gain) or self.feature_gain < 0:
+            raise ValueError(f"feature_gain must be a finite non-negative number, got {feature_gain!r}")
         c4 = c3 if c4 is None else c4
         if not self.sep:
             self.cv4 = nn.ModuleList(
@@ -1311,7 +1338,8 @@ class MDetect(nn.Module):
                 raise ValueError(f"Unknown feature graph operator: {operator}")
             self.gat_head = nn.ModuleList(
                 AttributeFeatureGraph(c4, self.na, self.nal, self.com_path, operator,
-                                      conditional=self.gat.endswith("_conditional")) for _ in ch
+                                      conditional=self.gat.endswith("_conditional"),
+                                      gain=self.feature_gain) for _ in ch
             )
         elif isinstance(self.gat, str) and self.gat.startswith("com_") and self.gat.endswith("_residual"):
             # The five structural GCA variants are crossed with the five graph

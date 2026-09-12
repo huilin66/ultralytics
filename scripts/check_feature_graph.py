@@ -34,8 +34,36 @@ def main():
         assert torch.equal(graph(features, logits), logits)
         print(operator, "identity, learning, matrix influence and bypass OK")
 
+    # The gain is an explicit amplitude control: with identical parameters,
+    # changing gain from 1 to 4 should scale only the residual correction.
+    torch.manual_seed(13)
+    unit = AttributeFeatureGraph(8, 3, 2, None, "gca", gain=1.0)
+    with torch.no_grad():
+        unit.fusion[-1].weight.normal_()
+        unit.fusion[-1].bias.normal_()
+    amplified = AttributeFeatureGraph(8, 3, 2, None, "gca", gain=4.0)
+    amplified.load_state_dict(unit.state_dict())
+    unit_output = unit(features, logits)
+    amplified_output = amplified(features, logits)
+    assert torch.allclose(
+        amplified_output - logits,
+        4.0 * (unit_output - logits),
+        atol=1e-6,
+        rtol=1e-5,
+    )
+    print("feature_gain: residual amplitude scales exactly")
+
     base = v10MDetect(nc=2, na=3, nal=2, params=[False, None, None, False, None], ch=(16, 32, 64))
     model = v10MDetect(nc=2, na=3, nal=2, params=[False, None, 'feature_gca_cross', False, None], ch=(16, 32, 64))
+    gained_model = v10MDetect(
+        nc=2,
+        na=3,
+        nal=2,
+        params=[False, None, 'feature_gca_cross', False, None, 4.0],
+        ch=(16, 32, 64),
+    )
+    assert gained_model.feature_gain == 4.0
+    assert all(graph.feature_gain == 4.0 for graph in gained_model.gat_head)
     incompatible = model.load_state_dict(base.state_dict(), strict=False)
     assert not incompatible.unexpected_keys
     assert all('gat_head' in key for key in incompatible.missing_keys)

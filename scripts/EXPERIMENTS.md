@@ -205,15 +205,20 @@ python scripts/train_mdet_experiments.py gca-stage2 \
 Stage1 checkpoint 运行新的 multiclass-aware 比较。此前的五个 Stage2=100 GNN 结果
 已经完成，保留在 `E2_2_GCA_GNN_margin_residual`，不会被当前 `run.sh` 重复训练。
 
-当前 run.sh 已改为属性视觉特征图实验，共 11 个 Stage2 任务：
-GCA、加权 GCN、矩阵先验 GAT、加权 GraphSAGE、加权 GIN，各测试 cross
-和 conditional 两种矩阵（10 个），另加一个无图的 local 视觉适配器对照。
+上一轮 11 个 Stage2 特征图任务已经完成，但所有 hard 指标都与 baseline
+完全相同；检查 checkpoint 后确认分支是有效的，只是输出修正幅度太小。
+因此当前 `run.sh` 默认改为残差增益筛选，共 4 个任务：
+`feature_gca_cross` 的 gain=2/4/8，以及 gain=4 的无图 `local` 对照。
+gain=1 的 GCA cross 是上一轮已完成的参考点，不再默认重复训练；如果本地没有
+该参考结果，可设置 `FEATURE_GAIN_VALUES="1 2 4 8"` 补跑。
 
 历史“5×5”的 context_cross/context_conditional 在固定矩阵下是同一结构，
 实际只有 4 个结构。历史重复结果不能视为独立证据，旧命令已注释保留。
 
 新模块从 cv4 分类器之前提取视觉特征，构造每属性 16 维节点，保留原分类器。
-输出为 z + gamma * delta_z；gamma 初始 0.1，输出层零初始化。
+输出为 `z + feature_gain * gamma * delta_z`；gain 默认 1.0，gamma 初始 0.1，
+输出层零初始化。训练脚本的 `--feature-gain` 只在生成 YAML 副本时写入第六个
+参数，不修改源 YAML；manifest 同时记录该值。
 连续共现边权与源属性正类概率共同控制传播。conditional CSV 行是条件源，
 列是目标，因此加载时转置为目标行、源列。所有算子都是本项目的加权变体。
 
@@ -221,12 +226,19 @@ GCA、加权 GCN、矩阵先验 GAT、加权 GraphSAGE、加权 GIN，各测试 
 保持 AdamW 学习率 1e-4，不混入学习率消融。检测部分冻结，两个属性分支均训练。
 根据验证集选择候选，test 用于最终报告。local 对照用于判断提升是否来自图关系。
 
-先独立 smoke：
+先独立 smoke（只验证默认 4 个任务的配置和一轮训练）：
 ```bash
-FEATURE_EPOCHS=1 FEATURE_PROJECT=runs/experiments/E2_2_feature_graph_smoke bash run.sh
+FEATURE_EPOCHS=1 FEATURE_PROJECT=runs/experiments/E2_2_feature_gain_smoke bash run.sh
 ```
-正式运行 bash run.sh。提前设置 COM_PATH 和 COM_CONDITIONAL_PATH。
-正式结果目录为 runs/experiments/E2_2_feature_graph，已加入 mayolo_r1.py 汇总。
+正式运行 `bash run.sh`。提前设置 `COM_PATH`；正式结果目录为
+`runs/experiments/E2_2_feature_gain`。需要补跑 gain=1 时：
+```bash
+FEATURE_GAIN_VALUES="1 2 4 8" bash run.sh
+```
+
+当前阶段先只筛选 cross 矩阵。根据验证集 `F1_macro` 和逐属性 F1 选出 gain，
+再固定 gain 比较 conditional、`p>=0.1` 阈值化和 top-k=2/3 矩阵；不要在
+筛选阶段使用 test 集或默认 composite 指标挑选模型。
 
 scripts/check_feature_graph.py 检查初始等价、学习梯度、矩阵影响和两分支接入。
 可设置 AttributeFeatureGraph.enabled=False 关闭整个修正分支来评估同一权重；

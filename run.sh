@@ -210,9 +210,11 @@ COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3
 # # The completed 10-position GIA-v2 matrix is retained below for reference;
 # # leave it commented to avoid retraining those experiments.
 
-# Feature graph experiments: 5 operators x 2 matrices + one local adapter control.
+# Next experiment: residual-gain screening from one fixed Stage1 checkpoint.
+# The previous 11-position feature graph matrix was completed separately and
+# should not be retrained by the default command.
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
-for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH"; do
   if [ ! -f "$REQUIRED_FILE" ]; then
     echo "Missing input: $REQUIRED_FILE" >&2
     exit 1
@@ -220,20 +222,42 @@ for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
 done
 # Set FEATURE_EPOCHS=1 and FEATURE_PROJECT=... for a separate smoke run.
 FEATURE_EPOCHS=${FEATURE_EPOCHS:-100}
-FEATURE_PROJECT=${FEATURE_PROJECT:-runs/experiments/E2_2_feature_graph}
-for MATRIX in cross conditional; do
-  MATRIX_PATH="$COM_PATH"
-  if [ "$MATRIX" = conditional ]; then MATRIX_PATH="$COM_CONDITIONAL_PATH"; fi
-  OPERATORS="local gca gcn gat graphsage gin"
-  if [ "$MATRIX" = conditional ]; then OPERATORS="gca gcn gat graphsage gin"; fi
-  for GNN in $OPERATORS; do
-    python scripts/train_mdet_experiments.py gca-stage2 \
-      --label "feature_${GNN}_${MATRIX}" \
-      --data "$DATA" \
-      --stage1-checkpoint "$STAGE1_CKPT" \
-      --stage2-epochs "$FEATURE_EPOCHS" \
-      --variant "${GNN}_${MATRIX}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_${GNN}_${MATRIX}.yaml" \
-      --com-path "$MATRIX_PATH" \
-      --project "$FEATURE_PROJECT" || exit $?
-  done
+FEATURE_PROJECT=${FEATURE_PROJECT:-runs/experiments/E2_2_feature_gain}
+FEATURE_GAIN_VALUES=${FEATURE_GAIN_VALUES:-"2 4 8"}
+FEATURE_LOCAL_GAIN=${FEATURE_LOCAL_GAIN:-4}
+
+# Gain=1 is the completed feature_gca_cross reference.  Reproduce it with
+# FEATURE_GAIN_VALUES="1 2 4 8" when the reference is not available locally.
+for GAIN in $FEATURE_GAIN_VALUES; do
+  python scripts/train_mdet_experiments.py gca-stage2 \
+    --label "feature_gca_cross_gain_${GAIN}" \
+    --data "$DATA" \
+    --stage1-checkpoint "$STAGE1_CKPT" \
+    --stage1-epochs 100 \
+    --stage2-epochs "$FEATURE_EPOCHS" \
+    --variant "gca_cross_gain_${GAIN}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_gca_cross.yaml" \
+    --feature-gain "$GAIN" \
+    --w4 0.5 \
+    --batch 16 \
+    --seed 0 \
+    --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+    --com-path "$COM_PATH" \
+    --project "$FEATURE_PROJECT" || exit $?
 done
+
+# A no-graph local adapter control separates a useful residual amplitude from
+# a gain that only compensates for an ineffective graph message.
+python scripts/train_mdet_experiments.py gca-stage2 \
+  --label "feature_local_cross_gain_${FEATURE_LOCAL_GAIN}" \
+  --data "$DATA" \
+  --stage1-checkpoint "$STAGE1_CKPT" \
+  --stage1-epochs 100 \
+  --stage2-epochs "$FEATURE_EPOCHS" \
+  --variant "local_cross_gain_${FEATURE_LOCAL_GAIN}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_local_cross.yaml" \
+  --feature-gain "$FEATURE_LOCAL_GAIN" \
+  --w4 0.5 \
+  --batch 16 \
+  --seed 0 \
+  --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+  --com-path "$COM_PATH" \
+  --project "$FEATURE_PROJECT" || exit $?

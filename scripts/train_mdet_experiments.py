@@ -76,6 +76,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -150,15 +151,18 @@ def _materialize_config(
     com_path: Optional[str],
     project: str,
     gnn_type: Optional[str] = None,
+    feature_gain: Optional[float] = None,
 ) -> str:
-    """Return a runnable config with optional GCA matrix/GNN substitutions.
+    """Return a runnable config with optional graph substitutions.
 
     The ablation YAMLs in ``exp_ablation`` contain an absolute Linux path
     to the co-occurrence matrix.  Replacing it in a generated copy keeps the
     experiment reproducible and avoids changing the checked-in configuration.
     For the 5x5 GCA study, the checked-in YAML keeps the ``com_gca_*`` token
     and this function materializes the requested GNN-specific token in the
-    per-project generated copy.
+    per-project generated copy.  Feature-graph YAMLs may receive an optional
+    trailing residual gain in the same generated copy, so the source YAML
+    remains a stable baseline with the default gain of 1.0.
     """
     source = _resolve_config(config)
     text = source.read_text(encoding="utf-8")
@@ -189,6 +193,30 @@ def _materialize_config(
             raise ValueError(
                 f"{source} does not contain one of the materializable "
                 "com_gca_{context,adaptive,twohop,conv_adapter}_residual tokens."
+            )
+        changed = True
+
+    if feature_gain is not None:
+        feature_gain = float(feature_gain)
+        if not math.isfinite(feature_gain) or feature_gain < 0:
+            raise ValueError(
+                f"--feature-gain must be a finite non-negative number, got {feature_gain!r}"
+            )
+
+        # Feature graph params are [sep, c4, gat, retrain, com_path]. Add or
+        # replace the optional sixth value without touching unrelated YAMLs.
+        number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+        feature_pattern = re.compile(
+            r"(?P<prefix>['\"]feature_(?:gca|gcn|gat|graphsage|gin|local)_"
+            r"(?:cross|conditional)['\"]\s*,\s*(?:False|false)\s*,\s*[^,\]\n]+)"
+            rf"(?:\s*,\s*{number})?(?P<close>\s*\])"
+        )
+        replacement = rf"\g<prefix>, {feature_gain:g}\g<close>"
+        updated, count = feature_pattern.subn(replacement, updated)
+        if count == 0:
+            raise ValueError(
+                f"{source} does not contain a feature graph params list with a "
+                "feature_gain insertion point."
             )
         changed = True
 
@@ -240,6 +268,15 @@ def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--device", default="0", help="CUDA index, cpu, or device string")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--w4", type=float, default=0.5, help="attribute loss gain; mapped to mdet")
+    parser.add_argument(
+        "--feature-gain",
+        type=float,
+        default=None,
+        help=(
+            "multiplier for the feature-graph residual correction; only applies "
+            "to feature_* configs and is stored in the generated YAML"
+        ),
+    )
     parser.add_argument("--hsv-h", type=float, default=0.0, help="HSV hue augmentation gain")
     parser.add_argument("--hsv-s", type=float, default=0.2, help="HSV saturation augmentation gain")
     parser.add_argument("--hsv-v", type=float, default=0.2, help="HSV value/brightness augmentation gain")
@@ -369,7 +406,9 @@ def _train_one(
         raise ValueError("w4/mdet must be non-negative")
 
     hsv_h, hsv_s, hsv_v = _get_hsv_values(args)
-    resolved_config = _materialize_config(config, args.com_path, args.project)
+    resolved_config = _materialize_config(
+        config, args.com_path, args.project, feature_gain=args.feature_gain
+    )
     run_base = f"{_slug(label)}_{_slug(variant_name)}_w4_{_slug(w4)}_seed_{seed}"
     record: Dict[str, object] = {
         "label": label,
@@ -378,6 +417,7 @@ def _train_one(
         "pretrain": pretrain,
         "network": network_name,
         "w4": float(w4),
+        "feature_gain": None if args.feature_gain is None else float(args.feature_gain),
         "ultralytics_argument": {"mdet": float(w4)},
         "seed": seed,
         "stage1_epochs": args.stage1_epochs,
@@ -462,7 +502,13 @@ def _train_direct_stage(
         raise FileNotFoundError(f"Stage1 checkpoint not found: {pretrain}")
 
     hsv_h, hsv_s, hsv_v = _get_hsv_values(args, hsv)
-    resolved_config = _materialize_config(config, args.com_path, args.project, gnn_type=gnn_type)
+    resolved_config = _materialize_config(
+        config,
+        args.com_path,
+        args.project,
+        gnn_type=gnn_type,
+        feature_gain=args.feature_gain,
+    )
     record: Dict[str, object] = {
         "protocol": "stage2_only" if retrain else "stage1_only",
         "label": label,
@@ -473,6 +519,7 @@ def _train_direct_stage(
         "stage1_checkpoint": pretrain if retrain else None,
         "network": network_name,
         "w4": float(w4),
+        "feature_gain": None if args.feature_gain is None else float(args.feature_gain),
         "ultralytics_argument": {"mdet": float(w4)},
         "seed": seed,
         "stage1_epochs": stage1_epochs,
