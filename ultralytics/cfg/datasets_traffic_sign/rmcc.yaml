@@ -1,0 +1,30 @@
+path: E:/repository/road_project/data/rmcc_original_images
+train: images/train
+val: images/valid
+test: images/test
+
+names:
+  0: "abandoned_vehicle"
+  1: "blocked_drain"
+  2: "composite_bridge"
+  3: "concrete_bridge"
+  4: "crack"
+  5: "dead_animal"
+  6: "drain"
+  7: "edge_dropoff"
+  8: "faded_line_marking"
+  9: "floodway"
+  10: "graffiti"
+  11: "guardrail"
+  12: "guardrail_damaged"
+  13: "guide_post"
+  14: "misc"
+  15: "patch_deformation"
+  16: "ponding_water"
+  17: "pothole"
+  18: "road_debris"
+  19: "sign"
+  20: "sign_damaged"
+  21: "steel_bridge"
+  22: "tree_fallen"
+  23: "vegetation_obstruction"
