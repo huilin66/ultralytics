@@ -205,15 +205,20 @@ python scripts/train_mdet_experiments.py gca-stage2 \
 Stage1 checkpoint 运行新的 multiclass-aware 比较。此前的五个 Stage2=100 GNN 结果
 已经完成，保留在 `E2_2_GCA_GNN_margin_residual`，不会被当前 `run.sh` 重复训练。
 
-上一轮 11 个 Stage2 特征图任务已经完成，但所有 hard 指标都与 baseline
-完全相同；检查 checkpoint 后确认分支是有效的，只是输出修正幅度太小。
-因此当前 `run.sh` 默认改为残差增益筛选，共 4 个任务：
-`feature_gca_cross` 的 gain=2/4/8，以及 gain=4 的无图 `local` 对照。
-gain=1 的 GCA cross 是上一轮已完成的参考点，不再默认重复训练；如果本地没有
-该参考结果，可设置 `FEATURE_GAIN_VALUES="1 2 4 8"` 补跑。
+上一轮 11 个 Stage2 特征图任务以及后续 gain=2/4/8、local gain=4 筛选已经完成。
+所有 gain<=4 的 hard 指标都与 baseline 完全相同；gain=8 虽提高了
+`F1_macro_global`，但验证集和测试集的 `F1_macro` 均下降。因此 feature graph
+方向关闭，不再进入新的结构或矩阵实验。
+
+远程汇总保存在 `runs/experiments/E2_2_feature_gain/summary.csv`，该结果作为
+负结果归档。当前 `run.sh` 已加保护，默认不会启动 feature graph；仅在需要复现
+历史结果时显式设置 `ENABLE_FEATURE_GRAPH=1`。
 
 历史“5×5”的 context_cross/context_conditional 在固定矩阵下是同一结构，
-实际只有 4 个结构。历史重复结果不能视为独立证据，旧命令已注释保留。
+实际只有 4 个结构。其验证集最高 `F1_macro` 约为 `0.68653`，相对基线
+`0.68413` 有约 `+0.00240` 的微弱提升，但测试集没有同步提升；因此保留为
+候选信号，不把它当作已经稳定验证的收益。历史重复结果不能视为独立证据，
+旧命令已注释保留。
 
 新模块从 cv4 分类器之前提取视觉特征，构造每属性 16 维节点，保留原分类器。
 输出为 `z + feature_gain * gamma * delta_z`；gain 默认 1.0，gamma 初始 0.1，
@@ -222,27 +227,47 @@ gain=1 的 GCA cross 是上一轮已完成的参考点，不再默认重复训�
 连续共现边权与源属性正类概率共同控制传播。conditional CSV 行是条件源，
 列是目标，因此加载时转置为目标行、源列。所有算子都是本项目的加权变体。
 
-固定 Stage1 checkpoint、Stage2=100、batch=16、seed=0、w4=0.5；
+历史实验固定 Stage1 checkpoint、Stage2=100、batch=16、seed=0、w4=0.5；
 保持 AdamW 学习率 1e-4，不混入学习率消融。检测部分冻结，两个属性分支均训练。
-根据验证集选择候选，test 用于最终报告。local 对照用于判断提升是否来自图关系。
-
-先独立 smoke（只验证默认 4 个任务的配置和一轮训练）：
-```bash
-FEATURE_EPOCHS=1 FEATURE_PROJECT=runs/experiments/E2_2_feature_gain_smoke bash run.sh
-```
-正式运行 `bash run.sh`。提前设置 `COM_PATH`；正式结果目录为
-`runs/experiments/E2_2_feature_gain`。需要补跑 gain=1 时：
-```bash
-FEATURE_GAIN_VALUES="1 2 4 8" bash run.sh
-```
-
-当前阶段先只筛选 cross 矩阵。根据验证集 `F1_macro` 和逐属性 F1 选出 gain，
-再固定 gain 比较 conditional、`p>=0.1` 阈值化和 top-k=2/3 矩阵；不要在
-筛选阶段使用 test 集或默认 composite 指标挑选模型。
+根据验证集 `F1_macro` 和逐属性 F1 选择候选，test 只用于最终报告。
 
 scripts/check_feature_graph.py 检查初始等价、学习梯度、矩阵影响和两分支接入。
 可设置 AttributeFeatureGraph.enabled=False 关闭整个修正分支来评估同一权重；
 该操作同时关闭视觉适配，因此需要结合 local 模型解释图的贡献。
+
+### E2.6：固定共现先验 head-only 结构
+
+这组实验承接 5×5 的微弱验证集信号，但不再增加属性节点 GNN，也不解冻
+backbone/neck。新增模块都位于标准 `cv4` 属性分支，最后通过零初始化残差接入，
+所以 Stage2 初始预测与 baseline 对齐：
+
+1. `prior_bias`：对二分类 margin 做不确定性门控的先验偏置，作为最低成本控制；
+2. `prior_channel`：用先验支持和视觉全局描述生成 channel attention；
+3. `prior_spatial`：用视觉能量、先验支持和不确定性生成 7×7 spatial attention；
+4. `prior_moe`：在 local expert 与 prior-conditioned expert 之间自适应混合；
+5. `prior_texture`：复用 `TextureAttention`，但只在先验支持的空间门控下写回。
+
+使用统一 Stage1 checkpoint 的 Stage2 批量入口如下。默认跑 5 个 cross 结构；若夜间
+预算允许，增加 `--matrix-modes cross conditional` 即得到 10 个独立任务：
+
+```bash
+python scripts/train_mdet_experiments.py prior-stage2 \
+  --label E2_6_prior_head \
+  --model ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml \
+  --data ultralytics/cfg/mayolo_r1/mayolo_v3.yaml \
+  --stage1-checkpoint runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt \
+  --stage1-epochs 100 --stage2-epochs 100 \
+  --prior-types bias channel spatial moe texture \
+  --matrix-modes cross conditional \
+  --w4 0.5 --batch 16 --seed 0 \
+  --com-path /path/to/co_occurrence_matrix_train.csv \
+  --project runs/experiments/E2_6_prior_head
+```
+
+若先做快速筛选，将 `--stage2-epochs` 改为 50，并只保留 `cross`；最终候选再用
+100 epochs 和 seed 1/2 复核。选择标准仍是验证集 `F1_macro`，同时检查每个属性的
+F1、precision、recall；`F1_macro_global` 单独上涨不能作为接受条件。YOLO/RT-DETR/
+YOLO26 整网更换和局部解冻留到这轮之后，不与本轮混杂。
 
 ## E2.4–E2.5：HO
 

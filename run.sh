@@ -210,9 +210,14 @@ COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3
 # # The completed 10-position GIA-v2 matrix is retained below for reference;
 # # leave it commented to avoid retraining those experiments.
 
-# Next experiment: residual-gain screening from one fixed Stage1 checkpoint.
-# The previous 11-position feature graph matrix was completed separately and
-# should not be retrained by the default command.
+# Feature graph direction is closed after the gain screen. Keep the block below
+# only for exact reproduction of the archived runs; it is disabled by default.
+if [ "${ENABLE_FEATURE_GRAPH:-0}" != "1" ]; then
+  echo "Feature graph experiments are closed; no feature graph job was started."
+  exit 0
+fi
+
+# Archived feature graph gain screen from one fixed Stage1 checkpoint.
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
 for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH"; do
   if [ ! -f "$REQUIRED_FILE" ]; then

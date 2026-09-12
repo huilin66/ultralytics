@@ -853,6 +853,218 @@ class TextureAttention(nn.Module):
         return out
 
 
+class _CoOccurrencePriorBase(nn.Module):
+    """Shared fixed-prior utilities for non-GNN attribute-head experiments."""
+
+    expects_multiclass = True
+
+    def __init__(self, na, nal, com_path=None, conditional=False):
+        super().__init__()
+        self.na = int(na)
+        self.nal = int(nal)
+        if self.na < 1 or self.nal < 2:
+            raise ValueError("Co-occurrence prior heads require na >= 1 and nal >= 2")
+
+        graph = _load_attribute_graph(com_path, self.na)
+        if conditional:
+            # The stored conditional CSV uses P(source | target).  The head
+            # consumes target rows by source columns, hence the transpose.
+            graph = graph.T.contiguous()
+        if not torch.isfinite(graph).all():
+            raise ValueError("Co-occurrence matrix contains non-finite values")
+
+        row_sum = graph.sum(dim=-1, keepdim=True)
+        empty_rows = row_sum.squeeze(-1) <= 1e-6
+        graph = graph / row_sum.clamp_min(1e-6)
+        if empty_rows.any():
+            # An isolated target should fall back to its own prediction rather
+            # than producing an all-zero prior signal.
+            identity = torch.eye(self.na, dtype=graph.dtype)
+            graph[empty_rows] = identity[empty_rows]
+        self.register_buffer("prior", graph)
+
+    def _prior_signals(self, logits):
+        """Return positive probability, prior support, and binary uncertainty."""
+        batch, channels, height, width = logits.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+
+        probs = logits.reshape(batch, self.na, self.nal, height, width).softmax(dim=2)
+        positive = (1.0 - probs[:, :, 0]).detach()
+        prior = self.prior.to(device=logits.device, dtype=logits.dtype)
+        support = torch.einsum("ij,bjhw->bihw", prior, positive)
+        uncertainty = 4.0 * positive * (1.0 - positive)
+        return positive, support, uncertainty
+
+    @staticmethod
+    def _residual_scale(gamma):
+        """Keep a newly added head conservative while allowing it to grow."""
+        return 0.1 * torch.tanh(gamma)
+
+
+class CoOccurrencePriorBias(_CoOccurrencePriorBase):
+    """Uncertainty-gated prior bias on binary attribute margins.
+
+    This is the lowest-cost control: it tests whether the co-occurrence matrix
+    contains useful decision-level information before adding feature adapters.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorBias currently supports nal == 2 only")
+        self.alpha = nn.Parameter(torch.zeros(1, self.na, 1, 1))
+
+    def forward(self, inputs):
+        batch, channels, height, width = inputs.shape
+        positive, support, uncertainty = self._prior_signals(inputs)
+        logits = inputs.reshape(batch, self.na, self.nal, height, width)
+        center = logits.mean(dim=2, keepdim=True)
+        margin = logits[:, :, 1] - logits[:, :, 0]
+        correction = (
+            self._residual_scale(self.alpha)
+            * uncertainty
+            * (support - positive)
+        )
+        updated_margin = margin + correction
+        outputs = torch.stack(
+            (center[:, :, 0] - 0.5 * updated_margin, center[:, :, 0] + 0.5 * updated_margin), dim=2
+        )
+        return outputs.reshape(batch, channels, height, width)
+
+
+class _CoOccurrencePriorFeatureHead(_CoOccurrencePriorBase):
+    """Base for feature-level prior attention modules in the attribute head."""
+
+    expects_features = True
+
+    def __init__(self, channels, *args, hidden_chs=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.channels = int(channels)
+        self.hidden_chs = int(hidden_chs or max(32, min(128, self.channels // 4)))
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, features, logits, output_layer):
+        _, support, uncertainty = self._prior_signals(logits)
+        refined = self._refine(features, support, uncertainty)
+        return output_layer(refined)
+
+    def _refine(self, features, support, uncertainty):
+        raise NotImplementedError
+
+
+class CoOccurrencePriorChannelAttention(_CoOccurrencePriorFeatureHead):
+    """Channel attention conditioned on fixed co-occurrence support."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        self.channel_gate = nn.Sequential(
+            nn.Linear(self.channels + 2 * self.na, self.hidden_chs),
+            nn.GELU(),
+            nn.Linear(self.hidden_chs, self.channels),
+        )
+        nn.init.zeros_(self.channel_gate[-1].weight)
+        nn.init.zeros_(self.channel_gate[-1].bias)
+
+    def _refine(self, features, support, uncertainty):
+        descriptor = torch.cat(
+            (
+                F.adaptive_avg_pool2d(features, 1).flatten(1),
+                support.mean(dim=(2, 3)),
+                uncertainty.mean(dim=(2, 3)),
+            ),
+            dim=1,
+        )
+        gate = torch.sigmoid(self.channel_gate(descriptor)).unsqueeze(-1).unsqueeze(-1)
+        return features * (1.0 + self._residual_scale(self.gamma) * gate)
+
+
+class CoOccurrencePriorSpatialAttention(_CoOccurrencePriorFeatureHead):
+    """Spatial attention from visual energy and co-occurrence support maps."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        self.spatial_gate = nn.Conv2d(3, 1, kernel_size=7, padding=3, bias=True)
+        nn.init.zeros_(self.spatial_gate.weight)
+        nn.init.zeros_(self.spatial_gate.bias)
+
+    def _refine(self, features, support, uncertainty):
+        maps = torch.cat(
+            (
+                features.mean(dim=1, keepdim=True),
+                support.mean(dim=1, keepdim=True),
+                uncertainty.mean(dim=1, keepdim=True),
+            ),
+            dim=1,
+        )
+        gate = torch.sigmoid(self.spatial_gate(maps))
+        return features * (1.0 + self._residual_scale(self.gamma) * gate)
+
+
+class CoOccurrencePriorMixtureHead(_CoOccurrencePriorFeatureHead):
+    """Mix a local expert and a prior-conditioned expert with a learned gate."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        # The expert output layers start at zero so the initial prediction is
+        # exactly the baseline.  Keep a small non-zero outer gate so those
+        # zero-initialized experts still receive gradients on the first step.
+        nn.init.constant_(self.gamma, 0.1)
+        prior_channels = self.channels + 2 * self.na
+        self.local_expert = nn.Sequential(
+            nn.Conv2d(self.channels, self.channels, 1),
+            nn.GELU(),
+            nn.Conv2d(self.channels, self.channels, 1),
+        )
+        self.prior_expert = nn.Sequential(
+            nn.Conv2d(prior_channels, self.channels, 1),
+            nn.GELU(),
+            nn.Conv2d(self.channels, self.channels, 1),
+        )
+        self.expert_gate = nn.Sequential(
+            nn.Linear(prior_channels, self.hidden_chs),
+            nn.GELU(),
+            nn.Linear(self.hidden_chs, 1),
+        )
+        for expert in (self.local_expert, self.prior_expert):
+            nn.init.zeros_(expert[-1].weight)
+            nn.init.zeros_(expert[-1].bias)
+        nn.init.zeros_(self.expert_gate[-1].weight)
+        nn.init.zeros_(self.expert_gate[-1].bias)
+
+    def _refine(self, features, support, uncertainty):
+        prior_features = torch.cat((features, support, uncertainty), dim=1)
+        descriptor = F.adaptive_avg_pool2d(prior_features, 1).flatten(1)
+        gate = torch.sigmoid(self.expert_gate(descriptor)).unsqueeze(-1).unsqueeze(-1)
+        delta = (1.0 - gate) * self.local_expert(features) + gate * self.prior_expert(prior_features)
+        return features + self._residual_scale(self.gamma) * delta
+
+
+class CoOccurrenceTextureAttention(_CoOccurrencePriorFeatureHead):
+    """Texture attention whose spatial write is gated by prior support."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        self.texture = TextureAttention(channels)
+        self.spatial_gate = nn.Conv2d(3, 1, kernel_size=7, padding=3, bias=True)
+        nn.init.zeros_(self.spatial_gate.weight)
+        nn.init.zeros_(self.spatial_gate.bias)
+
+    def _refine(self, features, support, uncertainty):
+        maps = torch.cat(
+            (
+                features.mean(dim=1, keepdim=True),
+                support.mean(dim=1, keepdim=True),
+                uncertainty.mean(dim=1, keepdim=True),
+            ),
+            dim=1,
+        )
+        prior_gate = torch.sigmoid(self.spatial_gate(maps))
+        texture_delta = self.texture(features) - features
+        return features + self._residual_scale(self.gamma) * prior_gate * texture_delta
+
+
 # endregion
 
 
@@ -1330,6 +1542,43 @@ class MDetect(nn.Module):
                 GCAMarginResidual(self.na, self.nal, com_path=self.com_path, gate_init=0.1, gnn_type=gnn_type)
                 for x in ch
             )
+        elif isinstance(self.gat, str) and self.gat.startswith("com_prior_"):
+            # Fixed co-occurrence prior heads deliberately sit outside the GNN
+            # family.  They use the matrix as a support/calibration signal,
+            # while the visual features remain the source of the prediction.
+            prior_kind = self.gat[len("com_prior_") :]
+            conditional = prior_kind.endswith("_conditional")
+            if conditional:
+                prior_kind = prior_kind[: -len("_conditional")]
+            prior_classes = {
+                "bias": CoOccurrencePriorBias,
+                "channel": CoOccurrencePriorChannelAttention,
+                "channel_attention": CoOccurrencePriorChannelAttention,
+                "spatial": CoOccurrencePriorSpatialAttention,
+                "spatial_attention": CoOccurrencePriorSpatialAttention,
+                "moe": CoOccurrencePriorMixtureHead,
+                "texture": CoOccurrenceTextureAttention,
+            }
+            prior_class = prior_classes.get(prior_kind)
+            if prior_class is None:
+                raise ValueError(f"Unknown co-occurrence prior head: {self.gat}")
+            if prior_kind != "bias" and self.sep:
+                raise ValueError("Feature-level co-occurrence prior heads require the standard attribute head")
+            if prior_kind == "bias":
+                self.gat_head = nn.ModuleList(
+                    prior_class(self.na, self.nal, com_path=self.com_path, conditional=conditional) for _ in ch
+                )
+            else:
+                self.gat_head = nn.ModuleList(
+                    prior_class(
+                        c4,
+                        self.na,
+                        self.nal,
+                        com_path=self.com_path,
+                        conditional=conditional,
+                    )
+                    for _ in ch
+                )
         elif isinstance(self.gat, str) and self.gat.startswith("feature_"):
             if self.__class__.__name__ not in {"MDetect", "v10MDetect"} or self.sep:
                 raise ValueError("Feature graph requires the standard MDetect/v10MDetect attribute head")
@@ -1392,6 +1641,10 @@ class MDetect(nn.Module):
         if isinstance(graph, AttributeFeatureGraph):
             features = classifier[1](classifier[0](x))
             return graph(features, classifier[2](features))
+        if getattr(graph, "expects_features", False):
+            features = classifier[1](classifier[0](x))
+            logits = classifier[2](features)
+            return graph(features, logits, classifier[2])
         return self._apply_attribute_gat(classifier(x), graph)
 
     def _apply_attribute_gat(self, attribute_logits, gat_head):

@@ -6,6 +6,8 @@ The launcher supports the normal two-stage protocol and two schedule studies:
 * ``stage2-sweep`` independently trains stage 2 from one fixed stage-1
   checkpoint for several epoch budgets.
 * ``gca-stage2`` compares GCA/GNN variants from one fixed stage-1 checkpoint;
+* ``prior-stage2`` compares fixed co-occurrence-prior attention heads from one
+  fixed stage-1 checkpoint;
 * ``hsv-ablation`` independently trains stage 1 for three HSV augmentation
   settings at a fixed epoch budget.
 * variant experiments accept ``--stage1-only`` for position/structure tests
@@ -152,6 +154,8 @@ def _materialize_config(
     project: str,
     gnn_type: Optional[str] = None,
     feature_gain: Optional[float] = None,
+    prior_type: Optional[str] = None,
+    prior_conditional: bool = False,
 ) -> str:
     """Return a runnable config with optional graph substitutions.
 
@@ -162,7 +166,9 @@ def _materialize_config(
     and this function materializes the requested GNN-specific token in the
     per-project generated copy.  Feature-graph YAMLs may receive an optional
     trailing residual gain in the same generated copy, so the source YAML
-    remains a stable baseline with the default gain of 1.0.
+    remains a stable baseline with the default gain of 1.0.  The co-occurrence
+    prior study similarly materializes one of the non-GNN ``com_prior_*``
+    heads and can select the transposed conditional-matrix interpretation.
     """
     source = _resolve_config(config)
     text = source.read_text(encoding="utf-8")
@@ -217,6 +223,24 @@ def _materialize_config(
             raise ValueError(
                 f"{source} does not contain a feature graph params list with a "
                 "feature_gain insertion point."
+            )
+        changed = True
+
+    if prior_type is not None:
+        valid_prior_types = {"bias", "channel", "spatial", "moe", "texture"}
+        if prior_type not in valid_prior_types:
+            raise ValueError(f"Unsupported --prior-types value: {prior_type!r}")
+
+        prior_pattern = re.compile(
+            r'''(?P<quote>['"]?)com_prior_(?:bias|channel|spatial|moe|texture)'''
+            r'''(?:_conditional)?(?P=quote)'''
+        )
+        suffix = "_conditional" if prior_conditional else ""
+        replacement = rf"\g<quote>com_prior_{prior_type}{suffix}\g<quote>"
+        updated, count = prior_pattern.subn(replacement, updated)
+        if count == 0:
+            raise ValueError(
+                f"{source} does not contain a materializable com_prior_* token."
             )
         changed = True
 
@@ -492,6 +516,8 @@ def _train_direct_stage(
     hsv: Optional[Sequence[float]] = None,
     network_name: str = "yolo",
     gnn_type: Optional[str] = None,
+    prior_type: Optional[str] = None,
+    prior_conditional: bool = False,
 ) -> Optional[str]:
     """Run one independent stage-only experiment and record its provenance."""
     if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
@@ -508,12 +534,16 @@ def _train_direct_stage(
         args.project,
         gnn_type=gnn_type,
         feature_gain=args.feature_gain,
+        prior_type=prior_type,
+        prior_conditional=prior_conditional,
     )
     record: Dict[str, object] = {
         "protocol": "stage2_only" if retrain else "stage1_only",
         "label": label,
         "variant": variant_name,
         "gnn_type": gnn_type,
+        "prior_type": prior_type,
+        "prior_conditional": prior_conditional if prior_type is not None else None,
         "config": resolved_config,
         "pretrain": pretrain,
         "stage1_checkpoint": pretrain if retrain else None,
@@ -698,6 +728,36 @@ def _run_gca_stage2(args: argparse.Namespace) -> None:
                 run_name=run_name,
                 network_name="yolo",
                 gnn_type=gnn_type,
+            )
+
+
+def _run_prior_stage2(args: argparse.Namespace) -> None:
+    """Run head-only co-occurrence prior structures from one fixed checkpoint."""
+    _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
+    _validate_epoch_values([args.stage2_epochs], "--stage2-epochs")
+    for matrix_mode in args.matrix_modes:
+        conditional = matrix_mode == "conditional"
+        for prior_type in args.prior_types:
+            variant_name = f"{matrix_mode}_{prior_type}"
+            run_name = (
+                f"{_slug(args.label)}_{_slug(variant_name)}_stage1_{args.stage1_epochs}"
+                f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
+            )
+            _train_direct_stage(
+                args,
+                label=args.label,
+                variant_name=variant_name,
+                config=args.model,
+                pretrain=args.stage1_checkpoint,
+                w4=args.w4,
+                seed=args.seed,
+                epochs=args.stage2_epochs,
+                retrain=True,
+                stage1_epochs=args.stage1_epochs,
+                run_name=run_name,
+                network_name="yolo",
+                prior_type=prior_type,
+                prior_conditional=conditional,
             )
 
 
@@ -888,6 +948,49 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    prior_stage2 = subparsers.add_parser(
+        "prior-stage2",
+        help="E2.6: head-only fixed co-occurrence-prior structure comparison",
+    )
+    _add_common_train_arguments(prior_stage2)
+    prior_stage2.add_argument("--label", default="E2_6_prior_head")
+    prior_stage2.add_argument(
+        "--model",
+        default="ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml",
+        help="co-occurrence-prior model YAML",
+    )
+    prior_stage2.add_argument(
+        "--stage1-checkpoint",
+        required=True,
+        help="one fixed baseline stage-1 best.pt used to initialize every variant",
+    )
+    prior_stage2.add_argument(
+        "--stage1-epochs",
+        type=int,
+        default=DEFAULT_STAGE1_EPOCHS,
+        help="stage-1 epoch budget that produced --stage1-checkpoint",
+    )
+    prior_stage2.add_argument(
+        "--stage2-epochs",
+        type=int,
+        default=DEFAULT_STAGE2_EPOCHS,
+        help="stage-2 epoch budget for every prior-head variant",
+    )
+    prior_stage2.add_argument(
+        "--prior-types",
+        nargs="+",
+        choices=("bias", "channel", "spatial", "moe", "texture"),
+        default=["bias", "channel", "spatial", "moe", "texture"],
+        help="prior heads to materialize; default runs all five",
+    )
+    prior_stage2.add_argument(
+        "--matrix-modes",
+        nargs="+",
+        choices=("cross", "conditional"),
+        default=["cross"],
+        help="matrix interpretation; conditional transposes the stored CSV",
+    )
+
     for name, help_text, default_network in (
         ("variants", "Run named ablation/model variants", "yolo"),
         ("gia-position", "E2.1: GIA position ablation", "yolo"),
@@ -932,6 +1035,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         _run_stage2_sweep(args)
     elif args.experiment == "gca-stage2":
         _run_gca_stage2(args)
+    elif args.experiment == "prior-stage2":
+        _run_prior_stage2(args)
     elif args.experiment == "stability":
         _run_stability(args)
     else:
