@@ -897,6 +897,33 @@ class _CoOccurrencePriorBase(nn.Module):
         uncertainty = 4.0 * positive * (1.0 - positive)
         return positive, support, uncertainty
 
+    def _binary_state(self, logits):
+        """Split binary attribute logits and compute detached prior signals."""
+        batch, channels, height, width = logits.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+        if self.nal != 2:
+            raise ValueError("Direct co-occurrence logit heads currently support nal == 2 only")
+
+        reshaped = logits.reshape(batch, self.na, self.nal, height, width)
+        center = reshaped.mean(dim=2)
+        margin = reshaped[:, :, 1] - reshaped[:, :, 0]
+        positive, support, uncertainty = self._prior_signals(logits)
+        return center, margin, positive, support, uncertainty
+
+    @staticmethod
+    def _probability_logit(probability, eps=1e-4):
+        """Convert probabilities to bounded log-odds for stable margin fusion."""
+        probability = probability.clamp(eps, 1.0 - eps)
+        return torch.logit(probability).clamp(-5.0, 5.0)
+
+    @staticmethod
+    def _restore_binary(center, margin):
+        """Restore two-class logits while preserving their per-attribute center."""
+        outputs = torch.stack((center - 0.5 * margin, center + 0.5 * margin), dim=2)
+        return outputs.flatten(1, 2)
+
     @staticmethod
     def _residual_scale(gamma):
         """Keep a newly added head conservative while allowing it to grow."""
@@ -932,6 +959,136 @@ class CoOccurrencePriorBias(_CoOccurrencePriorBase):
             (center[:, :, 0] - 0.5 * updated_margin, center[:, :, 0] + 0.5 * updated_margin), dim=2
         )
         return outputs.reshape(batch, channels, height, width)
+
+
+class CoOccurrencePriorLogitBlend(_CoOccurrencePriorBase):
+    """Uncertainty-gated interpolation between visual and prior log-odds."""
+
+    def __init__(self, *args, initial_mix=0.25, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorLogitBlend currently supports nal == 2 only")
+        if not 0.0 < initial_mix < 1.0:
+            raise ValueError("initial_mix must be in (0, 1)")
+        self.mix_logit = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.log(initial_mix / (1.0 - initial_mix)))
+        )
+
+    def forward(self, inputs):
+        center, margin, _, support, uncertainty = self._binary_state(inputs)
+        prior_margin = self._probability_logit(support)
+        mix = torch.sigmoid(self.mix_logit)
+        updated_margin = margin + mix * uncertainty * (prior_margin - margin)
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorLogitBias(_CoOccurrencePriorBase):
+    """Add a bounded, uncertainty-gated prior log-odds bias to each margin."""
+
+    def __init__(self, *args, initial_gain=0.25, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorLogitBias currently supports nal == 2 only")
+        if not -0.5 < initial_gain < 0.5:
+            raise ValueError("initial_gain must be in (-0.5, 0.5)")
+        self.raw_gain = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.atanh(initial_gain / 0.5))
+        )
+
+    def forward(self, inputs):
+        center, margin, _, support, uncertainty = self._binary_state(inputs)
+        prior_margin = self._probability_logit(support)
+        gain = 0.5 * torch.tanh(self.raw_gain)
+        updated_margin = margin + gain * uncertainty * prior_margin
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorLogitMLP(_CoOccurrencePriorBase):
+    """Learn a bounded nonlinear margin correction from visual and prior signals."""
+
+    def __init__(self, *args, hidden_chs=None, initial_gain=0.1, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorLogitMLP currently supports nal == 2 only")
+        if not -0.25 < initial_gain < 0.25:
+            raise ValueError("initial_gain must be in (-0.25, 0.25)")
+        hidden_chs = int(hidden_chs or max(16, self.na * 2))
+        self.raw_gain = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.atanh(initial_gain / 0.25))
+        )
+        self.correction = nn.Sequential(
+            nn.Conv2d(4 * self.na, hidden_chs, kernel_size=1),
+            nn.GELU(),
+            nn.Conv2d(hidden_chs, self.na, kernel_size=1),
+        )
+        # The direct prior term makes the module useful from the first epoch;
+        # the nonlinear residual is learned without changing the baseline
+        # until its final projection receives a gradient.
+        nn.init.zeros_(self.correction[-1].weight)
+        nn.init.zeros_(self.correction[-1].bias)
+
+    def forward(self, inputs):
+        center, margin, positive, support, uncertainty = self._binary_state(inputs)
+        prior_margin = self._probability_logit(support)
+        signals = torch.cat((margin, prior_margin, uncertainty, support - positive), dim=1)
+        learned = 0.5 * torch.tanh(self.correction(signals))
+        gain = 0.25 * torch.tanh(self.raw_gain)
+        updated_margin = margin + uncertainty * (gain * prior_margin + learned)
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorCrossAttention(_CoOccurrencePriorBase):
+    """Dynamically reweight prior edges from source-attribute visual margins."""
+
+    def __init__(self, *args, initial_mix=0.25, initial_temperature=0.25, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorCrossAttention currently supports nal == 2 only")
+        if not 0.0 < initial_mix < 1.0:
+            raise ValueError("initial_mix must be in (0, 1)")
+        self.mix_logit = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.log(initial_mix / (1.0 - initial_mix)))
+        )
+        self.temperature = nn.Parameter(torch.full((1, self.na, 1, 1), initial_temperature))
+
+    def forward(self, inputs):
+        center, margin, positive, _, uncertainty = self._binary_state(inputs)
+        prior = self.prior.to(device=inputs.device, dtype=inputs.dtype).clamp_min(1e-6)
+        scores = prior.log().view(1, self.na, self.na, 1, 1)
+        scores = scores + self.temperature.unsqueeze(2) * margin.detach().unsqueeze(1)
+        attention = torch.softmax(scores, dim=2)
+        dynamic_support = (attention * positive.unsqueeze(1)).sum(dim=2)
+        prior_margin = self._probability_logit(dynamic_support)
+        mix = torch.sigmoid(self.mix_logit)
+        updated_margin = margin + mix * uncertainty * (prior_margin - margin)
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorDynamicGate(_CoOccurrencePriorBase):
+    """Use a per-pixel gate to decide when prior logit blending is trustworthy."""
+
+    def __init__(self, *args, hidden_chs=None, initial_gate=0.25, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorDynamicGate currently supports nal == 2 only")
+        if not 0.0 < initial_gate < 1.0:
+            raise ValueError("initial_gate must be in (0, 1)")
+        hidden_chs = int(hidden_chs or max(16, self.na * 2))
+        self.gate = nn.Sequential(
+            nn.Conv2d(4 * self.na, hidden_chs, kernel_size=1),
+            nn.GELU(),
+            nn.Conv2d(hidden_chs, self.na, kernel_size=1),
+        )
+        nn.init.zeros_(self.gate[-1].weight)
+        nn.init.constant_(self.gate[-1].bias, math.log(initial_gate / (1.0 - initial_gate)))
+
+    def forward(self, inputs):
+        center, margin, positive, support, uncertainty = self._binary_state(inputs)
+        prior_margin = self._probability_logit(support)
+        signals = torch.cat((margin, prior_margin, uncertainty, support - positive), dim=1)
+        gate = torch.sigmoid(self.gate(signals))
+        updated_margin = margin + gate * uncertainty * (prior_margin - margin)
+        return self._restore_binary(center, updated_margin)
 
 
 class _CoOccurrencePriorFeatureHead(_CoOccurrencePriorBase):
@@ -1558,6 +1715,11 @@ class MDetect(nn.Module):
                 "spatial_attention": CoOccurrencePriorSpatialAttention,
                 "moe": CoOccurrencePriorMixtureHead,
                 "texture": CoOccurrenceTextureAttention,
+                "logit_blend": CoOccurrencePriorLogitBlend,
+                "logit_bias": CoOccurrencePriorLogitBias,
+                "logit_mlp": CoOccurrencePriorLogitMLP,
+                "cross_attention": CoOccurrencePriorCrossAttention,
+                "dynamic_gate": CoOccurrencePriorDynamicGate,
             }
             prior_class = prior_classes.get(prior_kind)
             if prior_class is None:

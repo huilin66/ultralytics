@@ -8,6 +8,11 @@ from torch import nn
 from ultralytics.nn.modules.head import (
     CoOccurrencePriorBias,
     CoOccurrencePriorChannelAttention,
+    CoOccurrencePriorCrossAttention,
+    CoOccurrencePriorDynamicGate,
+    CoOccurrencePriorLogitBias,
+    CoOccurrencePriorLogitBlend,
+    CoOccurrencePriorLogitMLP,
     CoOccurrencePriorMixtureHead,
     CoOccurrencePriorSpatialAttention,
     CoOccurrenceTextureAttention,
@@ -45,6 +50,11 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
         "com_prior_spatial",
         "com_prior_moe",
         "com_prior_texture",
+        "com_prior_logit_blend",
+        "com_prior_logit_bias",
+        "com_prior_logit_mlp",
+        "com_prior_cross_attention",
+        "com_prior_dynamic_gate",
         "com_prior_channel_conditional",
     ):
         head = MDetect(nc=2, na=10, nal=2, params=[False, None, token, False, None], ch=[32, 64, 128])
@@ -54,6 +64,28 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
             (2, 86, 4, 4),
             (2, 86, 2, 2),
         ]
+
+
+def test_direct_logit_prior_heads_are_finite_and_trainable():
+    torch.manual_seed(0)
+    logits = torch.randn(2, 20, 4, 4, requires_grad=True)
+    heads = (
+        CoOccurrencePriorLogitBlend(10, 2),
+        CoOccurrencePriorLogitBias(10, 2),
+        CoOccurrencePriorLogitMLP(10, 2),
+        CoOccurrencePriorCrossAttention(10, 2),
+        CoOccurrencePriorDynamicGate(10, 2),
+    )
+
+    for head in heads:
+        output = head(logits)
+        assert output.shape == logits.shape
+        assert torch.isfinite(output).all()
+        output.square().mean().backward(retain_graph=True)
+        assert any(
+            parameter.grad is not None and torch.isfinite(parameter.grad).all()
+            for parameter in head.parameters()
+        )
 
 
 def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
@@ -70,9 +102,9 @@ def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
         str(config),
         str(matrix),
         str(tmp_path / "generated"),
-        prior_type="spatial",
+        prior_type="logit_blend",
         prior_conditional=True,
     )
     generated = Path(resolved).read_text(encoding="utf-8")
-    assert "com_prior_spatial_conditional" in generated
+    assert "com_prior_logit_blend_conditional" in generated
     assert matrix.resolve().as_posix() in generated

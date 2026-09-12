@@ -269,6 +269,24 @@ python scripts/train_mdet_experiments.py prior-stage2 \
 F1、precision、recall；`F1_macro_global` 单独上涨不能作为接受条件。YOLO/RT-DETR/
 YOLO26 整网更换和局部解冻留到这轮之后，不与本轮混杂。
 
+### E2.7：直接 logit/margin prior 结构
+
+E2.6 的 10 个结构虽然 head 参数发生更新，但属性混淆矩阵完全不变，说明
+feature-level residual 的写入幅度不足以改变 hard prediction。E2.7 保持相同的
+Stage1 checkpoint、冻结策略、`w4=0.5`、batch 和 seed，只把先验融合位置改为二分类
+logit/margin：
+
+1. `logit_blend`：不确定性门控的视觉 margin 与 prior log-odds 插值；
+2. `logit_bias`：不确定性门控的 prior log-odds 加性偏置；
+3. `logit_mlp`：由视觉 margin、prior log-odds、support 和 uncertainty 生成非线性修正；
+4. `cross_attention`：根据源属性视觉 margin 动态重加权共现边，再进行 logit 融合；
+5. `dynamic_gate`：用逐像素 gate 决定视觉 margin 与 prior margin 的融合比例。
+
+默认批量命令由仓库根目录的 `run.sh` 提供，输出到
+`runs/experiments/E2_7_prior_logit`。两种矩阵解释各跑一次，共 10 个 Stage2-only
+任务；backbone、neck 和检测分支不解冻。除 hard F1 外，后续应补充属性概率/校准指标，
+因为单看 argmax 可能漏掉连续分数的改善。
+
 ## E2.4–E2.5：HO
 
 E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一次 100+100
