@@ -725,6 +725,82 @@ class GCAConvAdapterResidual(GCAContextResidual):
         return torch.tanh(graph_message + local_message)
 
 
+class AttributeFeatureGraph(nn.Module):
+    """Visual attribute nodes with weighted source-to-target graph messages.
+
+    CSV conditional rows denote P(column | row), hence transpose for target
+    rows/source columns. Cross matrices are symmetric. Keep cv4 keys intact.
+    """
+
+    def __init__(self, channels, na, nal, com_path, operator="gca", conditional=False, dim=16):
+        super().__init__()
+        self.na, self.nal, self.dim = na, nal, dim
+        self.operator = operator
+        self.enabled = True
+        graph = _load_attribute_graph(com_path, na)
+        if not torch.isfinite(graph).all():
+            raise ValueError("Attribute matrix contains non-finite values")
+        self.register_buffer("adjacency", graph.T.contiguous() if conditional else graph)
+        self.project = nn.Conv2d(channels, na * dim, 1)
+        self.identity = nn.Parameter(torch.randn(na, dim) * 0.02)
+        self.norm = nn.LayerNorm(dim)
+        self.message = nn.Linear(dim, dim)
+        self.fusion = nn.Sequential(nn.Linear(2 * dim, dim), nn.GELU(), nn.Linear(dim, nal))
+        nn.init.zeros_(self.fusion[-1].weight)
+        nn.init.zeros_(self.fusion[-1].bias)
+        self.gamma = nn.Parameter(torch.full((na, 1), 0.1))
+        if operator == "gat":
+            self.query = nn.Linear(dim, dim, bias=False)
+            self.key = nn.Linear(dim, dim, bias=False)
+        if operator == "gin":
+            self.eps = nn.Parameter(torch.zeros(()))
+        if operator == "graphsage":
+            self.sage_fusion = nn.Linear(2 * dim, dim)
+
+    def forward(self, features, logits):
+        if not self.enabled:
+            return logits
+        b, _, h, w = features.shape
+        nodes = self.project(features).reshape(b, self.na, self.dim, h * w).permute(0, 3, 1, 2)
+        nodes = self.norm(nodes + self.identity)
+        # Positive-class probability, not confidence in either class.
+        probs = logits.reshape(b, self.na, self.nal, h * w).softmax(2)
+        positive = (1 - probs[:, :, 0]).permute(0, 2, 1).detach()
+        outputs = []
+        # Bound the temporary attention tensor on P3 feature maps.
+        for start in range(0, h * w, 256):
+            x = nodes[:, start:start + 256]
+            p = positive[:, start:start + 256]
+            a = self.adjacency.to(x.dtype)
+            weights = a[None, None] * p.unsqueeze(-2)
+            if self.operator == "local":
+                context = torch.zeros_like(x)
+            else:
+                if self.operator == "gat":
+                    scores = self.query(x) @ self.key(x).transpose(-1, -2) / self.dim ** 0.5
+                    scores = scores + weights.clamp_min(1e-8).log()
+                    scores = scores.masked_fill(a[None, None] <= 0, -1e4)
+                    weights = scores.softmax(-1) * (a[None, None] > 0)
+                if self.operator == "gcn":
+                    row = weights.sum(-1).clamp_min(1e-6).rsqrt()
+                    col = weights.sum(-2).clamp_min(1e-6).rsqrt()
+                    weights = row.unsqueeze(-1) * weights * col.unsqueeze(-2)
+                elif self.operator != "gin":
+                    weights = weights / weights.sum(-1, keepdim=True).clamp_min(1e-6)
+                context = weights @ self.message(x)
+                if self.operator == "gin":
+                    context = context + (1 + self.eps) * x
+                elif self.operator == "gcn":
+                    context = context + self.message(x)
+                elif self.operator == "graphsage":
+                    context = self.sage_fusion(torch.cat((x, context), -1))
+                context = F.gelu(context)
+            delta = self.fusion(torch.cat((x, context), -1)) * self.gamma
+            outputs.append(delta)
+        delta = torch.cat(outputs, 1).permute(0, 2, 3, 1).reshape(b, self.na * self.nal, h, w)
+        return logits + delta
+
+
 class TextureAttention(nn.Module):
     """ """
 
@@ -1227,6 +1303,16 @@ class MDetect(nn.Module):
                 GCAMarginResidual(self.na, self.nal, com_path=self.com_path, gate_init=0.1, gnn_type=gnn_type)
                 for x in ch
             )
+        elif isinstance(self.gat, str) and self.gat.startswith("feature_"):
+            if self.__class__.__name__ not in {"MDetect", "v10MDetect"} or self.sep:
+                raise ValueError("Feature graph requires the standard MDetect/v10MDetect attribute head")
+            operator = self.gat.split("_")[1]
+            if operator not in {"gca", "gcn", "gat", "graphsage", "gin", "local"}:
+                raise ValueError(f"Unknown feature graph operator: {operator}")
+            self.gat_head = nn.ModuleList(
+                AttributeFeatureGraph(c4, self.na, self.nal, self.com_path, operator,
+                                      conditional=self.gat.endswith("_conditional")) for _ in ch
+            )
         elif isinstance(self.gat, str) and self.gat.startswith("com_") and self.gat.endswith("_residual"):
             # The five structural GCA variants are crossed with the five graph
             # operators by the experiment launcher.  Keeping this dispatch in
@@ -1274,6 +1360,12 @@ class MDetect(nn.Module):
             for x in range(self.nl)
         )
 
+    def _attribute_branch(self, x, classifier, graph):
+        if isinstance(graph, AttributeFeatureGraph):
+            features = classifier[1](classifier[0](x))
+            return graph(features, classifier[2](features))
+        return self._apply_attribute_gat(classifier(x), graph)
+
     def _apply_attribute_gat(self, attribute_logits, gat_head):
         """Apply an attribute-level GAT to each of the ``nal`` class-logit slices."""
         if getattr(gat_head, "expects_multiclass", False):
@@ -1314,7 +1406,7 @@ class MDetect(nn.Module):
         for i in range(self.nl):
             if not self.sep or self.sep in ["6no", "7no", "8no", "9no"]:
                 if self.gat is not None:
-                    attribute_logits = self._apply_attribute_gat(self.cv4[i](x[i]), self.gat_head[i])
+                    attribute_logits = self._attribute_branch(x[i], self.cv4[i], self.gat_head[i])
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), attribute_logits), 1)
                 else:
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)
@@ -1352,8 +1444,8 @@ class MDetect(nn.Module):
         for i in range(self.nl):
             if not self.sep or self.sep in ["6no", "7no", "8no", "9no"]:
                 if self.gat is not None:
-                    attribute_logits = self._apply_attribute_gat(
-                        self.one2one_cv4[i](x_detach[i]), self.one2one_gat_head[i]
+                    attribute_logits = self._attribute_branch(
+                        x_detach[i], self.one2one_cv4[i], self.one2one_gat_head[i]
                     )
                     x_detach[i] = torch.cat(
                         (self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i]), attribute_logits), 1
@@ -1391,7 +1483,7 @@ class MDetect(nn.Module):
         for i in range(self.nl):
             if not self.sep or self.sep in ["6no", "7no", "8no", "9no"]:
                 if self.gat is not None:
-                    attribute_logits = self._apply_attribute_gat(self.cv4[i](x[i]), self.gat_head[i])
+                    attribute_logits = self._attribute_branch(x[i], self.cv4[i], self.gat_head[i])
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), attribute_logits), 1)
                 else:
                     x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i]), self.cv4[i](x[i])), 1)

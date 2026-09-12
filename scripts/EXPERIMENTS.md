@@ -205,50 +205,32 @@ python scripts/train_mdet_experiments.py gca-stage2 \
 Stage1 checkpoint 运行新的 multiclass-aware 比较。此前的五个 Stage2=100 GNN 结果
 已经完成，保留在 `E2_2_GCA_GNN_margin_residual`，不会被当前 `run.sh` 重复训练。
 
-当前 `run.sh` 保留此前定义的五个 variant，并分别在两种 train-only
-共现矩阵上运行完整的 5×5 矩阵。五个 variant 为：
+当前 run.sh 已改为属性视觉特征图实验，共 11 个 Stage2 任务：
+GCA、加权 GCN、矩阵先验 GAT、加权 GraphSAGE、加权 GIN，各测试 cross
+和 conditional 两种矩阵（10 个），另加一个无图的 local 视觉适配器对照。
 
-1. `GCAContextResidual + cross`：原有 cross-normalized 共现矩阵；
-2. `GCAContextResidual + conditional`：train-only、有向条件矩阵
-   `P(attribute_j=1 | attribute_i=1)`，并加入 Laplace smoothing；
-3. `GCAAdaptiveResidual`：学习 local/context 的自适应混合比例；
-4. `GCATwoHopResidual`：同时使用一跳和二跳图上下文；
-5. `GCAConvAdapterResidual`：在图上下文旁增加轻量的 `1×1` 属性适配器。
+历史“5×5”的 context_cross/context_conditional 在固定矩阵下是同一结构，
+实际只有 4 个结构。历史重复结果不能视为独立证据，旧命令已注释保留。
 
-每一个 variant 都分别替换为五种 GNN operator：GCA、GCN、GAT、GraphSAGE、GIN。
-原始 cross 矩阵和 conditional 矩阵各运行一次，因此得到 25+25=50 个
-Stage2-only run。`--gnn-types` 会在项目的
-`_generated_configs/` 中生成对应 YAML；它不会修改原始配置，也不会把不同
-variant 错误地合并成只有一个 context wrapper 的比较。
+新模块从 cv4 分类器之前提取视觉特征，构造每属性 16 维节点，保留原分类器。
+输出为 z + gamma * delta_z；gamma 初始 0.1，输出层零初始化。
+连续共现边权与源属性正类概率共同控制传播。conditional CSV 行是条件源，
+列是目标，因此加载时转置为目标行、源列。所有算子都是本项目的加权变体。
 
-该结构在属性 margin 上使用“置信源聚合→上下文差异→两层融合 MLP→残差门控”：
-高置信度目标不会被图强行改写，降低固定矩阵造成的错误传播。它仍然位于 mdet 属性头，
-不会改变检测分支或 segmentation；因此该 Stage2 实验主要衡量属性指标，mAP50
-理论上应与固定 Stage1 checkpoint 一致。
+固定 Stage1 checkpoint、Stage2=100、batch=16、seed=0、w4=0.5；
+保持 AdamW 学习率 1e-4，不混入学习率消融。检测部分冻结，两个属性分支均训练。
+根据验证集选择候选，test 用于最终报告。local 对照用于判断提升是否来自图关系。
 
-条件矩阵先用 `generate_com.py` 生成，例如：
-
+先独立 smoke：
 ```bash
-python generate_com.py \
-  --data-root /localnvme/data/billboard/mayolo_v3 \
-  --split train \
-  --mode conditional \
-  --smoothing 1.0 \
-  --output /localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv
+FEATURE_EPOCHS=1 FEATURE_PROJECT=runs/experiments/E2_2_feature_graph_smoke bash run.sh
 ```
+正式运行 bash run.sh。提前设置 COM_PATH 和 COM_CONDITIONAL_PATH。
+正式结果目录为 runs/experiments/E2_2_feature_graph，已加入 mayolo_r1.py 汇总。
 
-然后设置 `COM_CONDITIONAL_PATH` 后运行 `bash run.sh`。脚本会对两种矩阵各
-启动一条包含五个 variant 的 `gca-stage2` 命令，每条命令再由
-`--gnn-types gca gcn gat graphsage gin` 展开为 25 个 run。所有 50 个 run
-均从同一个 E1 Stage1 checkpoint 开始，固定 Stage2=100、w4=0.5、batch=16、
-seed=0；结果分别保存在 `E2_2_GCA5x5_cross` 和
-`E2_2_GCA5x5_conditional` 目录中。每个 run 的 `manifest.jsonl` 会记录实际的
-`gnn_type` 和生成后的配置路径，便于论文表格追溯。
-
-此外，脚本还在 conditional 矩阵上重新评估上一轮五个
-`margin_residual` GNN 模型，结果保存在
-`E2_2_GCA_GNN_margin_residual_conditional`。这 5 个补充结果不并入新的
-5×5 主表，因为它们使用的是不同的 margin-level 融合机制。
+scripts/check_feature_graph.py 检查初始等价、学习梯度、矩阵影响和两分支接入。
+可设置 AttributeFeatureGraph.enabled=False 关闭整个修正分支来评估同一权重；
+该操作同时关闭视觉适配，因此需要结合 local 模型解释图的贡献。
 
 ## E2.4–E2.5：HO
 
