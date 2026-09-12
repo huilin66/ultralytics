@@ -108,9 +108,9 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 # done
 
 
-# The GCA YAML file contains the original Linux matrix path. Override it with
-# an environment variable when the matrix is stored elsewhere:
-#   COM_PATH=/path/to/co_occurrence_matrix_train.csv bash run.sh
+# Override the train-only matrices when they are stored elsewhere:
+#   COM_PATH=/path/to/co_occurrence_matrix_train.csv \
+#   COM_CONDITIONAL_PATH=/path/to/co_occurrence_matrix_train_conditional.csv bash run.sh
 COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}
 COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv}
 
@@ -210,26 +210,81 @@ COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3
 # # The completed 10-position GIA-v2 matrix is retained below for reference;
 # # leave it commented to avoid retraining those experiments.
 
-# Feature graph direction is closed after the gain screen. Keep the block below
-# only for exact reproduction of the archived runs; it is disabled by default.
-if [ "${ENABLE_FEATURE_GRAPH:-0}" != "1" ]; then
-  echo "Feature graph experiments are closed; no feature graph job was started."
-  exit 0
-fi
-
-# Archived feature graph gain screen from one fixed Stage1 checkpoint.
+# E2.6 fixed co-occurrence-prior head-only batch.
+# The new structures use the existing Stage2 freeze policy (freeze=23 for the
+# YOLOv10/MAYOLO family); no backbone or neck parameters are unfrozen.
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
-for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH"; do
-  if [ ! -f "$REQUIRED_FILE" ]; then
-    echo "Missing input: $REQUIRED_FILE" >&2
+PRIOR_MODEL=${PRIOR_MODEL:-ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml}
+PRIOR_LABEL=${PRIOR_LABEL:-E2_6_prior_head}
+PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_6_prior_head}
+PRIOR_STAGE1_EPOCHS=${PRIOR_STAGE1_EPOCHS:-100}
+PRIOR_STAGE2_EPOCHS=${PRIOR_STAGE2_EPOCHS:-100}
+PRIOR_TYPES=${PRIOR_TYPES:-"bias channel spatial moe texture"}
+# Run both matrices by default. Set PRIOR_MATRIX_MODES="cross" for five jobs.
+PRIOR_MATRIX_MODES=${PRIOR_MATRIX_MODES:-"cross conditional"}
+PRIOR_W4=${PRIOR_W4:-0.5}
+PRIOR_BATCH=${PRIOR_BATCH:-16}
+PRIOR_SEED=${PRIOR_SEED:-0}
+RUN_PRIOR_BATCH=${RUN_PRIOR_BATCH:-1}
+
+if [ "$RUN_PRIOR_BATCH" = "1" ]; then
+  if [ ! -f "$STAGE1_CKPT" ]; then
+    echo "Missing Stage1 checkpoint: $STAGE1_CKPT" >&2
     exit 1
   fi
-done
-# Set FEATURE_EPOCHS=1 and FEATURE_PROJECT=... for a separate smoke run.
-FEATURE_EPOCHS=${FEATURE_EPOCHS:-100}
-FEATURE_PROJECT=${FEATURE_PROJECT:-runs/experiments/E2_2_feature_gain}
-FEATURE_GAIN_VALUES=${FEATURE_GAIN_VALUES:-"2 4 8"}
-FEATURE_LOCAL_GAIN=${FEATURE_LOCAL_GAIN:-4}
+
+  for MATRIX_MODE in $PRIOR_MATRIX_MODES; do
+    case "$MATRIX_MODE" in
+      cross)
+        MATRIX_PATH="$COM_PATH"
+        ;;
+      conditional)
+        MATRIX_PATH="$COM_CONDITIONAL_PATH"
+        ;;
+      *)
+        echo "Unsupported PRIOR_MATRIX_MODES value: $MATRIX_MODE" >&2
+        exit 1
+        ;;
+    esac
+
+    if [ ! -f "$MATRIX_PATH" ]; then
+      echo "Missing $MATRIX_MODE co-occurrence matrix: $MATRIX_PATH" >&2
+      exit 1
+    fi
+
+    python scripts/train_mdet_experiments.py prior-stage2 \
+      --label "$PRIOR_LABEL" \
+      --model "$PRIOR_MODEL" \
+      --data "$DATA" \
+      --stage1-checkpoint "$STAGE1_CKPT" \
+      --stage1-epochs "$PRIOR_STAGE1_EPOCHS" \
+      --stage2-epochs "$PRIOR_STAGE2_EPOCHS" \
+      --prior-types $PRIOR_TYPES \
+      --matrix-modes "$MATRIX_MODE" \
+      --w4 "$PRIOR_W4" \
+      --batch "$PRIOR_BATCH" \
+      --seed "$PRIOR_SEED" \
+      --com-path "$MATRIX_PATH" \
+      --project "$PRIOR_PROJECT" || exit $?
+  done
+fi
+
+# Feature graph direction is closed after the gain screen. The block below is
+# retained only for exact reproduction of archived runs and is opt-in.
+if [ "${ENABLE_FEATURE_GRAPH:-0}" = "1" ]; then
+  echo "Running archived feature graph reproduction because ENABLE_FEATURE_GRAPH=1."
+  # Set FEATURE_EPOCHS=1 and FEATURE_PROJECT=... for a separate smoke run.
+  for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  FEATURE_EPOCHS=${FEATURE_EPOCHS:-100}
+  FEATURE_PROJECT=${FEATURE_PROJECT:-runs/experiments/E2_2_feature_gain}
+  FEATURE_GAIN_VALUES=${FEATURE_GAIN_VALUES:-"2 4 8"}
+  FEATURE_LOCAL_GAIN=${FEATURE_LOCAL_GAIN:-4}
 
 # Gain=1 is the completed feature_gca_cross reference.  Reproduce it with
 # FEATURE_GAIN_VALUES="1 2 4 8" when the reference is not available locally.
@@ -246,8 +301,8 @@ for GAIN in $FEATURE_GAIN_VALUES; do
     --batch 16 \
     --seed 0 \
     --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-    --com-path "$COM_PATH" \
-    --project "$FEATURE_PROJECT" || exit $?
+      --com-path "$COM_PATH" \
+      --project "$FEATURE_PROJECT" || exit $?
 done
 
 # A no-graph local adapter control separates a useful residual amplitude from
@@ -266,3 +321,4 @@ python scripts/train_mdet_experiments.py gca-stage2 \
   --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
   --com-path "$COM_PATH" \
   --project "$FEATURE_PROJECT" || exit $?
+fi
