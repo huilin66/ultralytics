@@ -1724,9 +1724,17 @@ class MDetect(nn.Module):
             prior_class = prior_classes.get(prior_kind)
             if prior_class is None:
                 raise ValueError(f"Unknown co-occurrence prior head: {self.gat}")
-            if prior_kind != "bias" and self.sep:
+            direct_logit_kinds = {
+                "bias",
+                "logit_blend",
+                "logit_bias",
+                "logit_mlp",
+                "cross_attention",
+                "dynamic_gate",
+            }
+            if prior_kind not in direct_logit_kinds and self.sep:
                 raise ValueError("Feature-level co-occurrence prior heads require the standard attribute head")
-            if prior_kind == "bias":
+            if prior_kind in direct_logit_kinds:
                 self.gat_head = nn.ModuleList(
                     prior_class(self.na, self.nal, com_path=self.com_path, conditional=conditional) for _ in ch
                 )
