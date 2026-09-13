@@ -26,6 +26,10 @@ from ultralytics.nn.modules.head import (
     CoOccurrenceLabelAttention,
     CoOccurrenceLabelGCN,
     CoOccurrenceLabelGCNThreshold,
+    CoOccurrenceMLGCN,
+    CoOccurrenceMLGCNThreshold,
+    CoOccurrenceMLGCNDirect,
+    CoOccurrenceMLGCNLearnable,
     MDetect,
 )
 from scripts.train_mdet_experiments import _materialize_config
@@ -75,6 +79,10 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
         "com_prior_adaptive_label_gcn",
         "com_prior_dynamic_label_gcn",
         "com_prior_label_attention",
+        "com_prior_mlgcn",
+        "com_prior_mlgcn_threshold",
+        "com_prior_mlgcn_direct",
+        "com_prior_mlgcn_learnable",
         "com_prior_channel_conditional",
     ):
         head = MDetect(nc=2, na=10, nal=2, params=[False, None, token, False, None], ch=[32, 64, 128])
@@ -124,6 +132,10 @@ def test_label_graph_heads_are_finite_and_trainable():
         CoOccurrenceAdaptiveLabelGCN(32, 10, 2),
         CoOccurrenceDynamicLabelGCN(32, 10, 2),
         CoOccurrenceLabelAttention(32, 10, 2),
+        CoOccurrenceMLGCN(32, 10, 2),
+        CoOccurrenceMLGCNThreshold(32, 10, 2),
+        CoOccurrenceMLGCNDirect(32, 10, 2),
+        CoOccurrenceMLGCNLearnable(32, 10, 2),
     )
 
     for head in heads:
@@ -157,3 +169,24 @@ def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
     generated = Path(resolved).read_text(encoding="utf-8")
     assert "com_prior_label_gcn_conditional" in generated
     assert matrix.resolve().as_posix() in generated
+
+    resolved_mlgcn = _materialize_config(
+        str(config),
+        str(matrix),
+        str(tmp_path / "generated_mlgcn"),
+        prior_type="mlgcn_threshold",
+        prior_conditional=False,
+    )
+    generated_mlgcn = Path(resolved_mlgcn).read_text(encoding="utf-8")
+    assert "com_prior_mlgcn_threshold" in generated_mlgcn
+
+
+def test_mlgcn_uses_symmetric_graph_and_generates_classifier_weights():
+    torch.manual_seed(0)
+    head = CoOccurrenceMLGCN(32, 10, 2)
+    adjacency = head.adjacency
+    torch.testing.assert_close(adjacency, adjacency.transpose(0, 1))
+    classifiers = head._label_classifiers()
+    assert classifiers.shape == (10, 32)
+    assert torch.isfinite(classifiers).all()
+    assert classifiers.requires_grad

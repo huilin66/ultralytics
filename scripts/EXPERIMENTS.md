@@ -317,6 +317,21 @@ E2.7 的验证集提升没有泛化到测试集，因此 E2.8 固定相同的 St
 仓库根目录的 `run.sh` 默认输出到 `runs/experiments/E2_9_label_gcn`，两种矩阵解释
 各跑一次，共 10 个 Stage2-only 任务；backbone、neck 和检测分支不解冻。
 
+### E2.10：ML-GCN classifier-weight 结构
+
+E2.9 的 residual 写回幅度容易被 hard argmax 和 Stage2 checkpoint 选择掩盖。E2.10
+改为更接近原始 ML-GCN 的 classifier-weight 路径：用 `[I | P]` 作为无外部词向量时的
+固定 label-node 输入，使用带 self-loop 的对称归一化共现图进行两层图卷积，生成每个
+属性的分类器权重，再与空间特征做归一化 dot-product 得到 margin。四个变体为：
+
+1. `mlgcn`：加权图 + 视觉 margin 锚点融合，初始图分支占 35%；
+2. `mlgcn_threshold`：对共现边阈值化后再进行图卷积；
+3. `mlgcn_direct`：只使用图生成的分类器权重，作为 source-faithful 对照；
+4. `mlgcn_learnable`：在结构化 `[I | P]` 输入上增加可学习 label-input delta。
+
+根目录 `run.sh` 默认输出到 `runs/experiments/E2_10_mlgcn`，两种矩阵解释各跑一次，
+共 8 个 Stage2-only 任务；backbone、neck 和检测分支仍不解冻。
+
 ## E2.4–E2.5：HO
 
 E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一次 100+100

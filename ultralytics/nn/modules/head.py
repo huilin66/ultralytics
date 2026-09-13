@@ -1438,6 +1438,143 @@ class CoOccurrenceLabelAttention(_CoOccurrenceLabelGraphHead):
         return local_margin + attention * prior_margin
 
 
+def _mlgcn_normalize_adjacency(graph):
+    """Build the fixed symmetric-normalized adjacency used by ML-GCN."""
+    graph = graph.clamp_min(0)
+    identity = torch.eye(graph.shape[0], device=graph.device, dtype=graph.dtype)
+    graph = graph + identity
+    degree = graph.sum(dim=-1).clamp_min(1e-6)
+    inv_sqrt_degree = degree.rsqrt()
+    return inv_sqrt_degree.unsqueeze(1) * graph * inv_sqrt_degree.unsqueeze(0)
+
+
+class _CoOccurrenceMLGCNBase(_CoOccurrencePriorBase):
+    """ML-GCN-style label classifier for spatial attribute logits.
+
+    The original ML-GCN uses fixed word embeddings as label-node inputs and
+    uses a GCN to generate one classifier weight vector per label.  This
+    project has no external label vocabulary, so ``[I | P]`` is used as a
+    deterministic structural label input: the identity distinguishes labels
+    and the normalized co-occurrence row supplies their semantics.  The GCN
+    then generates attribute classifiers, which score each spatial feature by
+    a normalized dot product, matching the source method's classifier-weight
+    construction rather than adding a small logit residual.
+    """
+
+    expects_features = True
+
+    def __init__(
+        self,
+        channels,
+        *args,
+        hidden_chs=None,
+        initial_blend=0.35,
+        learnable_label_input=False,
+        direct=False,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("ML-GCN prior heads currently support nal == 2 only")
+        self.channels = int(channels)
+        self.hidden_chs = int(hidden_chs or max(32, min(128, self.channels // 4)))
+        self.direct = bool(direct)
+
+        identity = torch.eye(self.na, dtype=self.prior.dtype, device=self.prior.device)
+        label_input = torch.cat((identity, self.prior), dim=1)
+        self.register_buffer("label_input", label_input)
+        self.register_buffer("adjacency", _mlgcn_normalize_adjacency(self.prior))
+        if learnable_label_input:
+            # Start from the deterministic structural input; the delta lets
+            # the experiment test whether the graph needs a learned label
+            # vocabulary in addition to the fixed co-occurrence semantics.
+            self.label_input_delta = nn.Parameter(torch.zeros_like(label_input))
+
+        self.gcn1 = nn.Linear(2 * self.na, self.hidden_chs, bias=False)
+        self.gcn2 = nn.Linear(self.hidden_chs, self.channels, bias=False)
+        self.activation = nn.LeakyReLU(0.2, inplace=True)
+        self.logit_scale = nn.Parameter(torch.tensor(math.log(4.0)))
+        self.graph_bias = nn.Parameter(torch.zeros(1, self.na, 1, 1))
+
+        if not self.direct:
+            if not 0.0 < initial_blend < 1.0:
+                raise ValueError("initial_blend must be in (0, 1)")
+            self.blend_logit = nn.Parameter(
+                torch.full((1, self.na, 1, 1), math.log(initial_blend / (1.0 - initial_blend)))
+            )
+
+    def _label_classifiers(self):
+        label_input = self.label_input
+        if hasattr(self, "label_input_delta"):
+            label_input = label_input + self.label_input_delta
+        adjacency = self.adjacency.to(device=label_input.device, dtype=label_input.dtype)
+
+        # This is GraphConvolution from the reference implementation:
+        # A @ (X @ W), followed by a second graph-convolution layer.
+        nodes = torch.matmul(adjacency, self.gcn1(label_input))
+        nodes = self.activation(nodes)
+        nodes = torch.matmul(adjacency, self.gcn2(nodes))
+        return nodes
+
+    def _graph_margin(self, features, classifiers):
+        feature_vectors = F.normalize(features.float(), dim=1, eps=1e-6)
+        classifier_vectors = F.normalize(classifiers.float(), dim=-1, eps=1e-6)
+        margin = torch.einsum("bchw,ac->bahw", feature_vectors, classifier_vectors)
+        scale = self.logit_scale.float().exp().clamp(1.0, 16.0)
+        return scale * margin + self.graph_bias.float()
+
+    def forward(self, features, logits, output_layer):
+        del output_layer  # The graph generates the attribute classifier weights.
+        batch, channels, height, width = logits.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+
+        visual = logits.reshape(batch, self.na, self.nal, height, width)
+        center = visual.mean(dim=2)
+        visual_margin = visual[:, :, 1] - visual[:, :, 0]
+        graph_margin = self._graph_margin(features, self._label_classifiers())
+
+        if self.direct:
+            updated_margin = graph_margin.to(dtype=visual_margin.dtype)
+        else:
+            blend = torch.sigmoid(self.blend_logit).to(dtype=graph_margin.dtype)
+            updated_margin = (1.0 - blend) * visual_margin.float() + blend * graph_margin
+            updated_margin = updated_margin.to(dtype=visual_margin.dtype)
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrenceMLGCN(_CoOccurrenceMLGCNBase):
+    """Weighted symmetric-normalized ML-GCN with a visual anchor blend."""
+
+
+class CoOccurrenceMLGCNThreshold(_CoOccurrenceMLGCNBase):
+    """ML-GCN using thresholded co-occurrence edges plus self-loops."""
+
+    def __init__(self, channels, *args, threshold=0.1, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        if not 0.0 <= threshold < 1.0:
+            raise ValueError("threshold must be in [0, 1)")
+        self.threshold = float(threshold)
+        thresholded = self.prior * (self.prior >= self.threshold).to(self.prior.dtype)
+        with torch.no_grad():
+            self.adjacency.copy_(_mlgcn_normalize_adjacency(thresholded))
+
+
+class CoOccurrenceMLGCNDirect(_CoOccurrenceMLGCNBase):
+    """Source-faithful graph-generated classifier without visual blending."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, direct=True, **kwargs)
+
+
+class CoOccurrenceMLGCNLearnable(_CoOccurrenceMLGCNBase):
+    """Weighted ML-GCN with a learnable delta over the structural label input."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, learnable_label_input=True, **kwargs)
+
+
 class CoOccurrencePriorChannelAttention(_CoOccurrencePriorFeatureHead):
     """Channel attention conditioned on fixed co-occurrence support."""
 
@@ -2057,6 +2194,10 @@ class MDetect(nn.Module):
                 "adaptive_label_gcn": CoOccurrenceAdaptiveLabelGCN,
                 "dynamic_label_gcn": CoOccurrenceDynamicLabelGCN,
                 "label_attention": CoOccurrenceLabelAttention,
+                "mlgcn": CoOccurrenceMLGCN,
+                "mlgcn_threshold": CoOccurrenceMLGCNThreshold,
+                "mlgcn_direct": CoOccurrenceMLGCNDirect,
+                "mlgcn_learnable": CoOccurrenceMLGCNLearnable,
             }
             prior_class = prior_classes.get(prior_kind)
             if prior_class is None:
