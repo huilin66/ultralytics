@@ -10,10 +10,15 @@ from ultralytics.nn.modules.head import (
     CoOccurrencePriorChannelAttention,
     CoOccurrencePriorCrossAttention,
     CoOccurrencePriorDynamicGate,
+    CoOccurrencePriorAgreementTemperature,
+    CoOccurrencePriorConfidenceBlend,
+    CoOccurrencePriorLogitDiffusion,
+    CoOccurrencePriorLowRankAttention,
     CoOccurrencePriorLogitBias,
     CoOccurrencePriorLogitBlend,
     CoOccurrencePriorLogitMLP,
     CoOccurrencePriorMixtureHead,
+    CoOccurrencePriorStochasticBlend,
     CoOccurrencePriorSpatialAttention,
     CoOccurrenceTextureAttention,
     MDetect,
@@ -55,6 +60,11 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
         "com_prior_logit_mlp",
         "com_prior_cross_attention",
         "com_prior_dynamic_gate",
+        "com_prior_logit_diffusion",
+        "com_prior_confidence_blend",
+        "com_prior_agreement_temperature",
+        "com_prior_stochastic_blend",
+        "com_prior_lowrank_attention",
         "com_prior_channel_conditional",
     ):
         head = MDetect(nc=2, na=10, nal=2, params=[False, None, token, False, None], ch=[32, 64, 128])
@@ -75,6 +85,11 @@ def test_direct_logit_prior_heads_are_finite_and_trainable():
         CoOccurrencePriorLogitMLP(10, 2),
         CoOccurrencePriorCrossAttention(10, 2),
         CoOccurrencePriorDynamicGate(10, 2),
+        CoOccurrencePriorLogitDiffusion(10, 2),
+        CoOccurrencePriorConfidenceBlend(10, 2),
+        CoOccurrencePriorAgreementTemperature(10, 2),
+        CoOccurrencePriorStochasticBlend(10, 2),
+        CoOccurrencePriorLowRankAttention(10, 2),
     )
 
     for head in heads:
@@ -102,9 +117,9 @@ def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
         str(config),
         str(matrix),
         str(tmp_path / "generated"),
-        prior_type="logit_blend",
+        prior_type="confidence_blend",
         prior_conditional=True,
     )
     generated = Path(resolved).read_text(encoding="utf-8")
-    assert "com_prior_logit_blend_conditional" in generated
+    assert "com_prior_confidence_blend_conditional" in generated
     assert matrix.resolve().as_posix() in generated

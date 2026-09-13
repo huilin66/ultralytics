@@ -1091,6 +1091,153 @@ class CoOccurrencePriorDynamicGate(_CoOccurrencePriorBase):
         return self._restore_binary(center, updated_margin)
 
 
+class CoOccurrencePriorLogitDiffusion(_CoOccurrencePriorBase):
+    """Diffuse signed attribute margins through the fixed prior graph."""
+
+    def __init__(self, *args, initial_gain=0.12, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorLogitDiffusion currently supports nal == 2 only")
+        if not -0.5 < initial_gain < 0.5:
+            raise ValueError("initial_gain must be in (-0.5, 0.5)")
+        self.raw_gain = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.atanh(initial_gain / 0.5))
+        )
+
+    def forward(self, inputs):
+        center, margin, _, _, uncertainty = self._binary_state(inputs)
+        prior = self.prior.to(device=inputs.device, dtype=inputs.dtype)
+        # Propagate signed visual evidence instead of probabilities.  Detaching
+        # the source nodes keeps the update a target-wise calibration residual.
+        neighbor_margin = torch.einsum("ij,bjhw->bihw", prior, margin.detach())
+        correction = torch.tanh(neighbor_margin - margin)
+        gain = 0.5 * torch.tanh(self.raw_gain)
+        updated_margin = margin + gain * uncertainty * correction
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorConfidenceBlend(_CoOccurrencePriorBase):
+    """Blend with a prior support weighted by source-attribute confidence."""
+
+    def __init__(self, *args, initial_mix=0.2, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorConfidenceBlend currently supports nal == 2 only")
+        if not 0.0 < initial_mix < 1.0:
+            raise ValueError("initial_mix must be in (0, 1)")
+        self.mix_logit = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.log(initial_mix / (1.0 - initial_mix)))
+        )
+
+    def forward(self, inputs):
+        center, margin, positive, _, uncertainty = self._binary_state(inputs)
+        prior = self.prior.to(device=inputs.device, dtype=inputs.dtype)
+        source_confidence = (2.0 * positive - 1.0).abs()
+        weighted_positive = positive * source_confidence
+        numerator = torch.einsum("ij,bjhw->bihw", prior, weighted_positive)
+        denominator = torch.einsum("ij,bjhw->bihw", prior, source_confidence)
+        support = numerator / denominator.clamp_min(1e-4)
+        support = torch.where(denominator > 1e-4, support, positive)
+        prior_margin = self._probability_logit(support)
+        mix = torch.sigmoid(self.mix_logit)
+        updated_margin = margin + mix * uncertainty * (prior_margin - margin)
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorAgreementTemperature(_CoOccurrencePriorBase):
+    """Use prior agreement to sharpen or soften visual margins without flipping them."""
+
+    def __init__(self, *args, initial_gain=0.1, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorAgreementTemperature currently supports nal == 2 only")
+        if not -0.5 < initial_gain < 0.5:
+            raise ValueError("initial_gain must be in (-0.5, 0.5)")
+        self.raw_gain = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.atanh(initial_gain / 0.5))
+        )
+
+    def forward(self, inputs):
+        center, margin, positive, support, uncertainty = self._binary_state(inputs)
+        # Agreement is positive when visual and prior probabilities agree and
+        # negative when the prior should reduce overconfident visual margins.
+        agreement = 1.0 - 2.0 * (positive - support).abs()
+        gain = 0.5 * torch.tanh(self.raw_gain)
+        temperature = 1.0 + gain * uncertainty * agreement
+        return self._restore_binary(center, margin * temperature)
+
+
+class CoOccurrencePriorStochasticBlend(_CoOccurrencePriorBase):
+    """Logit blending with training-only prior-edge dropout regularization."""
+
+    def __init__(self, *args, initial_mix=0.2, edge_dropout=0.15, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorStochasticBlend currently supports nal == 2 only")
+        if not 0.0 < initial_mix < 1.0:
+            raise ValueError("initial_mix must be in (0, 1)")
+        if not 0.0 <= edge_dropout < 1.0:
+            raise ValueError("edge_dropout must be in [0, 1)")
+        self.edge_dropout = float(edge_dropout)
+        self.mix_logit = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.log(initial_mix / (1.0 - initial_mix)))
+        )
+
+    def _sample_prior(self, inputs):
+        prior = self.prior.to(device=inputs.device, dtype=inputs.dtype)
+        if not self.training or self.edge_dropout == 0.0:
+            return prior
+        keep = torch.rand_like(prior).ge(self.edge_dropout)
+        # Preserve self-support and fall back to the original row if every
+        # non-diagonal edge in a row was dropped.
+        keep.fill_diagonal_(True)
+        sampled = prior * keep
+        row_sum = sampled.sum(dim=-1, keepdim=True)
+        return torch.where(row_sum > 1e-6, sampled / row_sum.clamp_min(1e-6), prior)
+
+    def forward(self, inputs):
+        center, margin, positive, _, uncertainty = self._binary_state(inputs)
+        prior = self._sample_prior(inputs)
+        support = torch.einsum("ij,bjhw->bihw", prior, positive)
+        prior_margin = self._probability_logit(support)
+        mix = torch.sigmoid(self.mix_logit)
+        updated_margin = margin + mix * uncertainty * (prior_margin - margin)
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrencePriorLowRankAttention(_CoOccurrencePriorBase):
+    """Adapt fixed prior edges with a small low-rank target/source attention."""
+
+    def __init__(self, *args, rank=4, initial_mix=0.15, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("CoOccurrencePriorLowRankAttention currently supports nal == 2 only")
+        if not 0.0 < initial_mix < 1.0:
+            raise ValueError("initial_mix must be in (0, 1)")
+        self.rank = min(max(1, int(rank)), self.na)
+        self.query = nn.Parameter(torch.empty(self.na, self.rank))
+        self.key = nn.Parameter(torch.empty(self.na, self.rank))
+        nn.init.normal_(self.query, std=0.02)
+        nn.init.normal_(self.key, std=0.02)
+        self.mix_logit = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.log(initial_mix / (1.0 - initial_mix)))
+        )
+
+    def forward(self, inputs):
+        center, margin, positive, _, uncertainty = self._binary_state(inputs)
+        prior = self.prior.to(device=inputs.device, dtype=inputs.dtype)
+        edge_scores = prior.clamp_min(1e-6).log()
+        low_rank_scores = self.query.to(inputs.dtype) @ self.key.to(inputs.dtype).transpose(0, 1)
+        edge_scores = edge_scores + low_rank_scores / math.sqrt(self.rank)
+        edge_scores = edge_scores.masked_fill(prior <= 0, -1e4)
+        attention = torch.softmax(edge_scores, dim=-1)
+        support = torch.einsum("ij,bjhw->bihw", attention, positive)
+        prior_margin = self._probability_logit(support)
+        mix = torch.sigmoid(self.mix_logit)
+        updated_margin = margin + mix * uncertainty * (prior_margin - margin)
+        return self._restore_binary(center, updated_margin)
+
+
 class _CoOccurrencePriorFeatureHead(_CoOccurrencePriorBase):
     """Base for feature-level prior attention modules in the attribute head."""
 
@@ -1720,6 +1867,11 @@ class MDetect(nn.Module):
                 "logit_mlp": CoOccurrencePriorLogitMLP,
                 "cross_attention": CoOccurrencePriorCrossAttention,
                 "dynamic_gate": CoOccurrencePriorDynamicGate,
+                "logit_diffusion": CoOccurrencePriorLogitDiffusion,
+                "confidence_blend": CoOccurrencePriorConfidenceBlend,
+                "agreement_temperature": CoOccurrencePriorAgreementTemperature,
+                "stochastic_blend": CoOccurrencePriorStochasticBlend,
+                "lowrank_attention": CoOccurrencePriorLowRankAttention,
             }
             prior_class = prior_classes.get(prior_kind)
             if prior_class is None:
@@ -1731,6 +1883,11 @@ class MDetect(nn.Module):
                 "logit_mlp",
                 "cross_attention",
                 "dynamic_gate",
+                "logit_diffusion",
+                "confidence_blend",
+                "agreement_temperature",
+                "stochastic_blend",
+                "lowrank_attention",
             }
             if prior_kind not in direct_logit_kinds and self.sep:
                 raise ValueError("Feature-level co-occurrence prior heads require the standard attribute head")

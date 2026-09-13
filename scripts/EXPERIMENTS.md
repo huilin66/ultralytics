@@ -287,6 +287,20 @@ logit/margin：
 任务；backbone、neck 和检测分支不解冻。除 hard F1 外，后续应补充属性概率/校准指标，
 因为单看 argmax 可能漏掉连续分数的改善。
 
+### E2.8：鲁棒先验融合结构
+
+E2.7 的验证集提升没有泛化到测试集，因此 E2.8 固定相同的 Stage1 checkpoint、
+冻结策略、`w4=0.5`、batch 和 seed，改测五种更保守的属性 head：
+
+1. `logit_diffusion`：在 signed margin 空间做固定图扩散，并限制残差；
+2. `confidence_blend`：按源属性视觉置信度重加权共现支持，降低不确定源节点的污染；
+3. `agreement_temperature`：只根据先验与视觉预测的一致性调节 margin 温度，不直接翻转类别；
+4. `stochastic_blend`：训练时随机丢弃先验边，测试时恢复完整矩阵，用于先验正则化；
+5. `lowrank_attention`：在固定共现边上叠加低秩 target/source attention，限制可学习自由度。
+
+仓库根目录的 `run.sh` 默认输出到 `runs/experiments/E2_8_prior_robust`，两种矩阵解释
+各跑一次，共 10 个 Stage2-only 任务；backbone、neck 和检测分支不解冻。
+
 ## E2.4–E2.5：HO
 
 E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一次 100+100

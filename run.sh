@@ -210,18 +210,19 @@ COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3
 # # The completed 10-position GIA-v2 matrix is retained below for reference;
 # # leave it commented to avoid retraining those experiments.
 
-# E2.7 direct co-occurrence-prior logit batch.
-# These structures write in binary attribute logit/margin space, addressing
-# the sub-threshold residuals observed in the E2.6 feature-head screen.  The
-# existing Stage2 freeze policy (freeze=23 for YOLOv10/MAYOLO) remains active;
-# no backbone or neck parameters are unfrozen.
+# E2.8 robust direct co-occurrence-prior batch.
+# E2.7 produced a small validation gain but a test-set regression.  These
+# structures therefore regularize or calibrate the prior signal before it is
+# applied in binary attribute logit/margin space.  The existing Stage2 freeze
+# policy (freeze=23 for YOLOv10/MAYOLO) remains active; no backbone or neck
+# parameters are unfrozen.
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
 PRIOR_MODEL=${PRIOR_MODEL:-ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml}
-PRIOR_LABEL=${PRIOR_LABEL:-E2_7_prior_logit}
-PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_7_prior_logit}
+PRIOR_LABEL=${PRIOR_LABEL:-E2_8_prior_robust}
+PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_8_prior_robust}
 PRIOR_STAGE1_EPOCHS=${PRIOR_STAGE1_EPOCHS:-100}
 PRIOR_STAGE2_EPOCHS=${PRIOR_STAGE2_EPOCHS:-100}
-PRIOR_TYPES=${PRIOR_TYPES:-"logit_blend logit_bias logit_mlp cross_attention dynamic_gate"}
+PRIOR_TYPES=${PRIOR_TYPES:-"logit_diffusion confidence_blend agreement_temperature stochastic_blend lowrank_attention"}
 # Run both matrices by default. Set PRIOR_MATRIX_MODES="cross" for five jobs.
 PRIOR_MATRIX_MODES=${PRIOR_MATRIX_MODES:-"cross conditional"}
 PRIOR_W4=${PRIOR_W4:-0.5}
