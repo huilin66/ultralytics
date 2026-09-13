@@ -21,6 +21,11 @@ from ultralytics.nn.modules.head import (
     CoOccurrencePriorStochasticBlend,
     CoOccurrencePriorSpatialAttention,
     CoOccurrenceTextureAttention,
+    CoOccurrenceAdaptiveLabelGCN,
+    CoOccurrenceDynamicLabelGCN,
+    CoOccurrenceLabelAttention,
+    CoOccurrenceLabelGCN,
+    CoOccurrenceLabelGCNThreshold,
     MDetect,
 )
 from scripts.train_mdet_experiments import _materialize_config
@@ -65,6 +70,11 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
         "com_prior_agreement_temperature",
         "com_prior_stochastic_blend",
         "com_prior_lowrank_attention",
+        "com_prior_label_gcn",
+        "com_prior_label_gcn_threshold",
+        "com_prior_adaptive_label_gcn",
+        "com_prior_dynamic_label_gcn",
+        "com_prior_label_attention",
         "com_prior_channel_conditional",
     ):
         head = MDetect(nc=2, na=10, nal=2, params=[False, None, token, False, None], ch=[32, 64, 128])
@@ -103,6 +113,30 @@ def test_direct_logit_prior_heads_are_finite_and_trainable():
         )
 
 
+def test_label_graph_heads_are_finite_and_trainable():
+    torch.manual_seed(0)
+    features = torch.randn(2, 32, 8, 8)
+    output_layer = nn.Conv2d(32, 20, 1)
+    baseline = output_layer(features)
+    heads = (
+        CoOccurrenceLabelGCN(32, 10, 2),
+        CoOccurrenceLabelGCNThreshold(32, 10, 2),
+        CoOccurrenceAdaptiveLabelGCN(32, 10, 2),
+        CoOccurrenceDynamicLabelGCN(32, 10, 2),
+        CoOccurrenceLabelAttention(32, 10, 2),
+    )
+
+    for head in heads:
+        output = head(features, baseline, output_layer)
+        assert output.shape == baseline.shape
+        assert torch.isfinite(output).all()
+        output.square().mean().backward(retain_graph=True)
+        assert any(
+            parameter.grad is not None and torch.isfinite(parameter.grad).all()
+            for parameter in head.parameters()
+        ), head.__class__.__name__
+
+
 def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
     config = tmp_path / "prior.yaml"
     matrix = tmp_path / "co_occurrence_matrix_train.csv"
@@ -117,9 +151,9 @@ def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
         str(config),
         str(matrix),
         str(tmp_path / "generated"),
-        prior_type="confidence_blend",
+        prior_type="label_gcn",
         prior_conditional=True,
     )
     generated = Path(resolved).read_text(encoding="utf-8")
-    assert "com_prior_confidence_blend_conditional" in generated
+    assert "com_prior_label_gcn_conditional" in generated
     assert matrix.resolve().as_posix() in generated

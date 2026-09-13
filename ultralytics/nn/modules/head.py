@@ -1258,6 +1258,186 @@ class _CoOccurrencePriorFeatureHead(_CoOccurrencePriorBase):
         raise NotImplementedError
 
 
+class _CoOccurrenceLabelGraphHead(_CoOccurrencePriorFeatureHead):
+    """Build label-aware spatial classifiers from a fixed co-occurrence graph."""
+
+    def __init__(self, channels, *args, label_dim=None, initial_gain=0.08, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("Label-graph prior heads currently support nal == 2 only")
+        self.label_dim = int(label_dim or max(16, min(64, self.channels // 4)))
+        if self.label_dim < 1:
+            raise ValueError("label_dim must be positive")
+        if not -0.5 < initial_gain < 0.5:
+            raise ValueError("initial_gain must be in (-0.5, 0.5)")
+        self.label_embedding = nn.Parameter(torch.randn(self.na, self.label_dim) * 0.02)
+        self.feature_projector = nn.Conv2d(self.channels, self.label_dim, kernel_size=1, bias=False)
+        self.node_norm = nn.LayerNorm(self.label_dim)
+        self.raw_gain = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.atanh(initial_gain / 0.5))
+        )
+
+    def _adjacency(self, features=None):
+        """Return the row-normalized fixed graph used by the label nodes."""
+        return self.prior.to(
+            device=self.label_embedding.device,
+            dtype=self.label_embedding.dtype,
+        )
+
+    def _propagate_nodes(self, features, logits):
+        raise NotImplementedError
+
+    def _graph_margin(self, features, node_features):
+        """Score each spatial feature against every graph-generated label node."""
+        projected = F.normalize(self.feature_projector(features), dim=1, eps=1e-6)
+        node_features = F.normalize(node_features.to(projected.dtype), dim=-1, eps=1e-6)
+        if node_features.ndim == 2:
+            return torch.einsum("bdhw,ad->bahw", projected, node_features)
+        return torch.einsum("bdhw,bad->bahw", projected, node_features)
+
+    def forward(self, features, logits, output_layer):
+        del output_layer  # The baseline logits are already computed by MDetect.
+        batch, channels, height, width = logits.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+        if self.nal != 2:
+            raise ValueError("Label-graph prior heads currently support nal == 2 only")
+
+        visual = logits.reshape(batch, self.na, self.nal, height, width)
+        center = visual.mean(dim=2)
+        margin = visual[:, :, 1] - visual[:, :, 0]
+        _, _, uncertainty = self._prior_signals(logits)
+        nodes = self._propagate_nodes(features, logits)
+        graph_margin = self._graph_margin(features, nodes)
+        gain = 0.5 * torch.tanh(self.raw_gain)
+        updated_margin = margin + gain * uncertainty * graph_margin
+        return self._restore_binary(center, updated_margin)
+
+
+class CoOccurrenceLabelGCN(_CoOccurrenceLabelGraphHead):
+    """Two-layer ML-GCN-style classifier generated from fixed label correlations."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        self.gcn1 = nn.Linear(self.label_dim, self.label_dim, bias=False)
+        self.gcn2 = nn.Linear(self.label_dim, self.label_dim, bias=False)
+
+    def _propagate_nodes(self, features, logits):
+        del features, logits
+        adjacency = self._adjacency()
+        nodes = torch.matmul(adjacency, self.label_embedding)
+        nodes = F.gelu(self.gcn1(nodes))
+        nodes = torch.matmul(adjacency, nodes)
+        return self.node_norm(self.gcn2(nodes))
+
+
+class CoOccurrenceLabelGCNThreshold(CoOccurrenceLabelGCN):
+    """ML-GCN with thresholded prior edges and an explicit self-loop fallback."""
+
+    def __init__(self, channels, *args, threshold=0.1, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        if not 0.0 <= threshold < 1.0:
+            raise ValueError("threshold must be in [0, 1)")
+        self.threshold = float(threshold)
+
+    def _adjacency(self, features=None):
+        prior = super()._adjacency(features)
+        adjacency = prior * (prior >= self.threshold).to(prior.dtype)
+        identity = torch.eye(self.na, device=prior.device, dtype=prior.dtype)
+        adjacency = torch.maximum(adjacency, identity)
+        return adjacency / adjacency.sum(dim=-1, keepdim=True).clamp_min(1e-6)
+
+
+class CoOccurrenceAdaptiveLabelGCN(CoOccurrenceLabelGCN):
+    """Fuse fixed co-occurrence edges with a low-rank learnable label graph."""
+
+    def __init__(self, channels, *args, rank=4, initial_prior_weight=0.75, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        if not 0.0 < initial_prior_weight < 1.0:
+            raise ValueError("initial_prior_weight must be in (0, 1)")
+        self.rank = min(max(1, int(rank)), self.na)
+        self.edge_query = nn.Parameter(torch.empty(self.na, self.rank))
+        self.edge_key = nn.Parameter(torch.empty(self.na, self.rank))
+        nn.init.normal_(self.edge_query, std=0.02)
+        nn.init.normal_(self.edge_key, std=0.02)
+        self.prior_mix_logit = nn.Parameter(
+            torch.tensor(math.log(initial_prior_weight / (1.0 - initial_prior_weight)))
+        )
+
+    def _adjacency(self, features=None):
+        prior = super()._adjacency(features)
+        learned_scores = self.edge_query.to(prior.dtype) @ self.edge_key.to(prior.dtype).transpose(0, 1)
+        learned = torch.softmax(learned_scores / math.sqrt(self.rank), dim=-1)
+        prior_weight = torch.sigmoid(self.prior_mix_logit)
+        return prior_weight * prior + (1.0 - prior_weight) * learned
+
+
+class CoOccurrenceDynamicLabelGCN(CoOccurrenceLabelGCN):
+    """Use an image-conditioned label graph mixed with the global prior graph."""
+
+    def __init__(self, channels, *args, initial_prior_weight=0.75, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        if not 0.0 < initial_prior_weight < 1.0:
+            raise ValueError("initial_prior_weight must be in (0, 1)")
+        self.image_condition = nn.Linear(self.channels, self.label_dim, bias=False)
+        self.node_query = nn.Linear(self.label_dim, self.label_dim, bias=False)
+        self.node_key = nn.Linear(self.label_dim, self.label_dim, bias=False)
+        self.prior_mix_logit = nn.Parameter(
+            torch.tensor(math.log(initial_prior_weight / (1.0 - initial_prior_weight)))
+        )
+
+    def _adjacency(self, features=None):
+        if features is None:
+            raise ValueError("Dynamic label graph requires spatial features")
+        batch = features.shape[0]
+        descriptor = F.adaptive_avg_pool2d(features, 1).flatten(1)
+        condition = self.image_condition(descriptor).unsqueeze(1)
+        base_nodes = self.label_embedding.unsqueeze(0).expand(batch, -1, -1)
+        queries = self.node_query(base_nodes + condition)
+        keys = self.node_key(base_nodes)
+        scores = torch.matmul(queries, keys.transpose(1, 2)) / math.sqrt(self.label_dim)
+        dynamic = torch.softmax(scores, dim=-1)
+        prior = super()._adjacency(features).unsqueeze(0)
+        prior = prior.to(device=dynamic.device, dtype=dynamic.dtype)
+        prior_weight = torch.sigmoid(self.prior_mix_logit).to(dynamic.dtype)
+        return prior_weight * prior + (1.0 - prior_weight) * dynamic
+
+    def _propagate_nodes(self, features, logits):
+        del logits
+        adjacency = self._adjacency(features)
+        nodes = self.label_embedding.unsqueeze(0).expand(features.shape[0], -1, -1).to(adjacency.dtype)
+        nodes = F.gelu(self.gcn1(torch.bmm(adjacency, nodes)))
+        nodes = self.gcn2(torch.bmm(adjacency, nodes))
+        return self.node_norm(nodes)
+
+
+class CoOccurrenceLabelAttention(_CoOccurrenceLabelGraphHead):
+    """Label-aware spatial attention followed by fixed prior message passing."""
+
+    def __init__(self, channels, *args, initial_attention=0.2, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        if not 0.0 < initial_attention < 1.0:
+            raise ValueError("initial_attention must be in (0, 1)")
+        self.attention_logit = nn.Parameter(
+            torch.full((1, self.na, 1, 1), math.log(initial_attention / (1.0 - initial_attention)))
+        )
+
+    def _propagate_nodes(self, features, logits):
+        del features, logits
+        adjacency = self._adjacency()
+        return self.node_norm(torch.matmul(adjacency, self.label_embedding))
+
+    def _graph_margin(self, features, node_features):
+        local_margin = super()._graph_margin(features, node_features)
+        adjacency = self._adjacency().to(device=local_margin.device, dtype=local_margin.dtype)
+        local_probability = torch.sigmoid(local_margin)
+        prior_probability = torch.einsum("ij,bjhw->bihw", adjacency, local_probability)
+        prior_margin = 2.0 * prior_probability - 1.0
+        attention = torch.sigmoid(self.attention_logit)
+        return local_margin + attention * prior_margin
+
+
 class CoOccurrencePriorChannelAttention(_CoOccurrencePriorFeatureHead):
     """Channel attention conditioned on fixed co-occurrence support."""
 
@@ -1872,6 +2052,11 @@ class MDetect(nn.Module):
                 "agreement_temperature": CoOccurrencePriorAgreementTemperature,
                 "stochastic_blend": CoOccurrencePriorStochasticBlend,
                 "lowrank_attention": CoOccurrencePriorLowRankAttention,
+                "label_gcn": CoOccurrenceLabelGCN,
+                "label_gcn_threshold": CoOccurrenceLabelGCNThreshold,
+                "adaptive_label_gcn": CoOccurrenceAdaptiveLabelGCN,
+                "dynamic_label_gcn": CoOccurrenceDynamicLabelGCN,
+                "label_attention": CoOccurrenceLabelAttention,
             }
             prior_class = prior_classes.get(prior_kind)
             if prior_class is None:

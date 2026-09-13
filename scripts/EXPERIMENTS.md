@@ -301,6 +301,22 @@ E2.7 的验证集提升没有泛化到测试集，因此 E2.8 固定相同的 St
 仓库根目录的 `run.sh` 默认输出到 `runs/experiments/E2_8_prior_robust`，两种矩阵解释
 各跑一次，共 10 个 Stage2-only 任务；backbone、neck 和检测分支不解冻。
 
+### E2.9：ML-GCN 风格 label-correlation classifier
+
+参考 ML-GCN 的 label-node 设计，E2.9 不把共现矩阵直接当作 logits bias，而是在属性
+分支中维护可学习的 label embedding，通过图传播生成 label-aware spatial classifier，
+最后以小幅 residual 写回视觉 margin。固定 E2.8 的 Stage1 checkpoint、冻结策略、
+`w4=0.5`、batch 和 seed，比较以下五种结构：
+
+1. `label_gcn`：两层固定有向共现图 GCN；
+2. `label_gcn_threshold`：阈值化共现边并保留 self-loop；
+3. `adaptive_label_gcn`：固定先验图与低秩可学习图融合；
+4. `dynamic_label_gcn`：固定先验图与图像条件动态图融合；
+5. `label_attention`：label-aware spatial attention 后再做先验消息传播。
+
+仓库根目录的 `run.sh` 默认输出到 `runs/experiments/E2_9_label_gcn`，两种矩阵解释
+各跑一次，共 10 个 Stage2-only 任务；backbone、neck 和检测分支不解冻。
+
 ## E2.4–E2.5：HO
 
 E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一次 100+100

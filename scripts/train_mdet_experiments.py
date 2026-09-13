@@ -243,6 +243,11 @@ def _materialize_config(
             "agreement_temperature",
             "stochastic_blend",
             "lowrank_attention",
+            "label_gcn",
+            "label_gcn_threshold",
+            "adaptive_label_gcn",
+            "dynamic_label_gcn",
+            "label_attention",
         }
         if prior_type not in valid_prior_types:
             raise ValueError(f"Unsupported --prior-types value: {prior_type!r}")
@@ -251,7 +256,9 @@ def _materialize_config(
             r'''(?P<quote>['"]?)com_prior_(?:bias|channel|spatial|moe|texture|'''
             r'''logit_blend|logit_bias|logit_mlp|cross_attention|dynamic_gate|'''
             r'''logit_diffusion|confidence_blend|agreement_temperature|'''
-            r'''stochastic_blend|lowrank_attention)'''
+            r'''stochastic_blend|lowrank_attention|label_gcn|'''
+            r'''label_gcn_threshold|adaptive_label_gcn|dynamic_label_gcn|'''
+            r'''label_attention)'''
             r'''(?:_conditional)?(?P=quote)'''
         )
         suffix = "_conditional" if prior_conditional else ""
@@ -969,7 +976,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     prior_stage2 = subparsers.add_parser(
         "prior-stage2",
-        help="E2.6/E2.7/E2.8: head-only fixed co-occurrence-prior structure comparison",
+        help="E2.6-E2.9: head-only fixed co-occurrence-prior structure comparison",
     )
     _add_common_train_arguments(prior_stage2)
     prior_stage2.add_argument("--label", default="E2_6_prior_head")
@@ -1014,6 +1021,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "agreement_temperature",
             "stochastic_blend",
             "lowrank_attention",
+            "label_gcn",
+            "label_gcn_threshold",
+            "adaptive_label_gcn",
+            "dynamic_label_gcn",
+            "label_attention",
         ),
         default=["bias", "channel", "spatial", "moe", "texture"],
         help="prior heads to materialize; default runs the original five",
