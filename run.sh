@@ -210,23 +210,22 @@ COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3
 # # The completed 10-position GIA-v2 matrix is retained below for reference;
 # # leave it commented to avoid retraining those experiments.
 
-# E2.10 ML-GCN classifier-weight batch.
-# These heads follow the reference ML-GCN construction more closely: fixed
-# label-node inputs are propagated by a symmetric-normalized GCN, the output
-# nodes become spatial attribute classifier weights, and feature/classifier
-# dot products produce the attribute margins.  The four variants compare a
-# weighted graph, thresholded graph, source-faithful direct classifier, and a
-# learnable delta over the structural label input.  The existing Stage2 freeze
-# policy (freeze=23 for YOLOv10/MAYOLO) remains active; no backbone or neck
-# parameters are unfrozen.
+# E2.11 graph-refinement batch.
+# E2.10 showed that a direct ML-GCN classifier-weight path is not sufficient
+# for hard-F1 gains.  These variants retain the visual margin as the unary
+# prediction and use the co-occurrence graph as a learnable refinement:
+# graph-masked label attention, GraphSAGE label aggregation, a label
+# Transformer, two-step mean-field refinement, and a pixel-wise ML-GCN MoE.
+# The existing Stage2 freeze policy (freeze=23 for YOLOv10/MAYOLO) remains
+# active; no backbone or neck parameters are unfrozen.
 STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
 PRIOR_MODEL=${PRIOR_MODEL:-ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml}
-PRIOR_LABEL=${PRIOR_LABEL:-E2_10_mlgcn}
-PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_10_mlgcn}
+PRIOR_LABEL=${PRIOR_LABEL:-E2_11_graph_refine}
+PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_11_graph_refine}
 PRIOR_STAGE1_EPOCHS=${PRIOR_STAGE1_EPOCHS:-100}
 PRIOR_STAGE2_EPOCHS=${PRIOR_STAGE2_EPOCHS:-100}
-PRIOR_TYPES=${PRIOR_TYPES:-"mlgcn mlgcn_threshold mlgcn_direct mlgcn_learnable"}
-# Run both matrices by default. Set PRIOR_MATRIX_MODES="cross" for four jobs.
+PRIOR_TYPES=${PRIOR_TYPES:-"mlgat mlsage mltransformer graph_mean_field mlgcn_moe"}
+# Run both matrices by default. Set PRIOR_MATRIX_MODES="cross" for five jobs.
 PRIOR_MATRIX_MODES=${PRIOR_MATRIX_MODES:-"cross conditional"}
 PRIOR_W4=${PRIOR_W4:-0.5}
 PRIOR_BATCH=${PRIOR_BATCH:-16}

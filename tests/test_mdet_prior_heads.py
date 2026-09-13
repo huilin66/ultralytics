@@ -30,6 +30,11 @@ from ultralytics.nn.modules.head import (
     CoOccurrenceMLGCNThreshold,
     CoOccurrenceMLGCNDirect,
     CoOccurrenceMLGCNLearnable,
+    CoOccurrenceMLGAT,
+    CoOccurrenceMLSAGE,
+    CoOccurrenceMLTransformer,
+    CoOccurrenceMLGCNMoE,
+    CoOccurrenceGraphMeanField,
     MDetect,
 )
 from scripts.train_mdet_experiments import _materialize_config
@@ -83,6 +88,11 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
         "com_prior_mlgcn_threshold",
         "com_prior_mlgcn_direct",
         "com_prior_mlgcn_learnable",
+        "com_prior_mlgat",
+        "com_prior_mlsage",
+        "com_prior_mltransformer",
+        "com_prior_graph_mean_field",
+        "com_prior_mlgcn_moe",
         "com_prior_channel_conditional",
     ):
         head = MDetect(nc=2, na=10, nal=2, params=[False, None, token, False, None], ch=[32, 64, 128])
@@ -136,6 +146,11 @@ def test_label_graph_heads_are_finite_and_trainable():
         CoOccurrenceMLGCNThreshold(32, 10, 2),
         CoOccurrenceMLGCNDirect(32, 10, 2),
         CoOccurrenceMLGCNLearnable(32, 10, 2),
+        CoOccurrenceMLGAT(32, 10, 2),
+        CoOccurrenceMLSAGE(32, 10, 2),
+        CoOccurrenceMLTransformer(32, 10, 2),
+        CoOccurrenceMLGCNMoE(32, 10, 2),
+        CoOccurrenceGraphMeanField(32, 10, 2),
     )
 
     for head in heads:

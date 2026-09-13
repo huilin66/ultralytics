@@ -252,6 +252,11 @@ def _materialize_config(
             "mlgcn_threshold",
             "mlgcn_direct",
             "mlgcn_learnable",
+            "mlgat",
+            "mlsage",
+            "mltransformer",
+            "mlgcn_moe",
+            "graph_mean_field",
         }
         if prior_type not in valid_prior_types:
             raise ValueError(f"Unsupported --prior-types value: {prior_type!r}")
@@ -263,7 +268,8 @@ def _materialize_config(
             r'''stochastic_blend|lowrank_attention|label_gcn|'''
             r'''label_gcn_threshold|adaptive_label_gcn|dynamic_label_gcn|'''
             r'''label_attention|mlgcn_threshold|mlgcn_direct|'''
-            r'''mlgcn_learnable|mlgcn)'''
+            r'''mlgcn_learnable|mlgcn_moe|graph_mean_field|'''
+            r'''mltransformer|mlsage|mlgat|mlgcn)'''
             r'''(?:_conditional)?(?P=quote)'''
         )
         suffix = "_conditional" if prior_conditional else ""
@@ -1035,6 +1041,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "mlgcn_threshold",
             "mlgcn_direct",
             "mlgcn_learnable",
+            "mlgat",
+            "mlsage",
+            "mltransformer",
+            "mlgcn_moe",
+            "graph_mean_field",
         ),
         default=["bias", "channel", "spatial", "moe", "texture"],
         help="prior heads to materialize; default runs the original five",

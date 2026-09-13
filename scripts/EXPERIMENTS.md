@@ -332,6 +332,21 @@ E2.9 的 residual 写回幅度容易被 hard argmax 和 Stage2 checkpoint 选择
 根目录 `run.sh` 默认输出到 `runs/experiments/E2_10_mlgcn`，两种矩阵解释各跑一次，
 共 8 个 Stage2-only 任务；backbone、neck 和检测分支仍不解冻。
 
+### E2.11：图约束 refinement 结构
+
+E2.10 的 classifier-weight 结构在 test hard-F1 上没有超过视觉基线，因此 E2.11
+保留原始视觉 margin 作为 unary prediction，把共现图用于可学习 refinement，避免
+直接用随机初始化的图分类器替换视觉分类器。五个变体为：
+
+1. `mlgat`：图邻接掩码的 label attention，再生成分类器权重；
+2. `mlsage`：两次 GraphSAGE label 聚合，再生成分类器权重；
+3. `mltransformer`：以共现图作为 attention mask 的 label Transformer；
+4. `graph_mean_field`：带可学习边注意力和 feature gate 的两步 mean-field 更新；
+5. `mlgcn_moe`：像素级 gate 融合视觉 margin 与 ML-GCN classifier margin。
+
+根目录 `run.sh` 默认输出到 `runs/experiments/E2_11_graph_refine`，两种矩阵解释各跑
+一次，共 10 个 Stage2-only 任务；backbone、neck 和检测分支仍不解冻。
+
 ## E2.4–E2.5：HO
 
 E2.4 不需要重新写 loss 或训练流程。用下面的 `ho` 命令完成一次 100+100

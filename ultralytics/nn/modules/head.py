@@ -1471,6 +1471,7 @@ class _CoOccurrenceMLGCNBase(_CoOccurrencePriorBase):
         initial_blend=0.35,
         learnable_label_input=False,
         direct=False,
+        dynamic_blend=False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -1479,6 +1480,7 @@ class _CoOccurrenceMLGCNBase(_CoOccurrencePriorBase):
         self.channels = int(channels)
         self.hidden_chs = int(hidden_chs or max(32, min(128, self.channels // 4)))
         self.direct = bool(direct)
+        self.dynamic_blend = bool(dynamic_blend)
 
         identity = torch.eye(self.na, dtype=self.prior.dtype, device=self.prior.device)
         label_input = torch.cat((identity, self.prior), dim=1)
@@ -1496,18 +1498,22 @@ class _CoOccurrenceMLGCNBase(_CoOccurrencePriorBase):
         self.logit_scale = nn.Parameter(torch.tensor(math.log(4.0)))
         self.graph_bias = nn.Parameter(torch.zeros(1, self.na, 1, 1))
 
-        if not self.direct:
+        if not self.direct and not self.dynamic_blend:
             if not 0.0 < initial_blend < 1.0:
                 raise ValueError("initial_blend must be in (0, 1)")
             self.blend_logit = nn.Parameter(
                 torch.full((1, self.na, 1, 1), math.log(initial_blend / (1.0 - initial_blend)))
             )
 
-    def _label_classifiers(self):
+    def _label_graph_input(self):
         label_input = self.label_input
         if hasattr(self, "label_input_delta"):
             label_input = label_input + self.label_input_delta
         adjacency = self.adjacency.to(device=label_input.device, dtype=label_input.dtype)
+        return label_input, adjacency
+
+    def _label_classifiers(self):
+        label_input, adjacency = self._label_graph_input()
 
         # This is GraphConvolution from the reference implementation:
         # A @ (X @ W), followed by a second graph-convolution layer.
@@ -1537,6 +1543,8 @@ class _CoOccurrenceMLGCNBase(_CoOccurrencePriorBase):
 
         if self.direct:
             updated_margin = graph_margin.to(dtype=visual_margin.dtype)
+        elif self.dynamic_blend:
+            raise NotImplementedError("Dynamic ML-GCN subclasses must implement forward")
         else:
             blend = torch.sigmoid(self.blend_logit).to(dtype=graph_margin.dtype)
             updated_margin = (1.0 - blend) * visual_margin.float() + blend * graph_margin
@@ -1573,6 +1581,185 @@ class CoOccurrenceMLGCNLearnable(_CoOccurrenceMLGCNBase):
 
     def __init__(self, channels, *args, **kwargs):
         super().__init__(channels, *args, learnable_label_input=True, **kwargs)
+
+
+class CoOccurrenceMLGAT(_CoOccurrenceMLGCNBase):
+    """ML-GCN label nodes refined by graph-masked attention before scoring."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        self.gat_query = nn.Linear(self.hidden_chs, self.hidden_chs, bias=False)
+        self.gat_key = nn.Linear(self.hidden_chs, self.hidden_chs, bias=False)
+        self.gat_value = nn.Linear(self.hidden_chs, self.hidden_chs, bias=False)
+        self.gat_out = nn.Linear(self.hidden_chs, self.hidden_chs, bias=False)
+
+    def _label_classifiers(self):
+        label_input, adjacency = self._label_graph_input()
+        nodes = self.activation(torch.matmul(adjacency, self.gcn1(label_input)))
+        queries = self.gat_query(nodes)
+        keys = self.gat_key(nodes)
+        values = self.gat_value(nodes)
+        scores = torch.matmul(queries, keys.transpose(0, 1)) / math.sqrt(self.hidden_chs)
+        connected = adjacency > 0
+        scores = scores.masked_fill(~connected, -1e4)
+        attention = torch.softmax(scores, dim=-1)
+        nodes = self.activation(nodes + self.gat_out(torch.matmul(attention, values)))
+        nodes = torch.matmul(adjacency, nodes)
+        return self.gcn2(nodes)
+
+
+class CoOccurrenceMLSAGE(_CoOccurrenceMLGCNBase):
+    """ML-GCN label nodes refined with two GraphSAGE-style aggregations."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        self.sage_fuse = nn.Linear(2 * self.hidden_chs, self.hidden_chs)
+
+    def _label_classifiers(self):
+        label_input, adjacency = self._label_graph_input()
+        nodes = self.activation(torch.matmul(adjacency, self.gcn1(label_input)))
+        for _ in range(2):
+            neighbors = torch.matmul(adjacency, nodes)
+            nodes = self.activation(self.sage_fuse(torch.cat((nodes, neighbors), dim=-1)))
+        return self.gcn2(nodes)
+
+
+class CoOccurrenceMLTransformer(_CoOccurrenceMLGCNBase):
+    """Graph-masked label Transformer used to generate spatial classifiers."""
+
+    def __init__(self, channels, *args, **kwargs):
+        super().__init__(channels, *args, **kwargs)
+        attention_heads = min(4, self.hidden_chs)
+        while self.hidden_chs % attention_heads:
+            attention_heads -= 1
+        self.label_attention = nn.MultiheadAttention(
+            self.hidden_chs,
+            attention_heads,
+            dropout=0.0,
+            batch_first=True,
+        )
+        self.label_norm1 = nn.LayerNorm(self.hidden_chs)
+        self.label_norm2 = nn.LayerNorm(self.hidden_chs)
+        self.label_ffn = nn.Sequential(
+            nn.Linear(self.hidden_chs, 2 * self.hidden_chs),
+            nn.GELU(),
+            nn.Linear(2 * self.hidden_chs, self.hidden_chs),
+        )
+
+    def _label_classifiers(self):
+        label_input, adjacency = self._label_graph_input()
+        nodes = self.activation(torch.matmul(adjacency, self.gcn1(label_input)))
+        attention_mask = torch.where(
+            adjacency > 0,
+            adjacency.clamp_min(1e-6).log(),
+            torch.full_like(adjacency, -1e4),
+        )
+        attended, _ = self.label_attention(
+            nodes.unsqueeze(0),
+            nodes.unsqueeze(0),
+            nodes.unsqueeze(0),
+            attn_mask=attention_mask,
+            need_weights=False,
+        )
+        nodes = self.label_norm1(nodes + attended.squeeze(0))
+        nodes = self.label_norm2(nodes + self.label_ffn(nodes))
+        nodes = torch.matmul(adjacency, nodes)
+        return self.gcn2(nodes)
+
+
+class CoOccurrenceMLGCNMoE(_CoOccurrenceMLGCNBase):
+    """Pixel-wise mixture of visual and ML-GCN-generated classifiers."""
+
+    def __init__(self, channels, *args, initial_gate=0.2, **kwargs):
+        super().__init__(channels, *args, dynamic_blend=True, **kwargs)
+        if not 0.0 < initial_gate < 1.0:
+            raise ValueError("initial_gate must be in (0, 1)")
+        self.graph_gate = nn.Sequential(
+            nn.Conv2d(self.channels + self.na, self.hidden_chs, kernel_size=1),
+            nn.GELU(),
+            nn.Conv2d(self.hidden_chs, self.na, kernel_size=1),
+        )
+        nn.init.zeros_(self.graph_gate[-1].weight)
+        nn.init.constant_(self.graph_gate[-1].bias, math.log(initial_gate / (1.0 - initial_gate)))
+
+    def forward(self, features, logits, output_layer):
+        del output_layer
+        batch, channels, height, width = logits.shape
+        expected_channels = self.na * self.nal
+        if channels != expected_channels:
+            raise RuntimeError(f"Expected {expected_channels} attribute channels, got {channels}")
+
+        visual = logits.reshape(batch, self.na, self.nal, height, width)
+        center = visual.mean(dim=2)
+        visual_margin = visual[:, :, 1] - visual[:, :, 0]
+        graph_margin = self._graph_margin(features, self._label_classifiers())
+        gate_input = torch.cat((features.float(), visual_margin.float()), dim=1)
+        gate = torch.sigmoid(self.graph_gate(gate_input))
+        updated_margin = (1.0 - gate) * visual_margin.float() + gate * graph_margin
+        return self._restore_binary(center, updated_margin.to(dtype=visual_margin.dtype))
+
+
+class CoOccurrenceGraphMeanField(_CoOccurrencePriorBase):
+    """Two-step graph mean-field refinement of visual attribute margins."""
+
+    expects_features = True
+
+    def __init__(self, channels, *args, rank=4, iterations=2, initial_gain=0.25, initial_gate=0.35, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.nal != 2:
+            raise ValueError("Graph mean-field prior heads currently support nal == 2 only")
+        if not 0.0 < initial_gain < 1.0:
+            raise ValueError("initial_gain must be in (0, 1)")
+        if not 0.0 < initial_gate < 1.0:
+            raise ValueError("initial_gate must be in (0, 1)")
+        self.channels = int(channels)
+        self.hidden_chs = int(max(32, min(128, self.channels // 4)))
+        self.rank = min(max(1, int(rank)), self.na)
+        self.iterations = max(1, int(iterations))
+
+        identity = torch.eye(self.na, dtype=self.prior.dtype, device=self.prior.device)
+        self.register_buffer("label_input", torch.cat((identity, self.prior), dim=1))
+        self.edge_query = nn.Linear(2 * self.na, self.rank, bias=False)
+        self.edge_key = nn.Linear(2 * self.na, self.rank, bias=False)
+        self.raw_gain = nn.Parameter(torch.tensor(math.log(initial_gain / (1.0 - initial_gain))))
+        self.raw_temperature = nn.Parameter(torch.zeros(self.na))
+        self.feature_gate = nn.Sequential(
+            nn.Conv2d(self.channels + 2 * self.na, self.hidden_chs, kernel_size=1),
+            nn.GELU(),
+            nn.Conv2d(self.hidden_chs, self.na, kernel_size=1),
+        )
+        nn.init.zeros_(self.feature_gate[-1].weight)
+        nn.init.constant_(self.feature_gate[-1].bias, math.log(initial_gate / (1.0 - initial_gate)))
+
+    def _edge_attention(self):
+        label_input = self.label_input
+        prior = self.prior.to(device=label_input.device, dtype=label_input.dtype)
+        queries = self.edge_query(label_input)
+        keys = self.edge_key(label_input)
+        scores = torch.matmul(queries, keys.transpose(0, 1)) / math.sqrt(self.rank)
+        connected = prior > 0
+        scores = scores + prior.clamp_min(1e-6).log()
+        scores = scores.masked_fill(~connected, -1e4)
+        return torch.softmax(scores, dim=-1)
+
+    def forward(self, features, logits, output_layer):
+        del output_layer
+        center, margin, _, _, _ = self._binary_state(logits)
+        refined = margin.float()
+        adjacency = self._edge_attention()
+        gain = torch.sigmoid(self.raw_gain)
+        temperature = (0.5 + F.softplus(self.raw_temperature)).view(1, self.na, 1, 1)
+        for _ in range(self.iterations):
+            belief = torch.tanh(refined / temperature)
+            message = torch.einsum(
+                "ij,bjhw->bihw",
+                adjacency.to(device=refined.device, dtype=refined.dtype),
+                belief,
+            )
+            gate_input = torch.cat((features.float(), refined, message), dim=1)
+            gate = torch.sigmoid(self.feature_gate(gate_input))
+            refined = refined + gain * gate * message
+        return self._restore_binary(center, refined.to(dtype=margin.dtype))
 
 
 class CoOccurrencePriorChannelAttention(_CoOccurrencePriorFeatureHead):
@@ -2198,6 +2385,11 @@ class MDetect(nn.Module):
                 "mlgcn_threshold": CoOccurrenceMLGCNThreshold,
                 "mlgcn_direct": CoOccurrenceMLGCNDirect,
                 "mlgcn_learnable": CoOccurrenceMLGCNLearnable,
+                "mlgat": CoOccurrenceMLGAT,
+                "mlsage": CoOccurrenceMLSAGE,
+                "mltransformer": CoOccurrenceMLTransformer,
+                "mlgcn_moe": CoOccurrenceMLGCNMoE,
+                "graph_mean_field": CoOccurrenceGraphMeanField,
             }
             prior_class = prior_classes.get(prior_kind)
             if prior_class is None:
