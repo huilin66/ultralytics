@@ -1694,7 +1694,8 @@ class CoOccurrenceMLGCNMoE(_CoOccurrenceMLGCNBase):
         visual_margin = visual[:, :, 1] - visual[:, :, 0]
         graph_margin = self._graph_margin(features, self._label_classifiers())
         gate_input = torch.cat((features.float(), visual_margin.float()), dim=1)
-        gate = torch.sigmoid(self.graph_gate(gate_input))
+        gate_dtype = self.graph_gate[0].weight.dtype
+        gate = torch.sigmoid(self.graph_gate(gate_input.to(dtype=gate_dtype)))
         updated_margin = (1.0 - gate) * visual_margin.float() + gate * graph_margin
         return self._restore_binary(center, updated_margin.to(dtype=visual_margin.dtype))
 
