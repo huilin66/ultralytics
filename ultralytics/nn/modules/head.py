@@ -1757,7 +1757,12 @@ class CoOccurrenceGraphMeanField(_CoOccurrencePriorBase):
                 belief,
             )
             gate_input = torch.cat((features.float(), refined, message), dim=1)
-            gate = torch.sigmoid(self.feature_gate(gate_input))
+            # The detector may be converted to FP16 before validation.  The
+            # feature tensors above intentionally stay in FP32 for stable
+            # mean-field updates, so match the gate input to its convolution
+            # parameters before applying the feature gate.
+            gate_dtype = self.feature_gate[0].weight.dtype
+            gate = torch.sigmoid(self.feature_gate(gate_input.to(dtype=gate_dtype)))
             refined = refined + gain * gate * message
         return self._restore_binary(center, refined.to(dtype=margin.dtype))
 
