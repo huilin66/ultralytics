@@ -457,6 +457,7 @@ def _train_one(
     w4: float,
     seed: int,
     network_name: str,
+    gnn_type: Optional[str] = None,
 ) -> Optional[str]:
     """Train one two-stage mdet run and return its best checkpoint."""
     if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
@@ -468,12 +469,17 @@ def _train_one(
 
     hsv_h, hsv_s, hsv_v = _get_hsv_values(args)
     resolved_config = _materialize_config(
-        config, args.com_path, args.project, feature_gain=args.feature_gain
+        config,
+        args.com_path,
+        args.project,
+        gnn_type=gnn_type,
+        feature_gain=args.feature_gain,
     )
     run_base = f"{_slug(label)}_{_slug(variant_name)}_w4_{_slug(w4)}_seed_{seed}"
     record: Dict[str, object] = {
         "label": label,
         "variant": variant_name,
+        "gnn_type": gnn_type,
         "config": resolved_config,
         "pretrain": pretrain,
         "network": network_name,
@@ -849,6 +855,7 @@ def _run_variants(args: argparse.Namespace) -> None:
                 w4=args.w4,
                 seed=args.seed,
                 network_name=args.network,
+                gnn_type=getattr(args, "gnn_type", None),
             )
 
 
@@ -1069,6 +1076,16 @@ def _build_parser() -> argparse.ArgumentParser:
     ):
         variant_parser = subparsers.add_parser(name, help=help_text)
         _add_variant_arguments(variant_parser, default_network=default_network, require_variant=name != "versions")
+        if name == "gca-structure":
+            variant_parser.add_argument(
+                "--gnn-type",
+                choices=("gca", "gcn", "gat", "graphsage", "gin"),
+                default=None,
+                help=(
+                    "materialize one GNN operator in com_gca_* structural YAMLs; "
+                    "useful when running a full stage1+stage2 GCA variant"
+                ),
+            )
         if name == "versions":
             variant_parser.add_argument(
                 "--include-yolo26",

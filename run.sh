@@ -274,6 +274,115 @@ if [ "$RUN_PRIOR_BATCH" = "1" ]; then
   done
 fi
 
+# E2.12 GIA-transfer selection batch.
+# This batch is intentionally opt-in because it launches 26 long runs:
+# 13 selected structures under two initialization protocols.
+#   (1) Stage2-only, initialized from the best GIA-v2 Test checkpoint.
+#   (2) Full stage1=100 + stage2=100, initialized from yolov10x.pt.
+# The selected structures are fixed by the remote E2.2 summary ranking:
+# three Test-improved structures plus ten highest Val-F1 configurations.
+if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
+  GIA_BEST_STAGE1_CKPT=${GIA_BEST_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  GIA_TRANSFER_STAGE2_PROJECT=${GIA_TRANSFER_STAGE2_PROJECT:-runs/experiments/E2_12_GCA_GIA_transfer_stage2}
+  GIA_TRANSFER_FULL_PROJECT=${GIA_TRANSFER_FULL_PROJECT:-runs/experiments/E2_12_GCA_GIA_transfer_full}
+  GIA_TRANSFER_W4=${GIA_TRANSFER_W4:-0.5}
+  GIA_TRANSFER_BATCH=${GIA_TRANSFER_BATCH:-16}
+  GIA_TRANSFER_SEED=${GIA_TRANSFER_SEED:-0}
+
+  for REQUIRED_FILE in "$GIA_BEST_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH" yolov10x.pt; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing GIA-transfer input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  run_gia_transfer_stage2() {
+    local matrix_path="$1"
+    shift
+    python scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_12_GCA_GIA_transfer_stage2 \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_BEST_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      "$@" \
+      --w4 "$GIA_TRANSFER_W4" \
+      --batch "$GIA_TRANSFER_BATCH" \
+      --seed "$GIA_TRANSFER_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$matrix_path" \
+      --project "$GIA_TRANSFER_STAGE2_PROJECT" || exit $?
+  }
+
+  run_gia_transfer_full() {
+    local matrix_path="$1"
+    shift
+    python scripts/train_mdet_experiments.py gca-structure \
+      --label E2_12_GCA_GIA_transfer_full \
+      --data "$DATA" \
+      --pretrain yolov10x.pt \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      "$@" \
+      --w4 "$GIA_TRANSFER_W4" \
+      --batch "$GIA_TRANSFER_BATCH" \
+      --seed "$GIA_TRANSFER_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$matrix_path" \
+      --project "$GIA_TRANSFER_FULL_PROJECT" || exit $?
+  }
+
+  # Test-improved: GraphSAGE adaptive (cross), GCN margin residual (cross),
+  # and GCN margin residual (conditional).
+  run_gia_transfer_stage2 "$COM_PATH" \
+    --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+    --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --gnn-types graphsage
+
+  run_gia_transfer_stage2 "$COM_PATH" \
+    --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+    --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+    --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+
+  run_gia_transfer_stage2 "$COM_CONDITIONAL_PATH" \
+    --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+    --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
+    --gnn-types gat
+
+  run_gia_transfer_stage2 "$COM_CONDITIONAL_PATH" \
+    --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+    --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+    --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+
+  # Full stage1+stage2 equivalents. The gnn-type option materializes the
+  # operator into a generated YAML without changing checked-in configs.
+  run_gia_transfer_full "$COM_PATH" \
+    --variant cross_graphsage_adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+    --variant cross_graphsage_context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant cross_graphsage_context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --gnn-type graphsage
+
+  run_gia_transfer_full "$COM_PATH" \
+    --variant cross_gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+    --variant cross_gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+    --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+
+  run_gia_transfer_full "$COM_CONDITIONAL_PATH" \
+    --variant conditional_gat_adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+    --variant conditional_gat_context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant conditional_gat_context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+    --variant conditional_gat_conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
+    --gnn-type gat
+
+  run_gia_transfer_full "$COM_CONDITIONAL_PATH" \
+    --variant conditional_gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+    --variant conditional_gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+    --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+fi
+
 # Feature graph direction is closed after the gain screen. The block below is
 # retained only for exact reproduction of archived runs and is opt-in.
 if [ "${ENABLE_FEATURE_GRAPH:-0}" = "1" ]; then
