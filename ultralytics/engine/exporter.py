@@ -107,9 +107,6 @@ from ultralytics.utils.files import file_size, spaces_in_path
 from ultralytics.utils.ops import Profile, nms_rotated, xywh2xyxy
 from ultralytics.utils.torch_utils import TORCH_1_13, get_latest_opset, select_device
 
-import deform_conv2d_onnx_exporter
-deform_conv2d_onnx_exporter.register_deform_conv2d_onnx_op()
-
 def export_formats():
     """Return a dictionary of Ultralytics YOLO export formats."""
     x = [
@@ -533,6 +530,14 @@ class Exporter:
             requirements += ["onnxslim", "onnxruntime" + ("-gpu" if torch.cuda.is_available() else "")]
         check_requirements(requirements)
         import onnx  # noqa
+
+        # This custom operator is only needed while exporting to ONNX.  Keeping
+        # the import here avoids making validation/inference depend on an
+        # export-only package: AutoBackend imports ``export_formats`` merely to
+        # identify a checkpoint suffix during final validation.
+        import deform_conv2d_onnx_exporter
+
+        deform_conv2d_onnx_exporter.register_deform_conv2d_onnx_op()
 
         opset_version = self.args.opset or get_latest_opset()
         LOGGER.info(f"\n{prefix} starting export with onnx {onnx.__version__} opset {opset_version}...")
