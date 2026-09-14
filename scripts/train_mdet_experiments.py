@@ -345,6 +345,12 @@ def _add_common_train_arguments(parser: argparse.ArgumentParser) -> None:
     add_bool_argument(parser, "--auto-optim", default=False)
     add_bool_argument(parser, "--amp", default=True)
     add_bool_argument(parser, "--exist-ok", default=False)
+    add_bool_argument(
+        parser,
+        "--skip-existing",
+        default=False,
+        help="skip runs whose results.csv reached the requested epoch and have best.pt",
+    )
     parser.add_argument(
         "--com-path",
         default=None,
@@ -405,6 +411,23 @@ def _append_manifest(project: str, record: Dict[str, object]) -> None:
     """Record the exact resolved configuration of a requested run."""
     with _record_path(project).open("a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _has_completed_run(project: str, run_name: str, epochs: int) -> bool:
+    """Return whether a run has a checkpoint and reached its target epoch."""
+    run_dir = Path(project) / run_name
+    checkpoint = run_dir / "weights" / "best.pt"
+    results = run_dir / "results.csv"
+    if not checkpoint.is_file() or not results.is_file():
+        return False
+    try:
+        rows = [line for line in results.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if len(rows) < 2:
+            return False
+        last_epoch = int(float(rows[-1].split(",", 1)[0]))
+    except (OSError, ValueError, IndexError):
+        return False
+    return last_epoch >= epochs
 
 
 def _get_hsv_values(
@@ -496,6 +519,12 @@ def _train_one(
         "hsv": {"h": hsv_h, "s": hsv_s, "v": hsv_v},
         "status": "dry-run" if args.dry_run else "started",
     }
+    stage2_checkpoint = Path(args.project) / record["stage2_name"] / "weights" / "best.pt"
+    if args.skip_existing and _has_completed_run(args.project, str(record["stage2_name"]), args.stage2_epochs):
+        record.update({"status": "skipped_existing", "best": str(stage2_checkpoint)})
+        _append_manifest(args.project, record)
+        print(f"[skip-existing] {record['stage2_name']}: best={stage2_checkpoint}")
+        return str(stage2_checkpoint)
     _append_manifest(args.project, record)
 
     print(json.dumps(record, ensure_ascii=False, indent=2))
@@ -603,6 +632,12 @@ def _train_direct_stage(
         "hsv": {"h": hsv_h, "s": hsv_s, "v": hsv_v},
         "status": "dry-run" if args.dry_run else "started",
     }
+    checkpoint = Path(args.project) / run_name / "weights" / "best.pt"
+    if args.skip_existing and _has_completed_run(args.project, run_name, epochs):
+        record.update({"status": "skipped_existing", "best": str(checkpoint)})
+        _append_manifest(args.project, record)
+        print(f"[skip-existing] {run_name}: best={checkpoint}")
+        return str(checkpoint)
     _append_manifest(args.project, record)
 
     print(json.dumps(record, ensure_ascii=False, indent=2))

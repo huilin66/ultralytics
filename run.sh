@@ -307,6 +307,7 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
       --stage1-epochs 100 \
       --stage2-epochs 100 \
       "$@" \
+      --skip-existing \
       --w4 "$GIA_TRANSFER_W4" \
       --batch "$GIA_TRANSFER_BATCH" \
       --seed "$GIA_TRANSFER_SEED" \
@@ -325,6 +326,7 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
       --stage1-epochs 100 \
       --stage2-epochs 100 \
       "$@" \
+      --skip-existing \
       --w4 "$GIA_TRANSFER_W4" \
       --batch "$GIA_TRANSFER_BATCH" \
       --seed "$GIA_TRANSFER_SEED" \
