@@ -113,6 +113,7 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 #   COM_CONDITIONAL_PATH=/path/to/co_occurrence_matrix_train_conditional.csv bash run.sh
 COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}
 COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv}
+PYTHON_BIN=${PYTHON_BIN:-python3}
 
 # Previous active E2.2 multiclass-aware GCA/GNN comparison.  This block is
 # intentionally retained as comments for visual comparison and is not run.
@@ -257,7 +258,7 @@ if [ "$RUN_PRIOR_BATCH" = "1" ]; then
       exit 1
     fi
 
-    python scripts/train_mdet_experiments.py prior-stage2 \
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py prior-stage2 \
       --label "$PRIOR_LABEL" \
       --model "$PRIOR_MODEL" \
       --data "$DATA" \
@@ -299,7 +300,7 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
   run_gia_transfer_stage2() {
     local matrix_path="$1"
     shift
-    python scripts/train_mdet_experiments.py gca-stage2 \
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
       --label E2_12_GCA_GIA_transfer_stage2 \
       --data "$DATA" \
       --stage1-checkpoint "$GIA_BEST_STAGE1_CKPT" \
@@ -317,7 +318,7 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
   run_gia_transfer_full() {
     local matrix_path="$1"
     shift
-    python scripts/train_mdet_experiments.py gca-structure \
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-structure \
       --label E2_12_GCA_GIA_transfer_full \
       --data "$DATA" \
       --pretrain yolov10x.pt \
@@ -403,7 +404,7 @@ if [ "${ENABLE_FEATURE_GRAPH:-0}" = "1" ]; then
 # Gain=1 is the completed feature_gca_cross reference.  Reproduce it with
 # FEATURE_GAIN_VALUES="1 2 4 8" when the reference is not available locally.
 for GAIN in $FEATURE_GAIN_VALUES; do
-  python scripts/train_mdet_experiments.py gca-stage2 \
+  "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
     --label "feature_gca_cross_gain_${GAIN}" \
     --data "$DATA" \
     --stage1-checkpoint "$STAGE1_CKPT" \
@@ -421,7 +422,7 @@ done
 
 # A no-graph local adapter control separates a useful residual amplitude from
 # a gain that only compensates for an ineffective graph message.
-python scripts/train_mdet_experiments.py gca-stage2 \
+"$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
   --label "feature_local_cross_gain_${FEATURE_LOCAL_GAIN}" \
   --data "$DATA" \
   --stage1-checkpoint "$STAGE1_CKPT" \
