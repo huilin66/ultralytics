@@ -386,6 +386,73 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
     --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
 fi
 
+# E2.13: repeat the three previously Test-improved structures with two new
+# seeds.  This is stage-2-only and intentionally uses a separate project so
+# that cross and conditional co-occurrence matrices cannot collide in run
+# names.  Set RUN_GCA_GIA_TEST3_SEEDS=1 to launch this six-run batch.
+if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
+  GIA_TEST3_STAGE1_CKPT=${GIA_TEST3_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  GIA_TEST3_PROJECT=${GIA_TEST3_PROJECT:-runs/experiments/E2_13_GCA_GIA_test3_seed}
+  GIA_TEST3_W4=${GIA_TEST3_W4:-0.5}
+  GIA_TEST3_BATCH=${GIA_TEST3_BATCH:-16}
+  GIA_TEST3_SEEDS=${GIA_TEST3_SEEDS:-"1 2"}
+
+  for REQUIRED_FILE in "$GIA_TEST3_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.13 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  for TEST3_SEED in $GIA_TEST3_SEEDS; do
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_13_GCA_GIA_test3_seed \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+      --gnn-types graphsage \
+      --skip-existing \
+      --w4 "$GIA_TEST3_W4" \
+      --batch "$GIA_TEST3_BATCH" \
+      --seed "$TEST3_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_PATH" \
+      --project "$GIA_TEST3_PROJECT" || exit $?
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_13_GCA_GIA_test3_seed \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+      --skip-existing \
+      --w4 "$GIA_TEST3_W4" \
+      --batch "$GIA_TEST3_BATCH" \
+      --seed "$TEST3_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_PATH" \
+      --project "$GIA_TEST3_PROJECT" || exit $?
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_13_GCA_GIA_test3_seed \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+      --skip-existing \
+      --w4 "$GIA_TEST3_W4" \
+      --batch "$GIA_TEST3_BATCH" \
+      --seed "$TEST3_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_CONDITIONAL_PATH" \
+      --project "$GIA_TEST3_PROJECT" || exit $?
+  done
+fi
+
 # Feature graph direction is closed after the gain screen. The block below is
 # retained only for exact reproduction of archived runs and is opt-in.
 if [ "${ENABLE_FEATURE_GRAPH:-0}" = "1" ]; then
