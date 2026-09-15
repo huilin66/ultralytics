@@ -386,10 +386,9 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
     --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
 fi
 
-# E2.13: repeat the three previously Test-improved structures with two new
-# seeds.  This is stage-2-only and intentionally uses a separate project so
-# that cross and conditional co-occurrence matrices cannot collide in run
-# names.  Set RUN_GCA_GIA_TEST3_SEEDS=1 to launch this six-run batch.
+# E2.13 (superseded): this batch used the GIA-v2 checkpoint as its Stage2
+# initialization.  It is retained for auditability, but is not the intended
+# no-GIA repeat experiment.  Do not relaunch it.
 if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
   GIA_TEST3_STAGE1_CKPT=${GIA_TEST3_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
   GIA_TEST3_PROJECT=${GIA_TEST3_PROJECT:-runs/experiments/E2_13_GCA_GIA_test3_seed}
@@ -450,6 +449,73 @@ if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
       --com-path "$COM_CONDITIONAL_PATH" \
       --project "$GIA_TEST3_PROJECT" || exit $?
+  done
+fi
+
+# E2.14: reproduce the three Test-improved E2.2 GCA/GNN structures with two
+# additional Stage2 seeds, using the same plain E1 Stage1 checkpoint as E2.2.
+# This is the no-GIA repeat batch requested after correcting E2.13.  Set
+# RUN_GCA_GNN_REPEAT_SEEDS=1 to launch the six sequential Stage2-only runs.
+if [ "${RUN_GCA_GNN_REPEAT_SEEDS:-0}" = "1" ]; then
+  GCA_REPEAT_STAGE1_CKPT=${GCA_REPEAT_STAGE1_CKPT:-runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt}
+  GCA_REPEAT_PROJECT=${GCA_REPEAT_PROJECT:-runs/experiments/E2_14_GCA_GNN_repeat_no_gia}
+  GCA_REPEAT_W4=${GCA_REPEAT_W4:-0.5}
+  GCA_REPEAT_BATCH=${GCA_REPEAT_BATCH:-16}
+  GCA_REPEAT_SEEDS=${GCA_REPEAT_SEEDS:-"1 2"}
+
+  for REQUIRED_FILE in "$GCA_REPEAT_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.14 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  for REPEAT_SEED in $GCA_REPEAT_SEEDS; do
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_14_GCA_GNN_repeat_no_gia \
+      --data "$DATA" \
+      --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+      --gnn-types graphsage \
+      --skip-existing \
+      --w4 "$GCA_REPEAT_W4" \
+      --batch "$GCA_REPEAT_BATCH" \
+      --seed "$REPEAT_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_PATH" \
+      --project "$GCA_REPEAT_PROJECT" || exit $?
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_14_GCA_GNN_repeat_no_gia \
+      --data "$DATA" \
+      --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+      --skip-existing \
+      --w4 "$GCA_REPEAT_W4" \
+      --batch "$GCA_REPEAT_BATCH" \
+      --seed "$REPEAT_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_PATH" \
+      --project "$GCA_REPEAT_PROJECT" || exit $?
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_14_GCA_GNN_repeat_no_gia \
+      --data "$DATA" \
+      --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+      --skip-existing \
+      --w4 "$GCA_REPEAT_W4" \
+      --batch "$GCA_REPEAT_BATCH" \
+      --seed "$REPEAT_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_CONDITIONAL_PATH" \
+      --project "$GCA_REPEAT_PROJECT" || exit $?
   done
 fi
 
