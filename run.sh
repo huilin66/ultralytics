@@ -386,9 +386,8 @@ if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
     --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
 fi
 
-# E2.13 (superseded): this batch used the GIA-v2 checkpoint as its Stage2
-# initialization.  It is retained for auditability, but is not the intended
-# no-GIA repeat experiment.  Do not relaunch it.
+# E2.13: GIA-initialized repeat of the three selected GCA/GNN structures.
+# The matching no-GCA/GNN GIA Stage2 control is defined in E2.15 below.
 if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
   GIA_TEST3_STAGE1_CKPT=${GIA_TEST3_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
   GIA_TEST3_PROJECT=${GIA_TEST3_PROJECT:-runs/experiments/E2_13_GCA_GIA_test3_seed}
@@ -516,6 +515,39 @@ if [ "${RUN_GCA_GNN_REPEAT_SEEDS:-0}" = "1" ]; then
       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
       --com-path "$COM_CONDITIONAL_PATH" \
       --project "$GCA_REPEAT_PROJECT" || exit $?
+  done
+fi
+
+# E2.15: matched control for E2.13.  Keep the best GIA-v2 Stage1 model and
+# train its ordinary attribute head in Stage2 without adding GCA or any GNN.
+# Use the same two seeds as E2.13 so the three structural runs have a direct
+# no-GCA/GNN reference.  Set RUN_GIA_STAGE2_CONTROL=1 to launch both runs.
+if [ "${RUN_GIA_STAGE2_CONTROL:-0}" = "1" ]; then
+  GIA_CONTROL_STAGE1_CKPT=${GIA_CONTROL_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  GIA_CONTROL_PROJECT=${GIA_CONTROL_PROJECT:-runs/experiments/E2_15_GIA_stage2_control}
+  GIA_CONTROL_W4=${GIA_CONTROL_W4:-0.5}
+  GIA_CONTROL_BATCH=${GIA_CONTROL_BATCH:-16}
+  GIA_CONTROL_SEEDS=${GIA_CONTROL_SEEDS:-"1 2"}
+
+  if [ ! -f "$GIA_CONTROL_STAGE1_CKPT" ]; then
+    echo "Missing E2.15 input: $GIA_CONTROL_STAGE1_CKPT" >&2
+    exit 1
+  fi
+
+  for CONTROL_SEED in $GIA_CONTROL_SEEDS; do
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_15_GIA_stage2_control \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_CONTROL_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml \
+      --skip-existing \
+      --w4 "$GIA_CONTROL_W4" \
+      --batch "$GIA_CONTROL_BATCH" \
+      --seed "$CONTROL_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --project "$GIA_CONTROL_PROJECT" || exit $?
   done
 fi
 
