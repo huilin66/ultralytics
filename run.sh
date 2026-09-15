@@ -219,388 +219,501 @@ PYTHON_BIN=${PYTHON_BIN:-python3}
 # Transformer, two-step mean-field refinement, and a pixel-wise ML-GCN MoE.
 # The existing Stage2 freeze policy (freeze=23 for YOLOv10/MAYOLO) remains
 # active; no backbone or neck parameters are unfrozen.
-STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
-PRIOR_MODEL=${PRIOR_MODEL:-ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml}
-PRIOR_LABEL=${PRIOR_LABEL:-E2_11_graph_refine}
-PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_11_graph_refine}
-PRIOR_STAGE1_EPOCHS=${PRIOR_STAGE1_EPOCHS:-100}
-PRIOR_STAGE2_EPOCHS=${PRIOR_STAGE2_EPOCHS:-100}
-PRIOR_TYPES=${PRIOR_TYPES:-"mlgat mlsage mltransformer graph_mean_field mlgcn_moe"}
-# Run both matrices by default. Set PRIOR_MATRIX_MODES="cross" for five jobs.
-PRIOR_MATRIX_MODES=${PRIOR_MATRIX_MODES:-"cross conditional"}
-PRIOR_W4=${PRIOR_W4:-0.5}
-PRIOR_BATCH=${PRIOR_BATCH:-16}
-PRIOR_SEED=${PRIOR_SEED:-0}
-RUN_PRIOR_BATCH=${RUN_PRIOR_BATCH:-0}
+# STAGE1_CKPT=runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt
+# PRIOR_MODEL=${PRIOR_MODEL:-ultralytics/cfg/models/exp_ablation/yolov10x_com_prior.yaml}
+# PRIOR_LABEL=${PRIOR_LABEL:-E2_11_graph_refine}
+# PRIOR_PROJECT=${PRIOR_PROJECT:-runs/experiments/E2_11_graph_refine}
+# PRIOR_STAGE1_EPOCHS=${PRIOR_STAGE1_EPOCHS:-100}
+# PRIOR_STAGE2_EPOCHS=${PRIOR_STAGE2_EPOCHS:-100}
+# PRIOR_TYPES=${PRIOR_TYPES:-"mlgat mlsage mltransformer graph_mean_field mlgcn_moe"}
+# # Run both matrices by default. Set PRIOR_MATRIX_MODES="cross" for five jobs.
+# PRIOR_MATRIX_MODES=${PRIOR_MATRIX_MODES:-"cross conditional"}
+# PRIOR_W4=${PRIOR_W4:-0.5}
+# PRIOR_BATCH=${PRIOR_BATCH:-16}
+# PRIOR_SEED=${PRIOR_SEED:-0}
+# RUN_PRIOR_BATCH=${RUN_PRIOR_BATCH:-0}
 
-if [ "$RUN_PRIOR_BATCH" = "1" ]; then
-  if [ ! -f "$STAGE1_CKPT" ]; then
-    echo "Missing Stage1 checkpoint: $STAGE1_CKPT" >&2
-    exit 1
-  fi
+# if [ "$RUN_PRIOR_BATCH" = "1" ]; then
+#   if [ ! -f "$STAGE1_CKPT" ]; then
+#     echo "Missing Stage1 checkpoint: $STAGE1_CKPT" >&2
+#     exit 1
+#   fi
 
-  for MATRIX_MODE in $PRIOR_MATRIX_MODES; do
-    case "$MATRIX_MODE" in
-      cross)
-        MATRIX_PATH="$COM_PATH"
+#   for MATRIX_MODE in $PRIOR_MATRIX_MODES; do
+#     case "$MATRIX_MODE" in
+#       cross)
+#         MATRIX_PATH="$COM_PATH"
+#         ;;
+#       conditional)
+#         MATRIX_PATH="$COM_CONDITIONAL_PATH"
+#         ;;
+#       *)
+#         echo "Unsupported PRIOR_MATRIX_MODES value: $MATRIX_MODE" >&2
+#         exit 1
+#         ;;
+#     esac
+
+#     if [ ! -f "$MATRIX_PATH" ]; then
+#       echo "Missing $MATRIX_MODE co-occurrence matrix: $MATRIX_PATH" >&2
+#       exit 1
+#     fi
+
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py prior-stage2 \
+#       --label "$PRIOR_LABEL" \
+#       --model "$PRIOR_MODEL" \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$STAGE1_CKPT" \
+#       --stage1-epochs "$PRIOR_STAGE1_EPOCHS" \
+#       --stage2-epochs "$PRIOR_STAGE2_EPOCHS" \
+#       --prior-types $PRIOR_TYPES \
+#       --matrix-modes "$MATRIX_MODE" \
+#       --w4 "$PRIOR_W4" \
+#       --batch "$PRIOR_BATCH" \
+#       --seed "$PRIOR_SEED" \
+#       --com-path "$MATRIX_PATH" \
+#       --project "$PRIOR_PROJECT" || exit $?
+#   done
+# fi
+
+# # E2.12 GIA-transfer selection batch.
+# # This batch is intentionally opt-in because it launches 26 long runs:
+# # 13 selected structures under two initialization protocols.
+# #   (1) Stage2-only, initialized from the best GIA-v2 Test checkpoint.
+# #   (2) Full stage1=100 + stage2=100, initialized from yolov10x.pt.
+# # The selected structures are fixed by the remote E2.2 summary ranking:
+# # three Test-improved structures plus ten highest Val-F1 configurations.
+# if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
+#   GIA_BEST_STAGE1_CKPT=${GIA_BEST_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+#   GIA_TRANSFER_STAGE2_PROJECT=${GIA_TRANSFER_STAGE2_PROJECT:-runs/experiments/E2_12_GCA_GIA_transfer_stage2}
+#   GIA_TRANSFER_FULL_PROJECT=${GIA_TRANSFER_FULL_PROJECT:-runs/experiments/E2_12_GCA_GIA_transfer_full}
+#   GIA_TRANSFER_W4=${GIA_TRANSFER_W4:-0.5}
+#   GIA_TRANSFER_BATCH=${GIA_TRANSFER_BATCH:-16}
+#   GIA_TRANSFER_SEED=${GIA_TRANSFER_SEED:-0}
+
+#   for REQUIRED_FILE in "$GIA_BEST_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH" yolov10x.pt; do
+#     if [ ! -f "$REQUIRED_FILE" ]; then
+#       echo "Missing GIA-transfer input: $REQUIRED_FILE" >&2
+#       exit 1
+#     fi
+#   done
+
+#   run_gia_transfer_stage2() {
+#     local matrix_path="$1"
+#     shift
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_12_GCA_GIA_transfer_stage2 \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GIA_BEST_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       "$@" \
+#       --skip-existing \
+#       --w4 "$GIA_TRANSFER_W4" \
+#       --batch "$GIA_TRANSFER_BATCH" \
+#       --seed "$GIA_TRANSFER_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$matrix_path" \
+#       --project "$GIA_TRANSFER_STAGE2_PROJECT" || exit $?
+#   }
+
+#   run_gia_transfer_full() {
+#     local matrix_path="$1"
+#     shift
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-structure \
+#       --label E2_12_GCA_GIA_transfer_full \
+#       --data "$DATA" \
+#       --pretrain yolov10x.pt \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       "$@" \
+#       --skip-existing \
+#       --w4 "$GIA_TRANSFER_W4" \
+#       --batch "$GIA_TRANSFER_BATCH" \
+#       --seed "$GIA_TRANSFER_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$matrix_path" \
+#       --project "$GIA_TRANSFER_FULL_PROJECT" || exit $?
+#   }
+
+#   # Test-improved: GraphSAGE adaptive (cross), GCN margin residual (cross),
+#   # and GCN margin residual (conditional).
+#   run_gia_transfer_stage2 "$COM_PATH" \
+#     --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+#     --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --gnn-types graphsage
+
+#   run_gia_transfer_stage2 "$COM_PATH" \
+#     --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+#     --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+#     --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+
+#   run_gia_transfer_stage2 "$COM_CONDITIONAL_PATH" \
+#     --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+#     --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --variant conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
+#     --gnn-types gat
+
+#   run_gia_transfer_stage2 "$COM_CONDITIONAL_PATH" \
+#     --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+#     --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+#     --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+
+#   # Full stage1+stage2 equivalents. The gnn-type option materializes the
+#   # operator into a generated YAML without changing checked-in configs.
+#   run_gia_transfer_full "$COM_PATH" \
+#     --variant cross_graphsage_adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+#     --variant cross_graphsage_context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --variant cross_graphsage_context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --gnn-type graphsage
+
+#   run_gia_transfer_full "$COM_PATH" \
+#     --variant cross_gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+#     --variant cross_gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+#     --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+
+#   run_gia_transfer_full "$COM_CONDITIONAL_PATH" \
+#     --variant conditional_gat_adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+#     --variant conditional_gat_context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --variant conditional_gat_context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
+#     --variant conditional_gat_conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
+#     --gnn-type gat
+
+#   run_gia_transfer_full "$COM_CONDITIONAL_PATH" \
+#     --variant conditional_gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
+#     --variant conditional_gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
+#     --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
+# fi
+
+# # E2.13: GIA-initialized repeat of the three selected GCA/GNN structures.
+# # The matching no-GCA/GNN GIA Stage2 control is defined in E2.15 below.
+# if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
+#   GIA_TEST3_STAGE1_CKPT=${GIA_TEST3_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+#   GIA_TEST3_PROJECT=${GIA_TEST3_PROJECT:-runs/experiments/E2_13_GCA_GIA_test3_seed}
+#   GIA_TEST3_W4=${GIA_TEST3_W4:-0.5}
+#   GIA_TEST3_BATCH=${GIA_TEST3_BATCH:-16}
+#   GIA_TEST3_SEEDS=${GIA_TEST3_SEEDS:-"0 1 2"}
+
+#   for REQUIRED_FILE in "$GIA_TEST3_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+#     if [ ! -f "$REQUIRED_FILE" ]; then
+#       echo "Missing E2.13 input: $REQUIRED_FILE" >&2
+#       exit 1
+#     fi
+#   done
+
+#   for TEST3_SEED in $GIA_TEST3_SEEDS; do
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_13_GCA_GIA_test3_seed \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+#       --gnn-types graphsage \
+#       --skip-existing \
+#       --w4 "$GIA_TEST3_W4" \
+#       --batch "$GIA_TEST3_BATCH" \
+#       --seed "$TEST3_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_PATH" \
+#       --project "$GIA_TEST3_PROJECT" || exit $?
+
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_13_GCA_GIA_test3_seed \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+#       --skip-existing \
+#       --w4 "$GIA_TEST3_W4" \
+#       --batch "$GIA_TEST3_BATCH" \
+#       --seed "$TEST3_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_PATH" \
+#       --project "$GIA_TEST3_PROJECT" || exit $?
+
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_13_GCA_GIA_test3_seed \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+#       --skip-existing \
+#       --w4 "$GIA_TEST3_W4" \
+#       --batch "$GIA_TEST3_BATCH" \
+#       --seed "$TEST3_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_CONDITIONAL_PATH" \
+#       --project "$GIA_TEST3_PROJECT" || exit $?
+#   done
+# fi
+
+# # E2.14: reproduce the three Test-improved E2.2 GCA/GNN structures with two
+# # additional Stage2 seeds, using the same plain E1 Stage1 checkpoint as E2.2.
+# # This is the no-GIA repeat batch requested after correcting E2.13.  Set
+# # RUN_GCA_GNN_REPEAT_SEEDS=1 to launch the six sequential Stage2-only runs.
+# if [ "${RUN_GCA_GNN_REPEAT_SEEDS:-0}" = "1" ]; then
+#   GCA_REPEAT_STAGE1_CKPT=${GCA_REPEAT_STAGE1_CKPT:-runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt}
+#   GCA_REPEAT_PROJECT=${GCA_REPEAT_PROJECT:-runs/experiments/E2_14_GCA_GNN_repeat_no_gia}
+#   GCA_REPEAT_W4=${GCA_REPEAT_W4:-0.5}
+#   GCA_REPEAT_BATCH=${GCA_REPEAT_BATCH:-16}
+#   GCA_REPEAT_SEEDS=${GCA_REPEAT_SEEDS:-"1 2"}
+
+#   for REQUIRED_FILE in "$GCA_REPEAT_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+#     if [ ! -f "$REQUIRED_FILE" ]; then
+#       echo "Missing E2.14 input: $REQUIRED_FILE" >&2
+#       exit 1
+#     fi
+#   done
+
+#   for REPEAT_SEED in $GCA_REPEAT_SEEDS; do
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_14_GCA_GNN_repeat_no_gia \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+#       --gnn-types graphsage \
+#       --skip-existing \
+#       --w4 "$GCA_REPEAT_W4" \
+#       --batch "$GCA_REPEAT_BATCH" \
+#       --seed "$REPEAT_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_PATH" \
+#       --project "$GCA_REPEAT_PROJECT" || exit $?
+
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_14_GCA_GNN_repeat_no_gia \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+#       --skip-existing \
+#       --w4 "$GCA_REPEAT_W4" \
+#       --batch "$GCA_REPEAT_BATCH" \
+#       --seed "$REPEAT_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_PATH" \
+#       --project "$GCA_REPEAT_PROJECT" || exit $?
+
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_14_GCA_GNN_repeat_no_gia \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+#       --skip-existing \
+#       --w4 "$GCA_REPEAT_W4" \
+#       --batch "$GCA_REPEAT_BATCH" \
+#       --seed "$REPEAT_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_CONDITIONAL_PATH" \
+#       --project "$GCA_REPEAT_PROJECT" || exit $?
+#   done
+# fi
+
+# # E2.15: matched control for E2.13.  Keep the best GIA-v2 Stage1 model and
+# # train its ordinary attribute head in Stage2 without adding GCA or any GNN.
+# # Use the same three seeds as E2.13 so the structural runs have a direct
+# # no-GCA/GNN reference.  Set RUN_GIA_STAGE2_CONTROL=1 to launch the runs.
+# if [ "${RUN_GIA_STAGE2_CONTROL:-0}" = "1" ]; then
+#   GIA_CONTROL_STAGE1_CKPT=${GIA_CONTROL_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+#   GIA_CONTROL_PROJECT=${GIA_CONTROL_PROJECT:-runs/experiments/E2_15_GIA_stage2_control}
+#   GIA_CONTROL_W4=${GIA_CONTROL_W4:-0.5}
+#   GIA_CONTROL_BATCH=${GIA_CONTROL_BATCH:-16}
+#   GIA_CONTROL_SEEDS=${GIA_CONTROL_SEEDS:-"0 1 2"}
+
+#   if [ ! -f "$GIA_CONTROL_STAGE1_CKPT" ]; then
+#     echo "Missing E2.15 input: $GIA_CONTROL_STAGE1_CKPT" >&2
+#     exit 1
+#   fi
+
+#   for CONTROL_SEED in $GIA_CONTROL_SEEDS; do
+#     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#       --label E2_15_GIA_stage2_control \
+#       --data "$DATA" \
+#       --stage1-checkpoint "$GIA_CONTROL_STAGE1_CKPT" \
+#       --stage1-epochs 100 \
+#       --stage2-epochs 100 \
+#       --variant gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml \
+#       --skip-existing \
+#       --w4 "$GIA_CONTROL_W4" \
+#       --batch "$GIA_CONTROL_BATCH" \
+#       --seed "$CONTROL_SEED" \
+#       --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --project "$GIA_CONTROL_PROJECT" || exit $?
+#   done
+# fi
+
+# # Feature graph direction is closed after the gain screen. The block below is
+# # retained only for exact reproduction of archived runs and is opt-in.
+# if [ "${ENABLE_FEATURE_GRAPH:-0}" = "1" ]; then
+#   echo "Running archived feature graph reproduction because ENABLE_FEATURE_GRAPH=1."
+#   # Set FEATURE_EPOCHS=1 and FEATURE_PROJECT=... for a separate smoke run.
+#   for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH"; do
+#     if [ ! -f "$REQUIRED_FILE" ]; then
+#       echo "Missing input: $REQUIRED_FILE" >&2
+#       exit 1
+#     fi
+#   done
+
+#   FEATURE_EPOCHS=${FEATURE_EPOCHS:-100}
+#   FEATURE_PROJECT=${FEATURE_PROJECT:-runs/experiments/E2_2_feature_gain}
+#   FEATURE_GAIN_VALUES=${FEATURE_GAIN_VALUES:-"2 4 8"}
+#   FEATURE_LOCAL_GAIN=${FEATURE_LOCAL_GAIN:-4}
+
+# # Gain=1 is the completed feature_gca_cross reference.  Reproduce it with
+# # FEATURE_GAIN_VALUES="1 2 4 8" when the reference is not available locally.
+# for GAIN in $FEATURE_GAIN_VALUES; do
+#   "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#     --label "feature_gca_cross_gain_${GAIN}" \
+#     --data "$DATA" \
+#     --stage1-checkpoint "$STAGE1_CKPT" \
+#     --stage1-epochs 100 \
+#     --stage2-epochs "$FEATURE_EPOCHS" \
+#     --variant "gca_cross_gain_${GAIN}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_gca_cross.yaml" \
+#     --feature-gain "$GAIN" \
+#     --w4 0.5 \
+#     --batch 16 \
+#     --seed 0 \
+#     --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#       --com-path "$COM_PATH" \
+#       --project "$FEATURE_PROJECT" || exit $?
+# done
+
+# # A no-graph local adapter control separates a useful residual amplitude from
+# # a gain that only compensates for an ineffective graph message.
+# "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+#   --label "feature_local_cross_gain_${FEATURE_LOCAL_GAIN}" \
+#   --data "$DATA" \
+#   --stage1-checkpoint "$STAGE1_CKPT" \
+#   --stage1-epochs 100 \
+#   --stage2-epochs "$FEATURE_EPOCHS" \
+#   --variant "local_cross_gain_${FEATURE_LOCAL_GAIN}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_local_cross.yaml" \
+#   --feature-gain "$FEATURE_LOCAL_GAIN" \
+#   --w4 0.5 \
+#   --batch 16 \
+#   --seed 0 \
+#   --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+#   --com-path "$COM_PATH" \
+#   --project "$FEATURE_PROJECT" || exit $?
+# fi
+
+# E3.1 model-version/scale matrix.  This is opt-in and intentionally contains
+# only native YOLO versions: no GIA, GCA/GNN, HO, or co-occurrence matrix is
+# used.  One subprocess is launched per variant so an OOM or missing asset in
+# one size does not prevent the remaining sizes from running.
+E3_LABEL=${E3_LABEL:-E3_versions}
+E3_PROJECT=${E3_PROJECT:-runs/experiments/E3_versions}
+E3_STAGE1_EPOCHS=${E3_STAGE1_EPOCHS:-100}
+E3_STAGE2_EPOCHS=${E3_STAGE2_EPOCHS:-100}
+E3_W4=${E3_W4:-0.5}
+E3_BATCH=${E3_BATCH:-16}
+E3_SEED=${E3_SEED:-0}
+E3_DEVICE=${E3_DEVICE:-0}
+E3_IMGSZ=${E3_IMGSZ:-640}
+E3_WORKERS=${E3_WORKERS:-2}
+E3_HSV_H=${E3_HSV_H:-0}
+E3_HSV_S=${E3_HSV_S:-0.2}
+E3_HSV_V=${E3_HSV_V:-0.2}
+E3_PRETRAIN_DIR=${E3_PRETRAIN_DIR:-}
+
+# v8/v10/v11/v12/v13/YOLO26 use n/s/m/l/x here.  YOLOv9's native scale names
+# are t/s/m/c/e, YOLOv10 additionally provides the b scale, and YOLOv13's
+# official checkpoints are n/s/l/x only.
+E3_SIZES=${E3_SIZES:-"n s m l x"}
+E3_YOLOV9_SIZES=${E3_YOLOV9_SIZES:-"t s m c e"}
+E3_YOLOV10_SIZES=${E3_YOLOV10_SIZES:-"n s m b l x"}
+E3_YOLOV13_SIZES=${E3_YOLOV13_SIZES:-"n s l x"}
+E3_FAMILIES=${E3_FAMILIES:-"yolov8 yolov9 yolov10 yolov11 yolov12 yolov13 yolov26"}
+
+if [ "${RUN_E3_VERSIONS:-0}" = "1" ]; then
+  E3_BASE_ARGS=(
+    versions
+    --label "$E3_LABEL"
+    --data "$DATA"
+    --stage1-epochs "$E3_STAGE1_EPOCHS"
+    --stage2-epochs "$E3_STAGE2_EPOCHS"
+    --w4 "$E3_W4"
+    --batch "$E3_BATCH"
+    --seed "$E3_SEED"
+    --device "$E3_DEVICE"
+    --imgsz "$E3_IMGSZ"
+    --workers "$E3_WORKERS"
+    --hsv-h "$E3_HSV_H"
+    --hsv-s "$E3_HSV_S"
+    --hsv-v "$E3_HSV_V"
+    --skip-existing
+  )
+  E3_FAILED=()
+  E3_TOTAL=0
+
+  for E3_FAMILY in $E3_FAMILIES; do
+    case "$E3_FAMILY" in
+      yolov9)
+        E3_FAMILY_SIZES="$E3_YOLOV9_SIZES"
         ;;
-      conditional)
-        MATRIX_PATH="$COM_CONDITIONAL_PATH"
+      yolov10)
+        E3_FAMILY_SIZES="$E3_YOLOV10_SIZES"
+        ;;
+      yolov13)
+        E3_FAMILY_SIZES="$E3_YOLOV13_SIZES"
+        ;;
+      yolov8|yolov11|yolov12|yolov26)
+        E3_FAMILY_SIZES="$E3_SIZES"
         ;;
       *)
-        echo "Unsupported PRIOR_MATRIX_MODES value: $MATRIX_MODE" >&2
+        echo "Unsupported E3 family: $E3_FAMILY" >&2
         exit 1
         ;;
     esac
 
-    if [ ! -f "$MATRIX_PATH" ]; then
-      echo "Missing $MATRIX_MODE co-occurrence matrix: $MATRIX_PATH" >&2
-      exit 1
-    fi
+    for E3_SIZE in $E3_FAMILY_SIZES; do
+      E3_NAME="${E3_FAMILY}${E3_SIZE}"
+      E3_CONFIG="ultralytics/cfg/models/experiments/${E3_NAME}-mdetect.yaml"
+      E3_PRETRAIN="${E3_NAME}.pt"
+      case "$E3_FAMILY" in
+        yolov11)
+          E3_PRETRAIN="yolo11${E3_SIZE}.pt"
+          ;;
+        yolov12)
+          E3_PRETRAIN="yolo12${E3_SIZE}.pt"
+          ;;
+        yolov26)
+          E3_PRETRAIN="yolo26${E3_SIZE}.pt"
+          ;;
+      esac
+      if [ -n "$E3_PRETRAIN_DIR" ]; then
+        E3_PRETRAIN="${E3_PRETRAIN_DIR%/}/${E3_PRETRAIN}"
+      fi
 
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py prior-stage2 \
-      --label "$PRIOR_LABEL" \
-      --model "$PRIOR_MODEL" \
-      --data "$DATA" \
-      --stage1-checkpoint "$STAGE1_CKPT" \
-      --stage1-epochs "$PRIOR_STAGE1_EPOCHS" \
-      --stage2-epochs "$PRIOR_STAGE2_EPOCHS" \
-      --prior-types $PRIOR_TYPES \
-      --matrix-modes "$MATRIX_MODE" \
-      --w4 "$PRIOR_W4" \
-      --batch "$PRIOR_BATCH" \
-      --seed "$PRIOR_SEED" \
-      --com-path "$MATRIX_PATH" \
-      --project "$PRIOR_PROJECT" || exit $?
-  done
-fi
+      if [ ! -f "$E3_CONFIG" ]; then
+        echo "Missing E3 config: $E3_CONFIG" >&2
+        exit 1
+      fi
 
-# E2.12 GIA-transfer selection batch.
-# This batch is intentionally opt-in because it launches 26 long runs:
-# 13 selected structures under two initialization protocols.
-#   (1) Stage2-only, initialized from the best GIA-v2 Test checkpoint.
-#   (2) Full stage1=100 + stage2=100, initialized from yolov10x.pt.
-# The selected structures are fixed by the remote E2.2 summary ranking:
-# three Test-improved structures plus ten highest Val-F1 configurations.
-if [ "${RUN_GCA_GIA_TRANSFER_BATCH:-0}" = "1" ]; then
-  GIA_BEST_STAGE1_CKPT=${GIA_BEST_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
-  GIA_TRANSFER_STAGE2_PROJECT=${GIA_TRANSFER_STAGE2_PROJECT:-runs/experiments/E2_12_GCA_GIA_transfer_stage2}
-  GIA_TRANSFER_FULL_PROJECT=${GIA_TRANSFER_FULL_PROJECT:-runs/experiments/E2_12_GCA_GIA_transfer_full}
-  GIA_TRANSFER_W4=${GIA_TRANSFER_W4:-0.5}
-  GIA_TRANSFER_BATCH=${GIA_TRANSFER_BATCH:-16}
-  GIA_TRANSFER_SEED=${GIA_TRANSFER_SEED:-0}
-
-  for REQUIRED_FILE in "$GIA_BEST_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH" yolov10x.pt; do
-    if [ ! -f "$REQUIRED_FILE" ]; then
-      echo "Missing GIA-transfer input: $REQUIRED_FILE" >&2
-      exit 1
-    fi
+      E3_TOTAL=$((E3_TOTAL + 1))
+      echo "[E3 ${E3_TOTAL}] ${E3_NAME}: config=${E3_CONFIG}, pretrain=${E3_PRETRAIN}"
+      if ! "$PYTHON_BIN" scripts/train_mdet_experiments.py \
+        "${E3_BASE_ARGS[@]}" \
+        --variant "${E3_NAME}=${E3_CONFIG}" \
+        --pretrain-map "${E3_NAME}=${E3_PRETRAIN}" \
+        --project "$E3_PROJECT"; then
+        echo "[E3 failed] ${E3_NAME}; continuing with the remaining variants." >&2
+        E3_FAILED+=("$E3_NAME")
+      fi
+    done
   done
 
-  run_gia_transfer_stage2() {
-    local matrix_path="$1"
-    shift
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_12_GCA_GIA_transfer_stage2 \
-      --data "$DATA" \
-      --stage1-checkpoint "$GIA_BEST_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      "$@" \
-      --skip-existing \
-      --w4 "$GIA_TRANSFER_W4" \
-      --batch "$GIA_TRANSFER_BATCH" \
-      --seed "$GIA_TRANSFER_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$matrix_path" \
-      --project "$GIA_TRANSFER_STAGE2_PROJECT" || exit $?
-  }
-
-  run_gia_transfer_full() {
-    local matrix_path="$1"
-    shift
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-structure \
-      --label E2_12_GCA_GIA_transfer_full \
-      --data "$DATA" \
-      --pretrain yolov10x.pt \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      "$@" \
-      --skip-existing \
-      --w4 "$GIA_TRANSFER_W4" \
-      --batch "$GIA_TRANSFER_BATCH" \
-      --seed "$GIA_TRANSFER_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$matrix_path" \
-      --project "$GIA_TRANSFER_FULL_PROJECT" || exit $?
-  }
-
-  # Test-improved: GraphSAGE adaptive (cross), GCN margin residual (cross),
-  # and GCN margin residual (conditional).
-  run_gia_transfer_stage2 "$COM_PATH" \
-    --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-    --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --gnn-types graphsage
-
-  run_gia_transfer_stage2 "$COM_PATH" \
-    --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
-    --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
-    --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
-
-  run_gia_transfer_stage2 "$COM_CONDITIONAL_PATH" \
-    --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-    --variant context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --variant context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --variant conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
-    --gnn-types gat
-
-  run_gia_transfer_stage2 "$COM_CONDITIONAL_PATH" \
-    --variant gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
-    --variant gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
-    --variant gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
-
-  # Full stage1+stage2 equivalents. The gnn-type option materializes the
-  # operator into a generated YAML without changing checked-in configs.
-  run_gia_transfer_full "$COM_PATH" \
-    --variant cross_graphsage_adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-    --variant cross_graphsage_context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --variant cross_graphsage_context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --gnn-type graphsage
-
-  run_gia_transfer_full "$COM_PATH" \
-    --variant cross_gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
-    --variant cross_gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
-    --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
-
-  run_gia_transfer_full "$COM_CONDITIONAL_PATH" \
-    --variant conditional_gat_adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-    --variant conditional_gat_context_conditional=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --variant conditional_gat_context_cross=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_context_residual.yaml \
-    --variant conditional_gat_conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
-    --gnn-type gat
-
-  run_gia_transfer_full "$COM_CONDITIONAL_PATH" \
-    --variant conditional_gca_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml \
-    --variant conditional_gin_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIN_margin_residual.yaml \
-    --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml
-fi
-
-# E2.13: GIA-initialized repeat of the three selected GCA/GNN structures.
-# The matching no-GCA/GNN GIA Stage2 control is defined in E2.15 below.
-if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
-  GIA_TEST3_STAGE1_CKPT=${GIA_TEST3_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
-  GIA_TEST3_PROJECT=${GIA_TEST3_PROJECT:-runs/experiments/E2_13_GCA_GIA_test3_seed}
-  GIA_TEST3_W4=${GIA_TEST3_W4:-0.5}
-  GIA_TEST3_BATCH=${GIA_TEST3_BATCH:-16}
-  GIA_TEST3_SEEDS=${GIA_TEST3_SEEDS:-"0 1 2"}
-
-  for REQUIRED_FILE in "$GIA_TEST3_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
-    if [ ! -f "$REQUIRED_FILE" ]; then
-      echo "Missing E2.13 input: $REQUIRED_FILE" >&2
-      exit 1
-    fi
-  done
-
-  for TEST3_SEED in $GIA_TEST3_SEEDS; do
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_13_GCA_GIA_test3_seed \
-      --data "$DATA" \
-      --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-      --gnn-types graphsage \
-      --skip-existing \
-      --w4 "$GIA_TEST3_W4" \
-      --batch "$GIA_TEST3_BATCH" \
-      --seed "$TEST3_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_PATH" \
-      --project "$GIA_TEST3_PROJECT" || exit $?
-
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_13_GCA_GIA_test3_seed \
-      --data "$DATA" \
-      --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
-      --skip-existing \
-      --w4 "$GIA_TEST3_W4" \
-      --batch "$GIA_TEST3_BATCH" \
-      --seed "$TEST3_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_PATH" \
-      --project "$GIA_TEST3_PROJECT" || exit $?
-
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_13_GCA_GIA_test3_seed \
-      --data "$DATA" \
-      --stage1-checkpoint "$GIA_TEST3_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
-      --skip-existing \
-      --w4 "$GIA_TEST3_W4" \
-      --batch "$GIA_TEST3_BATCH" \
-      --seed "$TEST3_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_CONDITIONAL_PATH" \
-      --project "$GIA_TEST3_PROJECT" || exit $?
-  done
-fi
-
-# E2.14: reproduce the three Test-improved E2.2 GCA/GNN structures with two
-# additional Stage2 seeds, using the same plain E1 Stage1 checkpoint as E2.2.
-# This is the no-GIA repeat batch requested after correcting E2.13.  Set
-# RUN_GCA_GNN_REPEAT_SEEDS=1 to launch the six sequential Stage2-only runs.
-if [ "${RUN_GCA_GNN_REPEAT_SEEDS:-0}" = "1" ]; then
-  GCA_REPEAT_STAGE1_CKPT=${GCA_REPEAT_STAGE1_CKPT:-runs/experiments/E1_w4/E1_w4_base_w4_0p5_seed_0_stage1/weights/best.pt}
-  GCA_REPEAT_PROJECT=${GCA_REPEAT_PROJECT:-runs/experiments/E2_14_GCA_GNN_repeat_no_gia}
-  GCA_REPEAT_W4=${GCA_REPEAT_W4:-0.5}
-  GCA_REPEAT_BATCH=${GCA_REPEAT_BATCH:-16}
-  GCA_REPEAT_SEEDS=${GCA_REPEAT_SEEDS:-"1 2"}
-
-  for REQUIRED_FILE in "$GCA_REPEAT_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
-    if [ ! -f "$REQUIRED_FILE" ]; then
-      echo "Missing E2.14 input: $REQUIRED_FILE" >&2
-      exit 1
-    fi
-  done
-
-  for REPEAT_SEED in $GCA_REPEAT_SEEDS; do
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_14_GCA_GNN_repeat_no_gia \
-      --data "$DATA" \
-      --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
-      --gnn-types graphsage \
-      --skip-existing \
-      --w4 "$GCA_REPEAT_W4" \
-      --batch "$GCA_REPEAT_BATCH" \
-      --seed "$REPEAT_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_PATH" \
-      --project "$GCA_REPEAT_PROJECT" || exit $?
-
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_14_GCA_GNN_repeat_no_gia \
-      --data "$DATA" \
-      --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
-      --skip-existing \
-      --w4 "$GCA_REPEAT_W4" \
-      --batch "$GCA_REPEAT_BATCH" \
-      --seed "$REPEAT_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_PATH" \
-      --project "$GCA_REPEAT_PROJECT" || exit $?
-
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_14_GCA_GNN_repeat_no_gia \
-      --data "$DATA" \
-      --stage1-checkpoint "$GCA_REPEAT_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
-      --skip-existing \
-      --w4 "$GCA_REPEAT_W4" \
-      --batch "$GCA_REPEAT_BATCH" \
-      --seed "$REPEAT_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_CONDITIONAL_PATH" \
-      --project "$GCA_REPEAT_PROJECT" || exit $?
-  done
-fi
-
-# E2.15: matched control for E2.13.  Keep the best GIA-v2 Stage1 model and
-# train its ordinary attribute head in Stage2 without adding GCA or any GNN.
-# Use the same three seeds as E2.13 so the structural runs have a direct
-# no-GCA/GNN reference.  Set RUN_GIA_STAGE2_CONTROL=1 to launch the runs.
-if [ "${RUN_GIA_STAGE2_CONTROL:-0}" = "1" ]; then
-  GIA_CONTROL_STAGE1_CKPT=${GIA_CONTROL_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
-  GIA_CONTROL_PROJECT=${GIA_CONTROL_PROJECT:-runs/experiments/E2_15_GIA_stage2_control}
-  GIA_CONTROL_W4=${GIA_CONTROL_W4:-0.5}
-  GIA_CONTROL_BATCH=${GIA_CONTROL_BATCH:-16}
-  GIA_CONTROL_SEEDS=${GIA_CONTROL_SEEDS:-"0 1 2"}
-
-  if [ ! -f "$GIA_CONTROL_STAGE1_CKPT" ]; then
-    echo "Missing E2.15 input: $GIA_CONTROL_STAGE1_CKPT" >&2
+  echo "E3 submitted ${E3_TOTAL} variants."
+  if [ "${#E3_FAILED[@]}" -gt 0 ]; then
+    echo "E3 failed variants: ${E3_FAILED[*]}" >&2
     exit 1
   fi
-
-  for CONTROL_SEED in $GIA_CONTROL_SEEDS; do
-    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_15_GIA_stage2_control \
-      --data "$DATA" \
-      --stage1-checkpoint "$GIA_CONTROL_STAGE1_CKPT" \
-      --stage1-epochs 100 \
-      --stage2-epochs 100 \
-      --variant gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml \
-      --skip-existing \
-      --w4 "$GIA_CONTROL_W4" \
-      --batch "$GIA_CONTROL_BATCH" \
-      --seed "$CONTROL_SEED" \
-      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --project "$GIA_CONTROL_PROJECT" || exit $?
-  done
-fi
-
-# Feature graph direction is closed after the gain screen. The block below is
-# retained only for exact reproduction of archived runs and is opt-in.
-if [ "${ENABLE_FEATURE_GRAPH:-0}" = "1" ]; then
-  echo "Running archived feature graph reproduction because ENABLE_FEATURE_GRAPH=1."
-  # Set FEATURE_EPOCHS=1 and FEATURE_PROJECT=... for a separate smoke run.
-  for REQUIRED_FILE in "$STAGE1_CKPT" "$COM_PATH"; do
-    if [ ! -f "$REQUIRED_FILE" ]; then
-      echo "Missing input: $REQUIRED_FILE" >&2
-      exit 1
-    fi
-  done
-
-  FEATURE_EPOCHS=${FEATURE_EPOCHS:-100}
-  FEATURE_PROJECT=${FEATURE_PROJECT:-runs/experiments/E2_2_feature_gain}
-  FEATURE_GAIN_VALUES=${FEATURE_GAIN_VALUES:-"2 4 8"}
-  FEATURE_LOCAL_GAIN=${FEATURE_LOCAL_GAIN:-4}
-
-# Gain=1 is the completed feature_gca_cross reference.  Reproduce it with
-# FEATURE_GAIN_VALUES="1 2 4 8" when the reference is not available locally.
-for GAIN in $FEATURE_GAIN_VALUES; do
-  "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-    --label "feature_gca_cross_gain_${GAIN}" \
-    --data "$DATA" \
-    --stage1-checkpoint "$STAGE1_CKPT" \
-    --stage1-epochs 100 \
-    --stage2-epochs "$FEATURE_EPOCHS" \
-    --variant "gca_cross_gain_${GAIN}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_gca_cross.yaml" \
-    --feature-gain "$GAIN" \
-    --w4 0.5 \
-    --batch 16 \
-    --seed 0 \
-    --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-      --com-path "$COM_PATH" \
-      --project "$FEATURE_PROJECT" || exit $?
-done
-
-# A no-graph local adapter control separates a useful residual amplitude from
-# a gain that only compensates for an ineffective graph message.
-"$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-  --label "feature_local_cross_gain_${FEATURE_LOCAL_GAIN}" \
-  --data "$DATA" \
-  --stage1-checkpoint "$STAGE1_CKPT" \
-  --stage1-epochs 100 \
-  --stage2-epochs "$FEATURE_EPOCHS" \
-  --variant "local_cross_gain_${FEATURE_LOCAL_GAIN}=ultralytics/cfg/models/exp_ablation/yolov10x_feature_local_cross.yaml" \
-  --feature-gain "$FEATURE_LOCAL_GAIN" \
-  --w4 0.5 \
-  --batch 16 \
-  --seed 0 \
-  --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
-  --com-path "$COM_PATH" \
-  --project "$FEATURE_PROJECT" || exit $?
 fi
