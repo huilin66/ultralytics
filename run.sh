@@ -393,7 +393,7 @@ if [ "${RUN_GCA_GIA_TEST3_SEEDS:-0}" = "1" ]; then
   GIA_TEST3_PROJECT=${GIA_TEST3_PROJECT:-runs/experiments/E2_13_GCA_GIA_test3_seed}
   GIA_TEST3_W4=${GIA_TEST3_W4:-0.5}
   GIA_TEST3_BATCH=${GIA_TEST3_BATCH:-16}
-  GIA_TEST3_SEEDS=${GIA_TEST3_SEEDS:-"1 2"}
+  GIA_TEST3_SEEDS=${GIA_TEST3_SEEDS:-"0 1 2"}
 
   for REQUIRED_FILE in "$GIA_TEST3_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
@@ -520,14 +520,14 @@ fi
 
 # E2.15: matched control for E2.13.  Keep the best GIA-v2 Stage1 model and
 # train its ordinary attribute head in Stage2 without adding GCA or any GNN.
-# Use the same two seeds as E2.13 so the three structural runs have a direct
-# no-GCA/GNN reference.  Set RUN_GIA_STAGE2_CONTROL=1 to launch both runs.
+# Use the same three seeds as E2.13 so the structural runs have a direct
+# no-GCA/GNN reference.  Set RUN_GIA_STAGE2_CONTROL=1 to launch the runs.
 if [ "${RUN_GIA_STAGE2_CONTROL:-0}" = "1" ]; then
   GIA_CONTROL_STAGE1_CKPT=${GIA_CONTROL_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
   GIA_CONTROL_PROJECT=${GIA_CONTROL_PROJECT:-runs/experiments/E2_15_GIA_stage2_control}
   GIA_CONTROL_W4=${GIA_CONTROL_W4:-0.5}
   GIA_CONTROL_BATCH=${GIA_CONTROL_BATCH:-16}
-  GIA_CONTROL_SEEDS=${GIA_CONTROL_SEEDS:-"1 2"}
+  GIA_CONTROL_SEEDS=${GIA_CONTROL_SEEDS:-"0 1 2"}
 
   if [ ! -f "$GIA_CONTROL_STAGE1_CKPT" ]; then
     echo "Missing E2.15 input: $GIA_CONTROL_STAGE1_CKPT" >&2
