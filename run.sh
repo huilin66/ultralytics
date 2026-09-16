@@ -803,3 +803,61 @@ if [ "${RUN_GIA_257_GCA_BATCH:-0}" = "1" ]; then
       --project "$GIA_257_CONTROL_PROJECT" || exit $?
   done
 fi
+
+# E2.19: corrected GIA-v2.9 initialized 5x6 GCA/GNN matrix.
+# The five GNN operators are crossed with the five existing structural
+# variants plus the new multiclass-aware margin-residual variant. Cross and
+# conditional train-only matrices are run in separate projects, for 30 jobs
+# per matrix and 60 Stage2-only jobs in total. Every config below preserves
+# the full GIA-v2.9 backbone; only the attribute head is changed.
+if [ "${RUN_GIA_GCA_5X6_BATCH:-0}" = "1" ]; then
+  GIA_5X6_STAGE1_CKPT=${GIA_5X6_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  GIA_5X6_CROSS_PROJECT=${GIA_5X6_CROSS_PROJECT:-runs/experiments/E2_19_GIA_GCA5x6_cross}
+  GIA_5X6_CONDITIONAL_PROJECT=${GIA_5X6_CONDITIONAL_PROJECT:-runs/experiments/E2_19_GIA_GCA5x6_conditional}
+  GIA_5X6_CONTEXT_CONFIG=${GIA_5X6_CONTEXT_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_context_residual.yaml}
+  GIA_5X6_ADAPTIVE_CONFIG=${GIA_5X6_ADAPTIVE_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_adaptive_residual.yaml}
+  GIA_5X6_TWOHOP_CONFIG=${GIA_5X6_TWOHOP_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_twohop_residual.yaml}
+  GIA_5X6_CONV_CONFIG=${GIA_5X6_CONV_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_conv_adapter_residual.yaml}
+  GIA_5X6_MARGIN_CONFIG=${GIA_5X6_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_margin_residual.yaml}
+  GIA_5X6_W4=${GIA_5X6_W4:-0.5}
+  GIA_5X6_BATCH=${GIA_5X6_BATCH:-16}
+  GIA_5X6_SEED=${GIA_5X6_SEED:-0}
+  GIA_5X6_GNN_TYPES=${GIA_5X6_GNN_TYPES:-"gca gcn gat graphsage gin"}
+
+  for REQUIRED_FILE in "$GIA_5X6_STAGE1_CKPT" "$GIA_5X6_CONTEXT_CONFIG" "$GIA_5X6_ADAPTIVE_CONFIG" "$GIA_5X6_TWOHOP_CONFIG" "$GIA_5X6_CONV_CONFIG" "$GIA_5X6_MARGIN_CONFIG" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.19 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  run_gia_5x6_matrix() {
+    local matrix_name="$1"
+    local matrix_path="$2"
+    local project="$3"
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label "E2_19_GIA_GCA5x6_${matrix_name}" \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_5X6_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant context_cross="$GIA_5X6_CONTEXT_CONFIG" \
+      --variant context_conditional="$GIA_5X6_CONTEXT_CONFIG" \
+      --variant adaptive="$GIA_5X6_ADAPTIVE_CONFIG" \
+      --variant twohop="$GIA_5X6_TWOHOP_CONFIG" \
+      --variant conv_adapter="$GIA_5X6_CONV_CONFIG" \
+      --variant margin_residual="$GIA_5X6_MARGIN_CONFIG" \
+      --gnn-types $GIA_5X6_GNN_TYPES \
+      --skip-existing \
+      --w4 "$GIA_5X6_W4" \
+      --batch "$GIA_5X6_BATCH" \
+      --seed "$GIA_5X6_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$matrix_path" \
+      --project "$project" || exit $?
+  }
+
+  run_gia_5x6_matrix cross "$COM_PATH" "$GIA_5X6_CROSS_PROJECT"
+  run_gia_5x6_matrix conditional "$COM_CONDITIONAL_PATH" "$GIA_5X6_CONDITIONAL_PROJECT"
+fi

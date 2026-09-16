@@ -180,25 +180,43 @@ def _materialize_config(
         if gnn_type not in valid_gnn_types:
             raise ValueError(f"Unsupported --gnn-types value: {gnn_type!r}")
 
-        # The five GCA variants are defined once in YAML. Replace only the
-        # operator token, preserving the selected structural variant:
+        # The standard GCA variants are defined once in YAML. Replace only
+        # the operator token, preserving the selected structural variant:
         # com_gca_context_residual -> com_gcn_context_residual, etc.
+        # The margin-residual base YAML historically uses
+        # ``com_gat_margin_residual`` for the GCA implementation. It is
+        # materialized separately because the other margin-residual
+        # operators do not carry the ``com_`` prefix.
+        margin_pattern = re.compile(
+            r"(?P<quote>['\"]?)com_gat_margin_residual(?P=quote)"
+        )
+        def replace_margin(match: re.Match) -> str:
+            token = (
+                "com_gat_margin_residual"
+                if gnn_type == "gca"
+                else f"{gnn_type}_margin_residual"
+            )
+            return f"{match.group('quote')}{token}{match.group('quote')}"
+
+        updated, margin_count = margin_pattern.subn(replace_margin, updated)
+
         gnn_pattern = re.compile(
             r"(?P<quote>['\"]?)com_gca_"
             r"(?P<variant>context|adaptive|twohop|conv_adapter)_residual"
             r"(?P=quote)"
         )
-        updated, count = gnn_pattern.subn(
+        updated, standard_count = gnn_pattern.subn(
             lambda match: (
                 f"{match.group('quote')}com_{gnn_type}_"
                 f"{match.group('variant')}_residual{match.group('quote')}"
             ),
             updated,
         )
-        if count == 0:
+        if margin_count + standard_count == 0:
             raise ValueError(
                 f"{source} does not contain one of the materializable "
-                "com_gca_{context,adaptive,twohop,conv_adapter}_residual tokens."
+                "GCA residual tokens. Expected a standard com_gca_*_residual "
+                "token or com_gat_margin_residual."
             )
         changed = True
 
