@@ -718,33 +718,37 @@ if [ "${RUN_E3_VERSIONS:-0}" = "1" ]; then
   fi
 fi
 
-# E2.17: re-run the matched GIA+GCA comparison from the Test-mAP50-best GIA
-# checkpoint (gia_v2_5_7).  The old E2.13/E2.15 v2_9 runs remain archived for
-# reproducibility.  This new batch is opt-in and runs nine GCA Stage2 jobs
-# plus three matched GIA-only controls.
+# E2.18: corrected matched GIA+GCA comparison from the Test-mAP50-best GIA
+# checkpoint (gia_v2_5_7).  E2.17 is retained as an archived partial-transfer
+# sanity check; its GCA YAMLs did not contain the GIA-v2 backbone blocks.  The
+# E2.18 YAMLs preserve GIA-v2 at layers 5/7 and replace only the attribute head.
+# This batch is opt-in and runs nine corrected GCA Stage2 jobs plus three
+# matched GIA-only controls.
 if [ "${RUN_GIA_257_GCA_BATCH:-0}" = "1" ]; then
   GIA_257_STAGE1_CKPT=${GIA_257_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
-  GIA_257_GCA_PROJECT=${GIA_257_GCA_PROJECT:-runs/experiments/E2_17_GIA_v2_5_7_GCA}
-  GIA_257_CONTROL_PROJECT=${GIA_257_CONTROL_PROJECT:-runs/experiments/E2_17_GIA_v2_5_7_control}
+  GIA_257_GCA_PROJECT=${GIA_257_GCA_PROJECT:-runs/experiments/E2_18_GIA_v2_5_7_GCA_corrected}
+  GIA_257_CONTROL_PROJECT=${GIA_257_CONTROL_PROJECT:-runs/experiments/E2_18_GIA_v2_5_7_control}
+  GIA_257_ADAPTIVE_CONFIG=${GIA_257_ADAPTIVE_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_adaptive_residual.yaml}
+  GIA_257_GCN_CONFIG=${GIA_257_GCN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCN_margin_residual.yaml}
   GIA_257_W4=${GIA_257_W4:-0.5}
   GIA_257_BATCH=${GIA_257_BATCH:-16}
   GIA_257_SEEDS=${GIA_257_SEEDS:-"0 1 2"}
 
-  for REQUIRED_FILE in "$GIA_257_STAGE1_CKPT" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
+  for REQUIRED_FILE in "$GIA_257_STAGE1_CKPT" "$GIA_257_ADAPTIVE_CONFIG" "$GIA_257_GCN_CONFIG" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
-      echo "Missing E2.17 input: $REQUIRED_FILE" >&2
+      echo "Missing E2.18 input: $REQUIRED_FILE" >&2
       exit 1
     fi
   done
 
   for GIA_257_SEED in $GIA_257_SEEDS; do
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_17_GIA_v2_5_7_GCA \
+      --label E2_18_GIA_v2_5_7_GCA_corrected \
       --data "$DATA" \
       --stage1-checkpoint "$GIA_257_STAGE1_CKPT" \
       --stage1-epochs 100 \
       --stage2-epochs 100 \
-      --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
+      --variant adaptive="$GIA_257_ADAPTIVE_CONFIG" \
       --gnn-types graphsage \
       --skip-existing \
       --w4 "$GIA_257_W4" \
@@ -755,12 +759,12 @@ if [ "${RUN_GIA_257_GCA_BATCH:-0}" = "1" ]; then
       --project "$GIA_257_GCA_PROJECT" || exit $?
 
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_17_GIA_v2_5_7_GCA \
+      --label E2_18_GIA_v2_5_7_GCA_corrected \
       --data "$DATA" \
       --stage1-checkpoint "$GIA_257_STAGE1_CKPT" \
       --stage1-epochs 100 \
       --stage2-epochs 100 \
-      --variant cross_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+      --variant cross_gcn_margin_residual="$GIA_257_GCN_CONFIG" \
       --skip-existing \
       --w4 "$GIA_257_W4" \
       --batch "$GIA_257_BATCH" \
@@ -770,12 +774,12 @@ if [ "${RUN_GIA_257_GCA_BATCH:-0}" = "1" ]; then
       --project "$GIA_257_GCA_PROJECT" || exit $?
 
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_17_GIA_v2_5_7_GCA \
+      --label E2_18_GIA_v2_5_7_GCA_corrected \
       --data "$DATA" \
       --stage1-checkpoint "$GIA_257_STAGE1_CKPT" \
       --stage1-epochs 100 \
       --stage2-epochs 100 \
-      --variant conditional_gcn_margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GCN_margin_residual.yaml \
+      --variant conditional_gcn_margin_residual="$GIA_257_GCN_CONFIG" \
       --skip-existing \
       --w4 "$GIA_257_W4" \
       --batch "$GIA_257_BATCH" \
@@ -785,7 +789,7 @@ if [ "${RUN_GIA_257_GCA_BATCH:-0}" = "1" ]; then
       --project "$GIA_257_GCA_PROJECT" || exit $?
 
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
-      --label E2_17_GIA_v2_5_7_control \
+      --label E2_18_GIA_v2_5_7_control \
       --data "$DATA" \
       --stage1-checkpoint "$GIA_257_STAGE1_CKPT" \
       --stage1-epochs 100 \
