@@ -29,6 +29,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ho.add_argument("--weights", required=True, help="trained mdet/HO checkpoint")
     ho.add_argument("--data", required=True, help="mdet dataset YAML")
     ho.add_argument("--mode", choices=("native", "one2many", "both"), default="both")
+    ho.add_argument("--split", choices=("val", "test"), default="val", help="dataset split to evaluate")
     ho.add_argument("--device", default="0")
     ho.add_argument("--imgsz", type=int, default=640)
     ho.add_argument("--batch", type=int, default=16)
@@ -67,6 +68,7 @@ def _evaluate_one(args: argparse.Namespace, mode: str) -> None:
         _set_one2many(model)
     kwargs = {
         "data": args.data,
+        "split": args.split,
         "device": args.device,
         "imgsz": args.imgsz,
         "batch": args.batch,

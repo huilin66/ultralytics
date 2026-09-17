@@ -363,13 +363,13 @@ python scripts/train_mdet_experiments.py ho `
 python scripts/eval_mdet_experiments.py ho `
   --weights runs/experiments/E2_4_HO/E2_4_HO_ho_gca_w4_0p5_seed_0_stage2/weights/best.pt `
   --data path/to/billboard_mdet.yaml `
-  --mode both `
+  --mode both --split test `
   --project runs/experiments/E2_4_HO_eval
 ```
 
 `native` 保留 checkpoint 的默认 head 选择，`one2many` 显式调用
 `use_one2many_head()`。脚本会为两种模式重新加载权重，避免前一次验证切换
-head 后影响后一次结果。E2.5 直接复用选定的最佳 GIA+GCA+HO checkpoint，
+head 后影响后一次结果。`--split` 可选 `val` 或 `test`，默认是 `val`。E2.5 直接复用选定的最佳 GIA+GCA+HO checkpoint，
 不需要再人为增加一组训练。
 
 ## E3：YOLOv8–YOLOv13、YOLO26 与 MAYOLO 多规模
