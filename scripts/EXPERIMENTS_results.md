@@ -166,6 +166,81 @@ Test mAP50，不是 GIA-v2.5.7 三 seed 配对复现的均值。
 下降。因此，`gia_v2.5.7` 是当前 Test 检测性能最优的候选，但仍需保留 seed
 差异和复现稳定性说明。
 
+## E2_2. 基于 baseline Stage2 的纯 GCA/GNN
+
+本节只纳入固定 baseline Stage1 checkpoint 的 Stage2 纯 GCA/GNN 实验，不包含
+原始完整两阶段的 GCA 结果。Baseline Stage2 与下列所有结构的 Test 检测指标
+完全相同：
+
+```text
+Test mAP50    = 0.666443
+Test mAP50-95 = 0.453483
+```
+
+因此 E2_2 只比较 Stage2 Test F1。
+
+### E2_2.1 `E2_2_GCA_stage2`
+
+| 结构 | n | Stage2 Test F1_attr@0.5 |
+|---|---:|---:|
+| Baseline Stage2 | 1 | **0.645716** |
+| GAT learned | 1 | 0.589428 |
+| GCA com | 1 | 0.577278 |
+| GCA current | 1 | 0.583349 |
+| GCN | 1 | 0.589533 |
+| GIN | 1 | 0.586960 |
+| GraphSAGE | 1 | 0.622928 |
+
+### E2_2.2 `E2_2_GCA_GNN_margin_residual`
+
+每个结构包含两个 seed；两条记录的 Stage2 Test F1 完全一致。
+
+| 结构 | n | Stage2 Test F1_attr@0.5 |
+|---|---:|---:|
+| GAT margin residual | 2 | 0.601624 |
+| GCA margin residual | 2 | 0.618513 |
+| **GCN margin residual** | 2 | **0.645847** |
+| GIN margin residual | 2 | 0.617948 |
+| GraphSAGE margin residual | 2 | 0.620039 |
+
+### E2_2.3 `E2_2_GCA_GNN_margin_residual_conditional`
+
+| 结构 | n | Stage2 Test F1_attr@0.5 |
+|---|---:|---:|
+| GAT margin residual | 1 | 0.616151 |
+| GCA margin residual | 1 | 0.618513 |
+| **GCN margin residual** | 1 | **0.645847** |
+| GIN margin residual | 1 | 0.633257 |
+| GraphSAGE margin residual | 1 | 0.618513 |
+
+### E2_2.4 `E2_2_GCA5x5_conditional`
+
+以下每个单元格为 Stage2 Test F1_attr@0.5：
+
+| GNN \ 结构 | adaptive | context_conditional | context_cross | conv_adapter | twohop |
+|---|---:|---:|---:|---:|---:|
+| GCA | **0.645716** | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| GCN | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| GAT | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| GraphSAGE | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| GIN | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+
+### E2_2.5 `E2_2_GCA5x5_cross`
+
+以下每个单元格为 Stage2 Test F1_attr@0.5：
+
+| GNN \ 结构 | adaptive | context_conditional | context_cross | conv_adapter | twohop |
+|---|---:|---:|---:|---:|---:|
+| GCA | 0.645716 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| GCN | 0.645716 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| GAT | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+| **GraphSAGE** | **0.645847** | 0.620039 | 0.620039 | 0.620039 | 0.620039 |
+| GIN | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
+
+E2_2 中，所有结构的 Test mAP50 和 Test mAP50-95 均与 baseline Stage2 完全
+一致；Test F1 最高的是 cross 矩阵下的 GraphSAGE + adaptive（0.645847），
+其次是 conditional 矩阵下的 GCA + adaptive（0.645716）。
+
 ## 4. GCA/GNN only：E2.14（不使用 GIA 初始化）
 
 E2.14 从同一个普通 E1 Stage1 checkpoint 开始，仅训练 Stage2 属性/GNN 部分，
@@ -296,6 +371,11 @@ runs/experiments/E0_stage2_sweep/summary.csv
 runs/experiments/E2_1_GIA_v2_position/summary.csv
 runs/experiments/E2_1_GIA_v2_confirm/summary.csv
 runs/experiments/E2_1_GIA_v2_confirm_seedfix/summary.csv
+runs/experiments/E2_2_GCA_stage2/summary.csv
+runs/experiments/E2_2_GCA_GNN_margin_residual/summary.csv
+runs/experiments/E2_2_GCA_GNN_margin_residual_conditional/summary.csv
+runs/experiments/E2_2_GCA5x5_conditional/summary.csv
+runs/experiments/E2_2_GCA5x5_cross/summary.csv
 runs/experiments/E2_14_GCA_GNN_repeat_no_gia/summary.csv
 runs/experiments/E2_13_GCA_GIA_test3_seed/summary.csv
 runs/experiments/E2_15_GIA_stage2_control/summary.csv
