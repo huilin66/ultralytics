@@ -861,3 +861,57 @@ if [ "${RUN_GIA_GCA_5X6_BATCH:-0}" = "1" ]; then
   run_gia_5x6_matrix cross "$COM_PATH" "$GIA_5X6_CROSS_PROJECT"
   run_gia_5x6_matrix conditional "$COM_CONDITIONAL_PATH" "$GIA_5X6_CONDITIONAL_PROJECT"
 fi
+
+# E2.20: stability repeats for the five tied Test-F1 leaders from E2.19.
+# Keep the GIA-v2.9 seed-0 Stage-1 checkpoint fixed and repeat only Stage 2
+# with seeds 1 and 2.  Each helper call selects one exact GNN x structure
+# combination, so this block launches 5 x 2 = 10 jobs rather than a Cartesian
+# product containing unselected combinations.
+if [ "${RUN_GIA_GCA_TOP5_STABILITY:-0}" = "1" ]; then
+  GIA_TOP5_STAGE1_CKPT=${GIA_TOP5_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_9_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  GIA_TOP5_PROJECT=${GIA_TOP5_PROJECT:-runs/experiments/E2_20_GIA_GCA_top5_stability}
+  GIA_TOP5_CONTEXT_CONFIG=${GIA_TOP5_CONTEXT_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_context_residual.yaml}
+  GIA_TOP5_TWOHOP_CONFIG=${GIA_TOP5_TWOHOP_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_twohop_residual.yaml}
+  GIA_TOP5_ADAPTIVE_CONFIG=${GIA_TOP5_ADAPTIVE_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9_GCA_adaptive_residual.yaml}
+  GIA_TOP5_W4=${GIA_TOP5_W4:-0.5}
+  GIA_TOP5_BATCH=${GIA_TOP5_BATCH:-16}
+  GIA_TOP5_SEEDS=${GIA_TOP5_SEEDS:-"1 2"}
+
+  for REQUIRED_FILE in "$GIA_TOP5_STAGE1_CKPT" "$GIA_TOP5_CONTEXT_CONFIG" "$GIA_TOP5_TWOHOP_CONFIG" "$GIA_TOP5_ADAPTIVE_CONFIG" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.20 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  run_gia_top5_one() {
+    local seed="$1"
+    local variant_name="$2"
+    local config="$3"
+    local gnn_type="$4"
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label E2_20_GIA_GCA_top5_stability \
+      --data "$DATA" \
+      --stage1-checkpoint "$GIA_TOP5_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant "$variant_name=$config" \
+      --gnn-types "$gnn_type" \
+      --skip-existing \
+      --w4 "$GIA_TOP5_W4" \
+      --batch "$GIA_TOP5_BATCH" \
+      --seed "$seed" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_CONDITIONAL_PATH" \
+      --project "$GIA_TOP5_PROJECT" || exit $?
+  }
+
+  for GIA_TOP5_SEED in $GIA_TOP5_SEEDS; do
+    run_gia_top5_one "$GIA_TOP5_SEED" context_conditional "$GIA_TOP5_CONTEXT_CONFIG" gca
+    run_gia_top5_one "$GIA_TOP5_SEED" context_cross "$GIA_TOP5_CONTEXT_CONFIG" gca
+    run_gia_top5_one "$GIA_TOP5_SEED" twohop "$GIA_TOP5_TWOHOP_CONFIG" gca
+    run_gia_top5_one "$GIA_TOP5_SEED" adaptive "$GIA_TOP5_ADAPTIVE_CONFIG" gin
+    run_gia_top5_one "$GIA_TOP5_SEED" twohop "$GIA_TOP5_TWOHOP_CONFIG" graphsage
+  done
+fi
