@@ -150,12 +150,12 @@ python scripts/train_mdet_experiments.py gca-structure `
   --project runs/experiments/E2_2_GCA
 
 python scripts/train_mdet_experiments.py gia-gca `
-  --label E2_3_GIA_GCA `
+  --label E2_3_old_GIA_GCA `
   --data path/to/billboard_mdet.yaml --pretrain yolov10x.pt `
   --variant baseline=ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml `
   --variant gia_gca=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_GCA.yaml `
   --w4 0.5 --com-path path/to/co_occurrence_matrix_train.csv `
-  --project runs/experiments/E2_3_GIA_GCA
+  --project runs/experiments/E2_3_old_GIA_GCA
 ```
 
 `exp_ablation` 中的 GCA YAML 含有 Linux 下的 `/nfsv4/...` 矩阵路径。

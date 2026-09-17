@@ -804,6 +804,76 @@ if [ "${RUN_GIA_257_GCA_BATCH:-0}" = "1" ]; then
   done
 fi
 
+# E2.3: corrected GIA-v2.5.7 seed-0 initialized 5x6 GCA/GNN matrix.
+# The previous historical E2.3 entry is archived as E2_3_old in the
+# experiment-summary helpers.  This batch is Stage2-only and preserves the
+# complete GIA-v2.5.7 backbone from the fixed seed-0 Stage1 checkpoint.
+# Conditional is intentionally run before Cross.  The five GNN operators are
+# crossed with the five existing structural variants plus margin_residual,
+# giving 30 jobs per matrix and 60 jobs in total.
+if [ "${RUN_E2_3_GIA_GCA_BATCH:-0}" = "1" ]; then
+  E2_3_STAGE1_CKPT=${E2_3_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  E2_3_CONDITIONAL_PROJECT=${E2_3_CONDITIONAL_PROJECT:-runs/experiments/E2_3_GIA_v2_5_7_GCA5x6_conditional}
+  E2_3_CROSS_PROJECT=${E2_3_CROSS_PROJECT:-runs/experiments/E2_3_GIA_v2_5_7_GCA5x6_cross}
+  E2_3_CONTEXT_CONFIG=${E2_3_CONTEXT_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_context_residual.yaml}
+  E2_3_ADAPTIVE_CONFIG=${E2_3_ADAPTIVE_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_adaptive_residual.yaml}
+  E2_3_TWOHOP_CONFIG=${E2_3_TWOHOP_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_twohop_residual.yaml}
+  E2_3_CONV_CONFIG=${E2_3_CONV_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_conv_adapter_residual.yaml}
+  E2_3_MARGIN_CONFIG=${E2_3_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}
+  E2_3_W4=${E2_3_W4:-0.5}
+  E2_3_BATCH=${E2_3_BATCH:-16}
+  E2_3_SEED=${E2_3_SEED:-0}
+  E2_3_GNN_TYPES=${E2_3_GNN_TYPES:-"gca gcn gat graphsage gin"}
+
+  # If a real old E2.3 output exists, preserve it under the requested archive
+  # name before creating the new E2.3 projects; never overwrite an archive.
+  E2_3_OLD_SOURCE=${E2_3_OLD_SOURCE:-runs/experiments/E2_3_GIA_GCA}
+  E2_3_OLD_TARGET=${E2_3_OLD_TARGET:-runs/experiments/E2_3_old_GIA_GCA}
+  if [ -d "$E2_3_OLD_SOURCE" ] && [ ! -e "$E2_3_OLD_TARGET" ]; then
+    mv "$E2_3_OLD_SOURCE" "$E2_3_OLD_TARGET"
+  elif [ -d "$E2_3_OLD_SOURCE" ] && [ -e "$E2_3_OLD_TARGET" ]; then
+    echo "Both old E2.3 paths exist; refusing to overwrite: $E2_3_OLD_TARGET" >&2
+    exit 1
+  fi
+
+  for REQUIRED_FILE in "$E2_3_STAGE1_CKPT" "$E2_3_CONTEXT_CONFIG" "$E2_3_ADAPTIVE_CONFIG" "$E2_3_TWOHOP_CONFIG" "$E2_3_CONV_CONFIG" "$E2_3_MARGIN_CONFIG" "$COM_CONDITIONAL_PATH" "$COM_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.3 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  run_e2_3_matrix() {
+    local matrix_name="$1"
+    local matrix_path="$2"
+    local project="$3"
+
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+      --label "E2_3_GIA_v2_5_7_GCA5x6_${matrix_name}" \
+      --data "$DATA" \
+      --stage1-checkpoint "$E2_3_STAGE1_CKPT" \
+      --stage1-epochs 100 \
+      --stage2-epochs 100 \
+      --variant context_cross="$E2_3_CONTEXT_CONFIG" \
+      --variant context_conditional="$E2_3_CONTEXT_CONFIG" \
+      --variant adaptive="$E2_3_ADAPTIVE_CONFIG" \
+      --variant twohop="$E2_3_TWOHOP_CONFIG" \
+      --variant conv_adapter="$E2_3_CONV_CONFIG" \
+      --variant margin_residual="$E2_3_MARGIN_CONFIG" \
+      --gnn-types $E2_3_GNN_TYPES \
+      --skip-existing \
+      --w4 "$E2_3_W4" \
+      --batch "$E2_3_BATCH" \
+      --seed "$E2_3_SEED" \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$matrix_path" \
+      --project "$project" || exit $?
+  }
+
+  run_e2_3_matrix conditional "$COM_CONDITIONAL_PATH" "$E2_3_CONDITIONAL_PROJECT"
+  run_e2_3_matrix cross "$COM_PATH" "$E2_3_CROSS_PROJECT"
+fi
+
 # E2.19: corrected GIA-v2.9 initialized 5x6 GCA/GNN matrix.
 # The five GNN operators are crossed with the five existing structural
 # variants plus the new multiclass-aware margin-residual variant. Cross and
