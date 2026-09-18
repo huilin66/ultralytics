@@ -189,6 +189,24 @@ def _attribute_map(nodes, batch, channels, height, width):
     return nodes.reshape(batch, height, width, channels).permute(0, 3, 1, 2).contiguous()
 
 
+def _chunked_multihead_attention(attention, query, key, value, chunk_size=2048):
+    """Run attribute-token attention in bounded spatial batches.
+
+    P3 contains many spatial locations, so flattening ``B*H*W`` into one MHA
+    batch can exceed CUDA kernel launch limits even though the attribute
+    sequence itself is short.  Chunking only the flattened spatial batch keeps
+    the attention semantics unchanged and bounds temporary CUDA tensors.
+    """
+    if query.shape[0] <= chunk_size:
+        return attention(query, key, value, need_weights=False)[0]
+
+    outputs = []
+    for start in range(0, query.shape[0], chunk_size):
+        end = start + chunk_size
+        outputs.append(attention(query[start:end], key[start:end], value[start:end], need_weights=False)[0])
+    return torch.cat(outputs, dim=0)
+
+
 class GraphGCN(nn.Module):
     """Fixed-graph GCN over attribute logits with a zero-initialized residual gate."""
 
@@ -531,7 +549,7 @@ class GCAMultiHeadMarginResidual(GCAMarginResidual):
         tokens = margin.permute(0, 2, 3, 1).reshape(-1, self.na, 1)
         hidden = self.attention_input(tokens)
         normalized = self.attention_norm(hidden)
-        attended, _ = self.multihead_attention(normalized, normalized, normalized, need_weights=False)
+        attended = _chunked_multihead_attention(self.multihead_attention, normalized, normalized, normalized)
         attended = attended + hidden
         delta = self.attention_output(attended).squeeze(-1)
         delta = delta.reshape(batch, height, width, self.na).permute(0, 3, 1, 2).contiguous()
@@ -637,7 +655,7 @@ class GCAFeatureLogitMultiHeadResidual(nn.Module):
 
         query = visual_tokens.reshape(batch * height * width, self.na, self.attention_chs)
         key_value = logit_tokens.reshape(batch * height * width, self.na, self.attention_chs)
-        attended, _ = self.cross_attention(query, key_value, key_value, need_weights=False)
+        attended = _chunked_multihead_attention(self.cross_attention, query, key_value, key_value)
         fused = query + attended
         delta = self.attention_output(fused)
         delta = delta.reshape(batch, height, width, self.na, self.nal).permute(0, 3, 4, 1, 2).contiguous()
