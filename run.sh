@@ -1039,6 +1039,7 @@ if [ "${RUN_E2_24_GCA_MHA_BATCH:-0}" = "1" ]; then
   E2_24_STAGE1_CKPT=${E2_24_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
   E2_24_PROJECT=${E2_24_PROJECT:-runs/experiments/E2_24_GIA_v2_5_7_GCA_MHA_margin_residual_conditional}
   E2_24_MHA_MARGIN_CONFIG=${E2_24_MHA_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_mha_margin_residual.yaml}
+  E2_24_DEVICE=${E2_24_DEVICE:-0}
   E2_24_W4=${E2_24_W4:-0.5}
   E2_24_BATCH=${E2_24_BATCH:-16}
   E2_24_GNN_TYPES=${E2_24_GNN_TYPES:-"gca gcn gat graphsage gin"}
@@ -1056,6 +1057,7 @@ if [ "${RUN_E2_24_GCA_MHA_BATCH:-0}" = "1" ]; then
     --stage1-checkpoint "$E2_24_STAGE1_CKPT" \
     --stage1-epochs 100 \
     --stage2-epochs 100 \
+    --device "$E2_24_DEVICE" \
     --variant mha_margin_residual="$E2_24_MHA_MARGIN_CONFIG" \
     --gnn-types $E2_24_GNN_TYPES \
     --skip-existing \
@@ -1076,6 +1078,7 @@ if [ "${RUN_E2_25_GCA_FEATURE_LOGIT_MHA_BATCH:-0}" = "1" ]; then
   E2_25_STAGE1_CKPT=${E2_25_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
   E2_25_PROJECT=${E2_25_PROJECT:-runs/experiments/E2_25_GIA_v2_5_7_GCA_feature_logit_MHA_margin_residual_conditional}
   E2_25_CONFIG=${E2_25_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_feature_logit_mha_margin_residual.yaml}
+  E2_25_DEVICE=${E2_25_DEVICE:-1}
   E2_25_W4=${E2_25_W4:-0.5}
   E2_25_BATCH=${E2_25_BATCH:-16}
   E2_25_GNN_TYPES=${E2_25_GNN_TYPES:-"gca gcn gat graphsage gin"}
@@ -1093,6 +1096,7 @@ if [ "${RUN_E2_25_GCA_FEATURE_LOGIT_MHA_BATCH:-0}" = "1" ]; then
     --stage1-checkpoint "$E2_25_STAGE1_CKPT" \
     --stage1-epochs 100 \
     --stage2-epochs 100 \
+    --device "$E2_25_DEVICE" \
     --variant feature_logit_mha_margin_residual="$E2_25_CONFIG" \
     --gnn-types $E2_25_GNN_TYPES \
     --skip-existing \

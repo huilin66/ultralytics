@@ -189,22 +189,94 @@ def _attribute_map(nodes, batch, channels, height, width):
     return nodes.reshape(batch, height, width, channels).permute(0, 3, 1, 2).contiguous()
 
 
+def _scaled_dot_product_multihead_attention(attention, query, key, value):
+    """Run a compatible ``MultiheadAttention`` through PyTorch fused SDPA.
+
+    ``nn.MultiheadAttention`` can dispatch to SDPA, but the dispatch is hidden
+    inside the module and may change with PyTorch versions.  This small path
+    keeps the module's parameters while calling ``scaled_dot_product_attention``
+    explicitly.  On CUDA, PyTorch selects Flash-SDP when the dtype/device/head
+    shape are supported and falls back to another SDP kernel otherwise.
+
+    ``None`` means that the module configuration is not compatible with this
+    fast path; the caller then uses the reference MHA implementation.
+    """
+    if (
+        not query.is_cuda
+        or not key.is_cuda
+        or not value.is_cuda
+        or not hasattr(F, "scaled_dot_product_attention")
+        or not getattr(attention, "batch_first", False)
+        or not getattr(attention, "_qkv_same_embed_dim", False)
+        or getattr(attention, "bias_k", None) is not None
+        or getattr(attention, "bias_v", None) is not None
+        or getattr(attention, "add_zero_attn", False)
+        or query.dtype not in (torch.float16, torch.bfloat16)
+        or key.dtype != query.dtype
+        or value.dtype != query.dtype
+        or query.shape[-1] != attention.embed_dim
+        or key.shape[-1] != attention.embed_dim
+        or value.shape[-1] != attention.embed_dim
+    ):
+        return None
+
+    in_proj_weight = attention.in_proj_weight
+    if in_proj_weight is None:
+        return None
+    q_weight, k_weight, v_weight = in_proj_weight.chunk(3, dim=0)
+    if attention.in_proj_bias is None:
+        q_bias = k_bias = v_bias = None
+    else:
+        q_bias, k_bias, v_bias = attention.in_proj_bias.chunk(3, dim=0)
+
+    q = F.linear(query, q_weight, q_bias)
+    k = F.linear(key, k_weight, k_bias)
+    v = F.linear(value, v_weight, v_bias)
+    batch, query_length, _ = q.shape
+    key_length = k.shape[1]
+    num_heads = attention.num_heads
+    head_dim = attention.head_dim
+    q = q.reshape(batch, query_length, num_heads, head_dim).transpose(1, 2)
+    k = k.reshape(batch, key_length, num_heads, head_dim).transpose(1, 2)
+    v = v.reshape(batch, key_length, num_heads, head_dim).transpose(1, 2)
+
+    dropout_p = float(attention.dropout) if attention.training else 0.0
+    attended = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p, is_causal=False)
+    attended = attended.transpose(1, 2).contiguous().reshape(batch, query_length, attention.embed_dim)
+    return F.linear(attended, attention.out_proj.weight, attention.out_proj.bias)
+
+
 def _chunked_multihead_attention(attention, query, key, value, chunk_size=2048):
     """Run attribute-token attention in bounded spatial batches.
 
     P3 contains many spatial locations, so flattening ``B*H*W`` into one MHA
     batch can exceed CUDA kernel launch limits even though the attribute
     sequence itself is short.  Chunking only the flattened spatial batch keeps
-    the attention semantics unchanged and bounds temporary CUDA tensors.
+    the attention semantics unchanged and bounds temporary CUDA tensors.  For
+    CUDA half/bfloat16 inputs, each chunk first tries PyTorch's fused SDPA path
+    (Flash-SDP when supported) and transparently falls back to reference MHA.
     """
-    if query.shape[0] <= chunk_size:
-        return attention(query, key, value, need_weights=False)[0]
-
     outputs = []
+    use_fast_path = True
     for start in range(0, query.shape[0], chunk_size):
         end = start + chunk_size
-        outputs.append(attention(query[start:end], key[start:end], value[start:end], need_weights=False)[0])
-    return torch.cat(outputs, dim=0)
+        query_chunk = query[start:end]
+        key_chunk = key[start:end]
+        value_chunk = value[start:end]
+        attended = None
+        if use_fast_path:
+            try:
+                attended = _scaled_dot_product_multihead_attention(
+                    attention, query_chunk, key_chunk, value_chunk
+                )
+            except (RuntimeError, NotImplementedError):
+                # Unsupported head shape/dtype/backend: use the numerically
+                # equivalent reference implementation for all later chunks.
+                use_fast_path = False
+        if attended is None:
+            attended = attention(query_chunk, key_chunk, value_chunk, need_weights=False)[0]
+        outputs.append(attended)
+    return outputs[0] if len(outputs) == 1 else torch.cat(outputs, dim=0)
 
 
 class GraphGCN(nn.Module):
