@@ -9,9 +9,10 @@ mode so that the two measurements are independent.
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -61,7 +62,7 @@ def _set_one2many(model) -> None:
     switch()
 
 
-def _evaluate_one(args: argparse.Namespace, mode: str) -> None:
+def _evaluate_one(args: argparse.Namespace, mode: str) -> Dict[str, object]:
     """Evaluate a checkpoint in one selected head mode."""
     model = _load_model(args.weights)
     if mode == "one2many":
@@ -80,7 +81,19 @@ def _evaluate_one(args: argparse.Namespace, mode: str) -> None:
     if args.conf is not None:
         kwargs["conf"] = args.conf
     print(f"[eval] mode={mode}, weights={args.weights}")
-    model.val(**kwargs)
+    metrics = model.val(**kwargs)
+    values = metrics.results_dict
+    return {
+        "weight": args.weights,
+        "mode": mode,
+        "mAP50_test": values["metrics/mAP50(B)"],
+        "mAP50-95_test": values["metrics/mAP50-95(B)"],
+        "OA_test": values["metrics/OA(A)"],
+        "F1_macro_test": values["metrics/f1_macro(A)"],
+        "F1_macro_global_test": values["metrics/f1_macro_global(A)"],
+        "P_macro_test": values["metrics/P_macro(A)"],
+        "R_macro_test": values["metrics/R_macro(A)"],
+    }
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -89,8 +102,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.experiment != "ho":
         raise ValueError(f"Unsupported evaluation: {args.experiment}")
     modes = ("native", "one2many") if args.mode == "both" else (args.mode,)
-    for mode in modes:
-        _evaluate_one(args, mode)
+    rows = [_evaluate_one(args, mode) for mode in modes]
+    summary_path = Path(args.project) / f"{args.name}_test_summary.csv"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with summary_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"[summary] {summary_path}")
 
 
 if __name__ == "__main__":
