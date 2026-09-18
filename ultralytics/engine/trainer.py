@@ -240,6 +240,15 @@ class BaseTrainer:
         self.set_model_attributes()
 
         # Freeze layers
+        train_only = getattr(self.args, "train_only", None)
+        if train_only is None:
+            train_only = []
+        elif isinstance(train_only, str):
+            train_only = [train_only]
+        else:
+            train_only = [str(x) for x in train_only]
+        self.train_only_patterns = train_only
+
         freeze_list = (
             self.args.freeze
             if isinstance(self.args.freeze, list)
@@ -264,20 +273,31 @@ class BaseTrainer:
         always_freeze_names = [".dfl"]  # always freeze these layers
         freeze_layer_names = [f"model.{x}." for x in freeze_list] + always_freeze_names + freeze_head_list + freeze_att_head_list
         self.freeze_layer_names = freeze_layer_names
-        for k, v in self.model.named_parameters():
-            # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
-            if any(x in k for x in freeze_layer_names):
-                LOGGER.info(f"Freezing layer '{k}'")
-                v.requires_grad = False
-            elif not v.requires_grad and v.dtype.is_floating_point:  # only floating point Tensor can require gradients
-                LOGGER.info(
-                    f"WARNING ⚠️ setting 'requires_grad=True' for frozen layer '{k}'. "
-                    "See ultralytics.engine.trainer for customization of frozen layers."
+        if train_only:
+            # This mode is deliberately exclusive: it supports staged
+            # optimization such as training only the GCA/GNN head after a
+            # baseline warm-up.  The DFL branch remains frozen in all modes.
+            for k, v in self.model.named_parameters():
+                is_trainable = any(pattern in k for pattern in train_only) and not any(
+                    name in k for name in always_freeze_names
                 )
-                v.requires_grad = True
-            else:
-                if len(freeze_layer_names) > 10:
-                    LOGGER.info(f"Training layer '{k}'")
+                v.requires_grad = is_trainable
+                LOGGER.info(f"{'Training' if is_trainable else 'Freezing'} layer '{k}'")
+        else:
+            for k, v in self.model.named_parameters():
+                # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
+                if any(x in k for x in freeze_layer_names):
+                    LOGGER.info(f"Freezing layer '{k}'")
+                    v.requires_grad = False
+                elif not v.requires_grad and v.dtype.is_floating_point:  # only floating point Tensor can require gradients
+                    LOGGER.info(
+                        f"WARNING ⚠️ setting 'requires_grad=True' for frozen layer '{k}'. "
+                        "See ultralytics.engine.trainer for customization of frozen layers."
+                    )
+                    v.requires_grad = True
+                else:
+                    if len(freeze_layer_names) > 10:
+                        LOGGER.info(f"Training layer '{k}'")
 
         # Check AMP
         self.amp = torch.tensor(self.args.amp).to(self.device)  # True or False
@@ -540,10 +560,16 @@ class BaseTrainer:
         """Set model in training mode."""
         self.model.train()
 
-        # Freeze BN
+        # Freeze BN. In train-only mode, all BN layers outside the selected
+        # parameter fragments are frozen as well; otherwise their running
+        # statistics could change the supposedly fixed baseline path.
         if self.args.freeze_bn:
             for n, m in self.model.named_modules():
-                if any(filter(lambda f: f in n, self.freeze_layer_names)) and isinstance(m, nn.BatchNorm2d):
+                frozen_by_train_only = self.train_only_patterns and not any(
+                    pattern in n for pattern in self.train_only_patterns
+                )
+                frozen_by_name = any(filter(lambda f: f in n, self.freeze_layer_names))
+                if (frozen_by_train_only or frozen_by_name) and isinstance(m, nn.BatchNorm2d):
                     m.eval()
 
     def save_model(self):

@@ -1,5 +1,6 @@
 import csv
 import os
+from pathlib import Path
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import torch
@@ -106,6 +107,105 @@ def myolo_train_full(
         **kwargs,
     )
     return model_path_s1
+
+
+GCA_TRAINABLE_PATTERNS = (".gat_head.", ".one2one_gat_head.")
+
+
+def _gca_residual_modules(model):
+    """Return the residual GCA/GNN modules in an mdet model."""
+    root = model.model if hasattr(model, "model") else model
+    return [
+        module
+        for module in root.modules()
+        if module.__class__.__name__.startswith("GCA") and hasattr(module, "gamma")
+    ]
+
+
+def _zero_gca_residuals(model):
+    """Make every GCA/GNN residual an exact identity before baseline warm-up."""
+    with torch.no_grad():
+        for module in _gca_residual_modules(model):
+            module.gamma.zero_()
+
+
+def myolo_train_gca_warmup(
+    cfg_path,
+    pretrain_path,
+    network=YOLO,
+    auto_optim=False,
+    k1_epochs=50,
+    k2_epochs=50,
+    stage1_name="gca_warmup_stage1",
+    stage2_name="gca_warmup_stage2",
+    project="runs/experiments",
+    **kwargs,
+):
+    """Train a baseline warm-up followed by GCA/GNN-only optimization.
+
+    Phase 1 freezes both one-to-many and one-to-one GCA heads and trains the
+    original model path.  Phase 2 freezes every parameter except those heads,
+    including BatchNorm statistics in the frozen path, and trains only the
+    GCA/GNN residual modules.  The phase-1 best checkpoint is automatically
+    used as the phase-2 initialization.
+    """
+    if k1_epochs < 1 or k2_epochs < 1:
+        raise ValueError("k1_epochs and k2_epochs must be positive")
+
+    input_seed = kwargs.get("seed")
+    model_seed = None if input_seed is None else int(input_seed)
+    model = _build_model(network, cfg_path, model_seed=model_seed)
+    model.load(pretrain_path)
+    _zero_gca_residuals(model)
+
+    train_params = {
+        "data": DATA,
+        "device": DEVICE,
+        "imgsz": IMGSZ,
+        "val": True,
+        "batch": BATCH_SIZE,
+        "patience": k1_epochs,
+        "project": project,
+    }
+    if not auto_optim:
+        train_params.update({"optimizer": "AdamW", "lr0": 0.0001})
+    train_params.update(kwargs)
+
+    # Phase 1: exact identity GCA, train the baseline/GIA path.
+    phase1_params = dict(train_params)
+    phase1_params.update(
+        {
+            "epochs": k1_epochs,
+            "name": stage1_name,
+            "patience": k1_epochs,
+            "freeze_head": list(GCA_TRAINABLE_PATTERNS),
+            "freeze_bn": True,
+            "train_only": None,
+        }
+    )
+    model.train(**phase1_params)
+    stage1_best = Path(model.trainer.best)
+    if not stage1_best.is_file():
+        stage1_best = Path(model.trainer.last)
+    if not stage1_best.is_file():
+        raise FileNotFoundError(f"Phase-1 checkpoint was not written: {stage1_best}")
+
+    # Phase 2: preserve the phase-1 baseline and train only both GCA copies.
+    phase2_params = dict(train_params)
+    phase2_params.update(
+        {
+            "epochs": k2_epochs,
+            "name": stage2_name,
+            "patience": k2_epochs,
+            "freeze": None,
+            "freeze_head": [],
+            "freeze_att_head": None,
+            "freeze_bn": True,
+            "train_only": list(GCA_TRAINABLE_PATTERNS),
+        }
+    )
+    model.train(**phase2_params)
+    return model.trainer.best
 
 
 def myolo_train(cfg_path, pretrain_path, network=YOLO, auto_optim=False, retrain=False, **kwargs):

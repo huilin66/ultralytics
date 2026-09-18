@@ -6,6 +6,7 @@ The launcher supports the normal two-stage protocol and two schedule studies:
 * ``stage2-sweep`` independently trains stage 2 from one fixed stage-1
   checkpoint for several epoch budgets.
 * ``gca-stage2`` compares GCA/GNN variants from one fixed stage-1 checkpoint;
+* ``gca-warmup`` runs a baseline warm-up followed by GCA/GNN-only training;
 * ``prior-stage2`` compares fixed co-occurrence-prior attention heads from one
   fixed stage-1 checkpoint;
 * ``hsv-ablation`` independently trains stage 1 for three HSV augmentation
@@ -827,6 +828,119 @@ def _run_gca_stage2(args: argparse.Namespace) -> None:
             )
 
 
+def _train_gca_warmup(
+    args: argparse.Namespace,
+    *,
+    label: str,
+    variant_name: str,
+    config: str,
+    k1_epochs: int,
+    k2_epochs: int,
+    gnn_type: Optional[str],
+) -> Optional[str]:
+    """Run baseline warm-up plus GCA/GNN-only fine-tuning for one variant."""
+    if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
+        raise ValueError(f"Segmentation config is outside this launcher: {config}")
+    _validate_epoch_values([k1_epochs], "--k1-epochs")
+    _validate_epoch_values([k2_epochs], "--k2-epochs")
+    if not args.dry_run and not Path(args.stage1_checkpoint).expanduser().is_file():
+        raise FileNotFoundError(f"Initial GIA/Baseline checkpoint not found: {args.stage1_checkpoint}")
+
+    hsv_h, hsv_s, hsv_v = _get_hsv_values(args)
+    resolved_config = _materialize_config(
+        config,
+        args.com_path,
+        args.project,
+        gnn_type=gnn_type,
+        feature_gain=args.feature_gain,
+    )
+    run_base = (
+        f"{_slug(label)}_{_slug(variant_name)}_k1_{k1_epochs}_k2_{k2_epochs}"
+        f"_w4_{_slug(args.w4)}_seed_{args.seed}"
+    )
+    stage1_name = f"{run_base}_baseline"
+    stage2_name = f"{run_base}_gca"
+    record: Dict[str, object] = {
+        "protocol": "baseline_warmup_then_gca_only",
+        "label": label,
+        "variant": variant_name,
+        "gnn_type": gnn_type,
+        "config": resolved_config,
+        "pretrain": args.stage1_checkpoint,
+        "network": "yolo",
+        "w4": float(args.w4),
+        "feature_gain": None if args.feature_gain is None else float(args.feature_gain),
+        "ultralytics_argument": {"mdet": float(args.w4)},
+        "seed": args.seed,
+        "k1_epochs": k1_epochs,
+        "k2_epochs": k2_epochs,
+        "data": args.data,
+        "project": args.project,
+        "stage1_name": stage1_name,
+        "stage2_name": stage2_name,
+        "stage1_baseline_checkpoint": str(Path(args.project) / stage1_name / "weights" / "best.pt"),
+        "hsv": {"h": hsv_h, "s": hsv_s, "v": hsv_v},
+        "status": "dry-run" if args.dry_run else "started",
+    }
+    stage2_checkpoint = Path(args.project) / stage2_name / "weights" / "best.pt"
+    if args.skip_existing and _has_completed_run(args.project, stage2_name, k2_epochs):
+        record.update({"status": "skipped_existing", "best": str(stage2_checkpoint)})
+        _append_manifest(args.project, record)
+        print(f"[skip-existing] {stage2_name}: best={stage2_checkpoint}")
+        return str(stage2_checkpoint)
+    _append_manifest(args.project, record)
+
+    print(json.dumps(record, ensure_ascii=False, indent=2))
+    if args.dry_run:
+        return None
+
+    from mayolo_r1 import myolo_train_gca_warmup
+    from ultralytics import YOLO
+
+    train_kwargs = _training_kwargs(args, args.w4, args.seed)
+    try:
+        best = myolo_train_gca_warmup(
+            resolved_config,
+            pretrain_path=args.stage1_checkpoint,
+            network=YOLO,
+            auto_optim=args.auto_optim,
+            k1_epochs=k1_epochs,
+            k2_epochs=k2_epochs,
+            stage1_name=stage1_name,
+            stage2_name=stage2_name,
+            project=args.project,
+            **train_kwargs,
+        )
+    except Exception as error:
+        failed = dict(record)
+        failed.update({"status": "failed", "error": repr(error)})
+        _append_manifest(args.project, failed)
+        raise
+    finished = dict(record)
+    finished.update({"status": "finished", "best": str(best) if best else None})
+    _append_manifest(args.project, finished)
+    print(f"[finished] {run_base}: best={best}")
+    return str(best) if best else None
+
+
+def _run_gca_warmup(args: argparse.Namespace) -> None:
+    """Run the requested k1/k2 warm-up matrix for GCA/GNN variants."""
+    variants = _parse_key_value(args.variant, "--variant")
+    gnn_types = args.gnn_types or [None]
+    for gnn_type in gnn_types:
+        for name, config in variants.items():
+            combo_name = f"{gnn_type}_{name}" if gnn_type else name
+            _train_gca_warmup(
+                args,
+                label=args.label,
+                variant_name=combo_name,
+                config=config,
+                k1_epochs=args.k1_epochs,
+                k2_epochs=args.k2_epochs,
+                gnn_type=gnn_type,
+            )
+
+
 def _run_prior_stage2(args: argparse.Namespace) -> None:
     """Run head-only co-occurrence prior structures from one fixed checkpoint."""
     _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
@@ -1045,6 +1159,35 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    gca_warmup = subparsers.add_parser(
+        "gca-warmup",
+        help="GCA warm-up: train the baseline for k1 epochs, then GCA/GNN only for k2 epochs",
+    )
+    _add_common_train_arguments(gca_warmup)
+    gca_warmup.add_argument("--label", default="E2_23_GCA_warmup")
+    gca_warmup.add_argument(
+        "--stage1-checkpoint",
+        required=True,
+        help="fixed GIA-only/Baseline checkpoint used to start the baseline warm-up",
+    )
+    gca_warmup.add_argument("--k1-epochs", type=int, required=True, help="baseline warm-up epoch budget")
+    gca_warmup.add_argument("--k2-epochs", type=int, required=True, help="GCA/GNN-only epoch budget")
+    gca_warmup.add_argument(
+        "--variant",
+        action="append",
+        required=True,
+        metavar="NAME=CONFIG_YAML",
+        help="repeat for each structural GCA variant",
+    )
+    gca_warmup.add_argument(
+        "--gnn-types",
+        nargs="+",
+        choices=("gca", "gcn", "gat", "graphsage", "gin"),
+        default=None,
+        metavar="GNN",
+        help="materialize the selected GNN operators in the margin-residual YAML",
+    )
+
     prior_stage2 = subparsers.add_parser(
         "prior-stage2",
         help="E2.6-E2.9: head-only fixed co-occurrence-prior structure comparison",
@@ -1172,6 +1315,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         _run_stage2_sweep(args)
     elif args.experiment == "gca-stage2":
         _run_gca_stage2(args)
+    elif args.experiment == "gca-warmup":
+        _run_gca_warmup(args)
     elif args.experiment == "prior-stage2":
         _run_prior_stage2(args)
     elif args.experiment == "stability":

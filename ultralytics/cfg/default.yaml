@@ -38,6 +38,9 @@ profile: False # (bool) profile ONNX and TensorRT speeds during training for log
 freeze: None # (int | list, optional) freeze first n layers, or freeze list of layer indices during training
 freeze_head: None
 freeze_bn: False
+# Optional list of parameter-name fragments to train exclusively. When set,
+# every parameter that does not match one of the fragments is frozen.
+train_only: None
 multi_scale: False # (bool) Whether to use multiscale during training
 contrastive_loss: False
 contrastive_loss_weight: 0.1

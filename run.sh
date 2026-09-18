@@ -985,3 +985,44 @@ if [ "${RUN_GIA_GCA_TOP5_STABILITY:-0}" = "1" ]; then
     run_gia_top5_one "$GIA_TOP5_SEED" twohop "$GIA_TOP5_TWOHOP_CONFIG" graphsage
   done
 fi
+
+# E2.23: conditional margin-residual GCA warm-up ablation.
+# Each run first trains the GIA/Baseline path with an identity GCA for k1
+# epochs, then freezes that path and trains only the GCA/GNN residual heads for
+# k2 epochs.  The five margin-residual operators are evaluated for k1/k2 =
+# 50/50 and 66/34, giving 10 final checkpoints.  This block is opt-in.
+if [ "${RUN_E2_23_GCA_WARMUP_BATCH:-0}" = "1" ]; then
+  E2_23_STAGE1_CKPT=${E2_23_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  E2_23_PROJECT=${E2_23_PROJECT:-runs/experiments/E2_23_GIA_v2_5_7_GCA_warmup_conditional}
+  E2_23_MARGIN_CONFIG=${E2_23_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}
+  E2_23_W4=${E2_23_W4:-0.5}
+  E2_23_BATCH=${E2_23_BATCH:-16}
+  E2_23_GNN_TYPES=${E2_23_GNN_TYPES:-"gca gcn gat graphsage gin"}
+
+  for REQUIRED_FILE in "$E2_23_STAGE1_CKPT" "$E2_23_MARGIN_CONFIG" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.23 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  for E2_23_SCHEDULE in 50:50 66:34; do
+    E2_23_K1=${E2_23_SCHEDULE%%:*}
+    E2_23_K2=${E2_23_SCHEDULE##*:}
+    "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-warmup \
+      --label E2_23_GIA_v2_5_7_GCA_warmup_conditional \
+      --data "$DATA" \
+      --stage1-checkpoint "$E2_23_STAGE1_CKPT" \
+      --k1-epochs "$E2_23_K1" \
+      --k2-epochs "$E2_23_K2" \
+      --variant margin_residual="$E2_23_MARGIN_CONFIG" \
+      --gnn-types $E2_23_GNN_TYPES \
+      --skip-existing \
+      --w4 "$E2_23_W4" \
+      --batch "$E2_23_BATCH" \
+      --seed 0 \
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+      --com-path "$COM_CONDITIONAL_PATH" \
+      --project "$E2_23_PROJECT" || exit $?
+  done
+fi
