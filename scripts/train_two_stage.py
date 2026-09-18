@@ -10,9 +10,10 @@ Example:
 
     python scripts/train_two_stage.py `
         --detector-checkpoint runs/experiments/E3_yolov10x_stage2/weights/best.pt `
-        --model ultralytics/cfg/models/11/yolo11n-cls.yaml `
+        --model ultralytics/cfg/models/v10/yolov10x-cls.yaml `
         --data path/to/detection_crops_multilabel.yaml `
-        --project runs/experiments --name E6_two_stage_yolov10x
+        --project runs/experiments/E6_two_stage_yolov10x `
+        --name detector_yolov10x_classifier_yolov10x_cls
 """
 
 from __future__ import annotations

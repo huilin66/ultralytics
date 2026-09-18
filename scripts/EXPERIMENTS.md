@@ -443,42 +443,29 @@ python scripts/train_mdet_experiments.py versions \
 属性头冻结逻辑：
 
 ```powershell
-python scripts/train_mdet_experiments.py rtdetr `
-  --label E4_rtdetr `
-  --data path/to/billboard_mdet.yaml `
-  --variant rtdetr_l=ultralytics/cfg/models/rt-detr/rtdetr-l-md.yaml `
-  --pretrain-map rtdetr_l=path/to/rtdetr-l.pt `
-  --w4 0.5 --project runs/experiments/E4_rtdetr
+CUDA_VISIBLE_DEVICES=1 bash scripts/run_e4_e5_e6.sh
 ```
 
-如果新增 `rtdetr-x-md.yaml` 等属性头 YAML，直接继续添加 `--variant` 和对应
-的 `--pretrain-map`。
+脚本默认运行 RT-DETR-L/X 两个变体，每个变体 stage1=100、stage2=100，使用
+`rtdetr-l.pt` 和 `rtdetr-x.pt`。X 直接使用 vanilla `rtdetr-x.yaml`，训练器会根据
+mdet 数据中的 `na/nal` 注入属性头。
 
 ## E5：真正的多标签目标检测 YOLOv10
 
 这不是 `mdetect`。使用现有的 `scripts/train_multilabel.py`，一个物理框对应
 一个 n-hot 标签向量：
 
-```powershell
-python scripts/train_multilabel.py `
-  --model path/to/yolov10x.pt `
-  --data path/to/data_multilabel.yaml `
-  --epochs 100 --imgsz 640 --batch 16 `
-  --project runs/experiments/E5_multilabel --name yolov10x
-```
+E5 已包含在 `scripts/run_e4_e5_e6.sh` 中，使用 YOLOv10x 预训练权重训练 100
+epoch。数据默认使用 `/localnvme/data/billboard/mayolo_v3_multilabel/data.yaml`。
 
 ## E6：目标检测 + 多标签分类双阶段
 
 先从 E1/E3/E7 得到检测器 checkpoint，再对检测器裁剪结果训练分类器：
 
-```powershell
-python scripts/train_two_stage.py `
-  --detector-checkpoint runs/experiments/E3_versions/.../weights/best.pt `
-  --model ultralytics/cfg/models/11/yolo11n-cls.yaml `
-  --data path/to/detection_crops_multilabel.yaml `
-  --epochs 100 --imgsz 224 --batch 16 `
-  --project runs/experiments/E6_two_stage --name yolov10x_yolo11n
-```
+E6 已包含在 `scripts/run_e4_e5_e6.sh` 中。检测器复用 E3 YOLOv10x 的
+100+100 checkpoint，分类器使用 YOLOv10x backbone + `Classify` head，在 crop
+数据上训练 100 epoch。由于没有官方 `yolov10x-cls.pt`，该分类器从 YAML 结构
+初始化，不伪装加载不存在的分类预训练权重。
 
 分类数据 YAML 的 `train/val/test` 应指向裁剪图目录，`labels` 指向 sidecar 标签
 目录；每个同名 `.txt` 文件只包含该 crop 的类别 ID，例如 `0,3`。正式结果应
