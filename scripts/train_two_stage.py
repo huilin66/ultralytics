@@ -11,6 +11,7 @@ Example:
     python scripts/train_two_stage.py `
         --detector-checkpoint runs/experiments/E3_yolov10x_stage2/weights/best.pt `
         --model ultralytics/cfg/models/v10/yolov10x-cls.yaml `
+        --pretrain yolov10x.pt `
         --data path/to/detection_crops_multilabel.yaml `
         --project runs/experiments/E6_two_stage_yolov10x `
         --name detector_yolov10x_classifier_yolov10x_cls
@@ -42,6 +43,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="checkpoint produced by the first-stage detector experiment; recorded for provenance",
     )
     parser.add_argument("--model", required=True, help="YOLO classification checkpoint or model YAML")
+    parser.add_argument(
+        "--pretrain",
+        default=None,
+        help="optional detector/classification checkpoint to partially transfer into the classifier YAML",
+    )
     parser.add_argument("--data", required=True, help="image-level multi-label crop dataset YAML")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--imgsz", type=int, default=224)
@@ -66,6 +72,7 @@ def _record_manifest(args: argparse.Namespace) -> None:
         "experiment": "E6_two_stage_detector_plus_multilabel_classifier",
         "detector_checkpoint": str(Path(args.detector_checkpoint).expanduser()),
         "classifier_model": args.model,
+        "classifier_pretrain": args.pretrain,
         "classifier_data": args.data,
         "epochs": args.epochs,
         "imgsz": args.imgsz,
@@ -114,7 +121,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         "exist_ok": args.exist_ok,
         "task": "classify",
     }
-    YOLO(args.model, task="classify").train(trainer=MultiLabelClassificationTrainer, **kwargs)
+    model = YOLO(args.model, task="classify")
+    if args.pretrain:
+        model.load(args.pretrain)
+    model.train(trainer=MultiLabelClassificationTrainer, **kwargs)
 
 
 if __name__ == "__main__":

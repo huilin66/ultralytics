@@ -101,12 +101,19 @@ if [ "$RUN_E6" = "1" ]; then
     fi
   done
 
-  # No official yolov10x-cls.pt is available.  This YAML is the YOLOv10x
-  # backbone with a Classify head, so the classifier is initialized from its
-  # architecture rather than silently pretending to load a classifier weight.
+  # There is no official yolov10x-cls.pt.  Transfer the compatible backbone
+  # parameters from the official YOLOv10x detector checkpoint and initialize
+  # only the new Classify head.
+  E6_PRETRAIN=${E6_PRETRAIN:-yolov10x.pt}
+  if [ ! -f "$E6_PRETRAIN" ]; then
+    echo "Missing E6 classifier pretrain: $E6_PRETRAIN" >&2
+    exit 1
+  fi
+
   "$PYTHON_BIN" scripts/train_two_stage.py \
     --detector-checkpoint "$E6_DETECTOR_CHECKPOINT" \
     --model "$E6_MODEL" \
+    --pretrain "$E6_PRETRAIN" \
     --data "$E6_DATA" \
     --epochs 100 \
     --imgsz 224 \
@@ -115,6 +122,5 @@ if [ "$RUN_E6" = "1" ]; then
     --device "$DEVICE" \
     --project "$E6_PROJECT" \
     --name detector_yolov10x_classifier_yolov10x_cls \
-    --seed "$SEED" \
-    --no-pretrained
+    --seed "$SEED"
 fi

@@ -464,8 +464,8 @@ epoch。数据默认使用 `/localnvme/data/billboard/mayolo_v3_multilabel/data.
 
 E6 已包含在 `scripts/run_e4_e5_e6.sh` 中。检测器复用 E3 YOLOv10x 的
 100+100 checkpoint，分类器使用 YOLOv10x backbone + `Classify` head，在 crop
-数据上训练 100 epoch。由于没有官方 `yolov10x-cls.pt`，该分类器从 YAML 结构
-初始化，不伪装加载不存在的分类预训练权重。
+数据上训练 100 epoch；分类器通过 `--pretrain yolov10x.pt` 迁移兼容的检测器
+backbone 参数，新 `Classify` head 保持随机初始化。
 
 分类数据 YAML 的 `train/val/test` 应指向裁剪图目录，`labels` 指向 sidecar 标签
 目录；每个同名 `.txt` 文件只包含该 crop 的类别 ID，例如 `0,3`。正式结果应
