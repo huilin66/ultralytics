@@ -483,8 +483,9 @@ class SPPF(nn.Module):
         if hasattr(self, 'pos_module') and self.pos_module==3:
             memory = self.layer_module(z)
             z = memory + z if self.res_module else memory
-        if self.gia is not None:
-            z = self.gia(z)
+        gia = getattr(self, "gia", None)
+        if gia is not None:
+            z = gia(z)
         return z
 
 
@@ -567,7 +568,8 @@ class C2f(nn.Module):
         y = list(self.cv1(x).chunk(2, 1))
         y.extend(m(y[-1]) for m in self.m)
         y = self.cv2(torch.cat(y, 1))
-        return self.gia(y) if self.gia is not None else y
+        gia = getattr(self, "gia", None)
+        return gia(y) if gia is not None else y
 
     def forward_split(self, x):
         """Forward pass using split() instead of chunk()."""
@@ -575,7 +577,8 @@ class C2f(nn.Module):
         y = [y[0], y[1]]
         y.extend(m(y[-1]) for m in self.m)
         y = self.cv2(torch.cat(y, 1))
-        return self.gia(y) if self.gia is not None else y
+        gia = getattr(self, "gia", None)
+        return gia(y) if gia is not None else y
 
 
 class C3(nn.Module):
@@ -2013,7 +2016,8 @@ class C2fCIB(C2f):
     def forward(self, x):
         """Apply C2fCIB and, optionally, a post-C2f GIA block."""
         x = super().forward(x)
-        return self.gia(x) if self.gia is not None else x
+        gia = getattr(self, "gia", None)
+        return gia(x) if gia is not None else x
 
 
 class Attention(nn.Module):
@@ -2547,7 +2551,8 @@ class SCDown(nn.Module):
             (torch.Tensor): Downsampled output tensor.
         """
         x = self.cv2(self.cv1(x))
-        return self.gia(x) if self.gia is not None else x
+        gia = getattr(self, "gia", None)
+        return gia(x) if gia is not None else x
 
 
 class TorchVision(nn.Module):
