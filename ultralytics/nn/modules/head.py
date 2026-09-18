@@ -439,6 +439,7 @@ class GCAMarginResidual(nn.Module):
 
         if self.nal == 2:
             margin = logits[:, :, 1] - logits[:, :, 0]
+            margin = self._pre_graph_margin(margin)
             message = self._graph_message(margin)
             updated_margin = margin + self.gamma * message
             outputs = torch.stack(
@@ -449,11 +450,202 @@ class GCAMarginResidual(nn.Module):
             # the same graph independently to every level.
             centered = logits - center
             level_values = centered.permute(0, 2, 1, 3, 4).reshape(batch * self.nal, self.na, height, width)
+            level_values = self._pre_graph_margin(level_values)
             messages = self._graph_message(level_values)
             messages = messages.reshape(batch, self.nal, self.na, height, width).permute(0, 2, 1, 3, 4)
             outputs = logits + self.gamma.unsqueeze(2) * messages
 
         return outputs.reshape(batch, expected_channels, height, width)
+
+    def _pre_graph_margin(self, margin):
+        """Optionally transform per-attribute margins before graph propagation."""
+        return margin
+
+
+class GCAMultiHeadMarginResidual(GCAMarginResidual):
+    """Multi-head self-attention followed by multiclass-aware graph propagation.
+
+    The attention sequence is the set of attribute nodes at each spatial
+    location.  A scalar margin is projected to an attention embedding, mixed
+    across attributes with ``nn.MultiheadAttention``, and projected back to a
+    scalar residual margin before the selected graph operator runs.  The
+    zero-initialized output projection keeps the new branch identity-like at
+    initialization while still allowing it to learn during direct Stage2
+    training.
+    """
+
+    def __init__(
+        self,
+        na,
+        nal,
+        com_path=None,
+        hidden_chs=None,
+        gate_init=0.1,
+        gnn_type="gca",
+        attention_chs=32,
+        attention_heads=4,
+        attention_dropout=0.0,
+    ):
+        super().__init__(
+            na,
+            nal,
+            com_path=com_path,
+            hidden_chs=hidden_chs,
+            gate_init=gate_init,
+            gnn_type=gnn_type,
+        )
+        attention_chs = int(attention_chs)
+        attention_heads = int(attention_heads)
+        if attention_heads < 1:
+            raise ValueError(f"attention_heads must be positive, got {attention_heads}")
+        if attention_chs < 1 or attention_chs % attention_heads != 0:
+            raise ValueError(
+                "attention_chs must be positive and divisible by attention_heads "
+                f"(got attention_chs={attention_chs}, attention_heads={attention_heads})"
+            )
+
+        self.attention_chs = attention_chs
+        self.attention_heads = attention_heads
+        self.attention_input = nn.Linear(1, attention_chs)
+        self.attention_norm = nn.LayerNorm(attention_chs)
+        self.multihead_attention = nn.MultiheadAttention(
+            embed_dim=attention_chs,
+            num_heads=attention_heads,
+            dropout=float(attention_dropout),
+            batch_first=True,
+        )
+        self.attention_output = nn.Linear(attention_chs, 1)
+        self.attention_gate = nn.Parameter(torch.full((1, self.na, 1, 1), float(gate_init)))
+        nn.init.zeros_(self.attention_output.weight)
+        nn.init.zeros_(self.attention_output.bias)
+
+    def _pre_graph_margin(self, margin):
+        """Mix attribute margins at each pixel before graph propagation."""
+        batch, channels, height, width = margin.shape
+        if channels != self.na:
+            raise RuntimeError(f"Expected {self.na} attribute channels, got {channels}")
+
+        # Each pixel is one sequence and each attribute is one token.  This
+        # avoids attention over the large spatial dimension while allowing
+        # every attribute to exchange context with the other attributes.
+        tokens = margin.permute(0, 2, 3, 1).reshape(-1, self.na, 1)
+        hidden = self.attention_input(tokens)
+        normalized = self.attention_norm(hidden)
+        attended, _ = self.multihead_attention(normalized, normalized, normalized, need_weights=False)
+        attended = attended + hidden
+        delta = self.attention_output(attended).squeeze(-1)
+        delta = delta.reshape(batch, height, width, self.na).permute(0, 3, 1, 2).contiguous()
+        gate = self.attention_gate.to(device=margin.device, dtype=margin.dtype)
+        return margin + gate * delta
+
+
+class GCAFeatureLogitMultiHeadResidual(nn.Module):
+    """Feature-logit cross-attention followed by margin-residual graph refinement.
+
+    The shared attribute head exposes a visual feature map immediately before
+    its final attribute-logit convolution.  This module turns that map into
+    one visual token per attribute and uses it as the query in cross-attention
+    over the corresponding attribute-logit tokens.  The resulting residual
+    logits are then passed to the selected multiclass-aware graph operator.
+    """
+
+    expects_features = True
+    supported_gnn_types = GCAMarginResidual.supported_gnn_types
+
+    def __init__(
+        self,
+        channels,
+        na,
+        nal,
+        com_path=None,
+        hidden_chs=None,
+        gate_init=0.1,
+        gnn_type="gca",
+        attention_chs=32,
+        attention_heads=4,
+        attention_dropout=0.0,
+    ):
+        super().__init__()
+        self.channels = int(channels)
+        self.na = int(na)
+        self.nal = int(nal)
+        if self.channels < 1 or self.na < 1 or self.nal < 2:
+            raise ValueError("GCAFeatureLogitMultiHeadResidual requires positive channels/na and nal >= 2")
+        if gnn_type not in self.supported_gnn_types:
+            raise ValueError(f"Unsupported feature-logit graph type: {gnn_type}")
+
+        attention_chs = int(attention_chs)
+        attention_heads = int(attention_heads)
+        if attention_heads < 1:
+            raise ValueError(f"attention_heads must be positive, got {attention_heads}")
+        if attention_chs < 1 or attention_chs % attention_heads != 0:
+            raise ValueError(
+                "attention_chs must be positive and divisible by attention_heads "
+                f"(got attention_chs={attention_chs}, attention_heads={attention_heads})"
+            )
+
+        self.attention_chs = attention_chs
+        self.attention_heads = attention_heads
+        self.feature_project = nn.Conv2d(self.channels, self.na * attention_chs, kernel_size=1)
+        self.feature_norm = nn.LayerNorm(attention_chs)
+        self.logit_input = nn.Linear(self.nal, attention_chs)
+        self.logit_norm = nn.LayerNorm(attention_chs)
+        self.cross_attention = nn.MultiheadAttention(
+            embed_dim=attention_chs,
+            num_heads=attention_heads,
+            dropout=float(attention_dropout),
+            batch_first=True,
+        )
+        self.attention_output = nn.Linear(attention_chs, self.nal)
+        self.attention_gate = nn.Parameter(torch.full((1, self.na, 1, 1), float(gate_init)))
+        nn.init.zeros_(self.attention_output.weight)
+        nn.init.zeros_(self.attention_output.bias)
+
+        # Reuse exactly the same graph implementation as the logits-only
+        # MHA experiment so the only new factor is the feature-logit fusion.
+        self.graph = GCAMarginResidual(
+            self.na,
+            self.nal,
+            com_path=com_path,
+            hidden_chs=hidden_chs,
+            gate_init=gate_init,
+            gnn_type=gnn_type,
+        )
+
+    def forward(self, features, logits, output_layer=None):
+        """Fuse feature/logit attribute tokens and apply the selected graph."""
+        del output_layer
+        batch, channels, height, width = features.shape
+        expected_channels = self.na * self.nal
+        if channels != self.channels:
+            raise RuntimeError(f"Expected {self.channels} feature channels, got {channels}")
+        if logits.shape != (batch, expected_channels, height, width):
+            raise RuntimeError(
+                f"Expected logits shape {(batch, expected_channels, height, width)}, got {tuple(logits.shape)}"
+            )
+
+        # One sequence per pixel; the sequence length is the number of
+        # attributes, not the number of spatial positions.
+        visual_tokens = self.feature_project(features)
+        visual_tokens = visual_tokens.reshape(batch, self.na, self.attention_chs, height * width)
+        visual_tokens = visual_tokens.permute(0, 3, 1, 2).contiguous()
+        visual_tokens = self.feature_norm(visual_tokens)
+
+        logit_tokens = logits.reshape(batch, self.na, self.nal, height * width)
+        logit_tokens = logit_tokens.permute(0, 3, 1, 2).contiguous()
+        logit_tokens = self.logit_norm(self.logit_input(logit_tokens))
+
+        query = visual_tokens.reshape(batch * height * width, self.na, self.attention_chs)
+        key_value = logit_tokens.reshape(batch * height * width, self.na, self.attention_chs)
+        attended, _ = self.cross_attention(query, key_value, key_value, need_weights=False)
+        fused = query + attended
+        delta = self.attention_output(fused)
+        delta = delta.reshape(batch, height, width, self.na, self.nal).permute(0, 3, 4, 1, 2).contiguous()
+
+        visual_logits = logits.reshape(batch, self.na, self.nal, height, width)
+        gate = self.attention_gate.to(device=logits.device, dtype=logits.dtype).unsqueeze(2)
+        fused_logits = visual_logits + gate * delta
+        return self.graph(fused_logits.reshape(batch, expected_channels, height, width))
 
 
 class GCAContextResidual(nn.Module):
@@ -2342,18 +2534,64 @@ class MDetect(nn.Module):
             "gat_margin_residual",
             "graphsage_margin_residual",
             "gin_margin_residual",
+            "com_gat_mha_margin_residual",
+            "gcn_mha_margin_residual",
+            "gat_mha_margin_residual",
+            "graphsage_mha_margin_residual",
+            "gin_mha_margin_residual",
         }:
             # These variants consume all na*nal logits at once so they can
             # propagate the two-class risk margin for every attribute.
-            gnn_type = {
+            margin_variants = {
                 "com_gat_margin_residual": "gca",
                 "gcn_margin_residual": "gcn",
                 "gat_margin_residual": "gat",
                 "graphsage_margin_residual": "graphsage",
                 "gin_margin_residual": "gin",
+            }
+            mha_margin_variants = {
+                "com_gat_mha_margin_residual": "gca",
+                "gcn_mha_margin_residual": "gcn",
+                "gat_mha_margin_residual": "gat",
+                "graphsage_mha_margin_residual": "graphsage",
+                "gin_mha_margin_residual": "gin",
+            }
+            if self.gat in margin_variants:
+                gnn_type = margin_variants[self.gat]
+                margin_class = GCAMarginResidual
+            else:
+                gnn_type = mha_margin_variants[self.gat]
+                margin_class = GCAMultiHeadMarginResidual
+            self.gat_head = nn.ModuleList(
+                margin_class(self.na, self.nal, com_path=self.com_path, gate_init=0.1, gnn_type=gnn_type)
+                for x in ch
+            )
+        elif self.gat in {
+            "com_gat_feature_logit_mha_margin_residual",
+            "gcn_feature_logit_mha_margin_residual",
+            "gat_feature_logit_mha_margin_residual",
+            "graphsage_feature_logit_mha_margin_residual",
+            "gin_feature_logit_mha_margin_residual",
+        }:
+            # These variants receive both the visual attribute feature and the
+            # raw attribute logits.  The feature-logit cross-attention is
+            # applied before the selected margin-residual graph operator.
+            gnn_type = {
+                "com_gat_feature_logit_mha_margin_residual": "gca",
+                "gcn_feature_logit_mha_margin_residual": "gcn",
+                "gat_feature_logit_mha_margin_residual": "gat",
+                "graphsage_feature_logit_mha_margin_residual": "graphsage",
+                "gin_feature_logit_mha_margin_residual": "gin",
             }[self.gat]
             self.gat_head = nn.ModuleList(
-                GCAMarginResidual(self.na, self.nal, com_path=self.com_path, gate_init=0.1, gnn_type=gnn_type)
+                GCAFeatureLogitMultiHeadResidual(
+                    c4,
+                    self.na,
+                    self.nal,
+                    com_path=self.com_path,
+                    gate_init=0.1,
+                    gnn_type=gnn_type,
+                )
                 for x in ch
             )
         elif isinstance(self.gat, str) and self.gat.startswith("com_prior_"):
@@ -2488,14 +2726,19 @@ class MDetect(nn.Module):
             for x in range(self.nl)
         )
 
-    def _attribute_branch(self, x, classifier, graph):
+    def _apply_attribute_head(self, features, logits, graph, output_layer=None):
+        """Apply a feature-aware or logits-only attribute refinement head."""
         if isinstance(graph, AttributeFeatureGraph):
-            features = classifier[1](classifier[0](x))
-            return graph(features, classifier[2](features))
+            return graph(features, logits)
         if getattr(graph, "expects_features", False):
+            return graph(features, logits, output_layer)
+        return self._apply_attribute_gat(logits, graph)
+
+    def _attribute_branch(self, x, classifier, graph):
+        if isinstance(graph, AttributeFeatureGraph) or getattr(graph, "expects_features", False):
             features = classifier[1](classifier[0](x))
             logits = classifier[2](features)
-            return graph(features, logits, classifier[2])
+            return self._apply_attribute_head(features, logits, graph, classifier[2])
         return self._apply_attribute_gat(classifier(x), graph)
 
     def _apply_attribute_gat(self, attribute_logits, gat_head):
@@ -2548,7 +2791,9 @@ class MDetect(nn.Module):
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         attribute_logits_cat = torch.cat(attribute_logits, 1)
-                        attribute_logits_gat = [self._apply_attribute_gat(attribute_logits_cat, self.gat_head[i])]
+                        attribute_logits_gat = [
+                            self._apply_attribute_head(attribute_feature, attribute_logits_cat, self.gat_head[i])
+                        ]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits_gat, 1)
                     else:
                         attribute_feature = self.cv4[i](x[i])
@@ -2597,7 +2842,11 @@ class MDetect(nn.Module):
                         attribute_feature = self.one2one_cv4[i](x_detach[i])
                         attribute_logits = [self.one2one_cv4_out[j][i](attribute_feature) for j in range(self.na)]
                         attribute_logits = [
-                            self._apply_attribute_gat(torch.cat(attribute_logits, 1), self.one2one_gat_head[i])
+                            self._apply_attribute_head(
+                                attribute_feature,
+                                torch.cat(attribute_logits, 1),
+                                self.one2one_gat_head[i],
+                            )
                         ]
                         x_detach[i] = torch.cat(
                             [self.one2one_cv2[i](x_detach[i]), self.one2one_cv3[i](x_detach[i])] + attribute_logits, 1
@@ -2624,7 +2873,9 @@ class MDetect(nn.Module):
                     if self.gat is not None:
                         attribute_feature = self.cv4[i](x[i])
                         attribute_logits = [self.cv4_out[j][i](attribute_feature) for j in range(self.na)]
-                        attribute_logits = [self._apply_attribute_gat(torch.cat(attribute_logits, 1), self.gat_head[i])]
+                        attribute_logits = [
+                            self._apply_attribute_head(attribute_feature, torch.cat(attribute_logits, 1), self.gat_head[i])
+                        ]
                         x[i] = torch.cat([self.cv2[i](x[i]), self.cv3[i](x[i])] + attribute_logits, 1)
                     else:
                         attribute_feature = self.cv4[i](x[i])

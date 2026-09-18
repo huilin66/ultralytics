@@ -187,7 +187,39 @@ def _materialize_config(
         # The margin-residual base YAML historically uses
         # ``com_gat_margin_residual`` for the GCA implementation. It is
         # materialized separately because the other margin-residual
-        # operators do not carry the ``com_`` prefix.
+        # operators do not carry the ``com_`` prefix.  The MHA variants follow
+        # the same convention with ``*_mha_margin_residual`` tokens.  The
+        # feature-logit variant adds ``feature_logit_`` before that suffix.
+        feature_logit_mha_pattern = re.compile(
+            r"(?P<quote>['\"]?)com_gat_feature_logit_mha_margin_residual(?P=quote)"
+        )
+
+        def replace_feature_logit_mha(match: re.Match) -> str:
+            token = (
+                "com_gat_feature_logit_mha_margin_residual"
+                if gnn_type == "gca"
+                else f"{gnn_type}_feature_logit_mha_margin_residual"
+            )
+            return f"{match.group('quote')}{token}{match.group('quote')}"
+
+        updated, feature_logit_mha_count = feature_logit_mha_pattern.subn(
+            replace_feature_logit_mha, updated
+        )
+
+        mha_margin_pattern = re.compile(
+            r"(?P<quote>['\"]?)com_gat_mha_margin_residual(?P=quote)"
+        )
+
+        def replace_mha_margin(match: re.Match) -> str:
+            token = (
+                "com_gat_mha_margin_residual"
+                if gnn_type == "gca"
+                else f"{gnn_type}_mha_margin_residual"
+            )
+            return f"{match.group('quote')}{token}{match.group('quote')}"
+
+        updated, mha_margin_count = mha_margin_pattern.subn(replace_mha_margin, updated)
+
         margin_pattern = re.compile(
             r"(?P<quote>['\"]?)com_gat_margin_residual(?P=quote)"
         )
@@ -213,11 +245,12 @@ def _materialize_config(
             ),
             updated,
         )
-        if margin_count + standard_count == 0:
+        if feature_logit_mha_count + mha_margin_count + margin_count + standard_count == 0:
             raise ValueError(
                 f"{source} does not contain one of the materializable "
                 "GCA residual tokens. Expected a standard com_gca_*_residual "
-                "token or com_gat_margin_residual."
+                "token, com_gat_margin_residual, com_gat_mha_margin_residual, "
+                "or com_gat_feature_logit_mha_margin_residual."
             )
         changed = True
 

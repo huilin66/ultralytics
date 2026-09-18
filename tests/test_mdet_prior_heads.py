@@ -35,6 +35,8 @@ from ultralytics.nn.modules.head import (
     CoOccurrenceMLTransformer,
     CoOccurrenceMLGCNMoE,
     CoOccurrenceGraphMeanField,
+    GCAFeatureLogitMultiHeadResidual,
+    GCAMultiHeadMarginResidual,
     MDetect,
 )
 from scripts.train_mdet_experiments import _materialize_config
@@ -205,3 +207,88 @@ def test_mlgcn_uses_symmetric_graph_and_generates_classifier_weights():
     assert classifiers.shape == (10, 32)
     assert torch.isfinite(classifiers).all()
     assert classifiers.requires_grad
+
+
+def test_mha_margin_residual_supports_all_graph_operators():
+    torch.manual_seed(0)
+    logits = torch.randn(2, 20, 4, 4, requires_grad=True)
+    for gnn_type in ("gca", "gcn", "gat", "graphsage", "gin"):
+        head = GCAMultiHeadMarginResidual(10, 2, gnn_type=gnn_type)
+        output = head(logits)
+        assert output.shape == logits.shape
+        assert torch.isfinite(output).all()
+        output.square().mean().backward(retain_graph=True)
+        assert any(
+            parameter.grad is not None and torch.isfinite(parameter.grad).all()
+            for parameter in head.parameters()
+        ), gnn_type
+
+
+def test_mha_margin_residual_materializes_each_gnn_token(tmp_path):
+    config = tmp_path / "mha_margin.yaml"
+    matrix = tmp_path / "co_occurrence_matrix_train.csv"
+    config.write_text(
+        "head: [v10MDetect, [False, None, 'com_gat_mha_margin_residual', False, "
+        "/nfsv4/data/co_occurrence_matrix_train.csv]]\n",
+        encoding="utf-8",
+    )
+    matrix.write_text("placeholder", encoding="utf-8")
+
+    for gnn_type, token in (
+        ("gca", "com_gat_mha_margin_residual"),
+        ("gcn", "gcn_mha_margin_residual"),
+        ("gat", "gat_mha_margin_residual"),
+        ("graphsage", "graphsage_mha_margin_residual"),
+        ("gin", "gin_mha_margin_residual"),
+    ):
+        resolved = _materialize_config(
+            str(config),
+            str(matrix),
+            str(tmp_path / f"generated_{gnn_type}"),
+            gnn_type=gnn_type,
+        )
+        generated = Path(resolved).read_text(encoding="utf-8")
+        assert token in generated
+
+
+def test_feature_logit_mha_margin_residual_supports_all_graph_operators():
+    torch.manual_seed(0)
+    features = torch.randn(2, 32, 4, 4, requires_grad=True)
+    logits = torch.randn(2, 20, 4, 4, requires_grad=True)
+    for gnn_type in ("gca", "gcn", "gat", "graphsage", "gin"):
+        head = GCAFeatureLogitMultiHeadResidual(32, 10, 2, gnn_type=gnn_type)
+        output = head(features, logits)
+        assert output.shape == logits.shape
+        assert torch.isfinite(output).all()
+        output.square().mean().backward(retain_graph=True)
+        assert any(
+            parameter.grad is not None and torch.isfinite(parameter.grad).all()
+            for parameter in head.parameters()
+        ), gnn_type
+
+
+def test_feature_logit_mha_margin_residual_materializes_each_gnn_token(tmp_path):
+    config = tmp_path / "feature_logit_mha_margin.yaml"
+    matrix = tmp_path / "co_occurrence_matrix_train.csv"
+    config.write_text(
+        "head: [v10MDetect, [False, None, 'com_gat_feature_logit_mha_margin_residual', False, "
+        "/nfsv4/data/co_occurrence_matrix_train.csv]]\n",
+        encoding="utf-8",
+    )
+    matrix.write_text("placeholder", encoding="utf-8")
+
+    for gnn_type, token in (
+        ("gca", "com_gat_feature_logit_mha_margin_residual"),
+        ("gcn", "gcn_feature_logit_mha_margin_residual"),
+        ("gat", "gat_feature_logit_mha_margin_residual"),
+        ("graphsage", "graphsage_feature_logit_mha_margin_residual"),
+        ("gin", "gin_feature_logit_mha_margin_residual"),
+    ):
+        resolved = _materialize_config(
+            str(config),
+            str(matrix),
+            str(tmp_path / f"generated_feature_logit_{gnn_type}"),
+            gnn_type=gnn_type,
+        )
+        generated = Path(resolved).read_text(encoding="utf-8")
+        assert token in generated

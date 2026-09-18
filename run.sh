@@ -1027,3 +1027,79 @@ if [ "${RUN_E2_23_GCA_WARMUP_BATCH:-0}" = "1" ]; then
       --project "$E2_23_PROJECT" || exit $?
   done
 fi
+
+# E2.24: direct Stage2 training of MHA + conditional margin-residual graphs.
+# Each job starts from the fixed GIA-v2.5.7 seed-0 Stage1 best checkpoint and
+# directly trains the attribute/GCA branch for 100 epochs.  Multi-head
+# attention mixes the per-pixel attribute margins before one of the five graph
+# operators (GCA/GCN/GAT/GraphSAGE/GIN) applies the conditional
+# margin-residual propagation.  This block produces exactly five jobs and is
+# opt-in.
+if [ "${RUN_E2_24_GCA_MHA_BATCH:-0}" = "1" ]; then
+  E2_24_STAGE1_CKPT=${E2_24_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  E2_24_PROJECT=${E2_24_PROJECT:-runs/experiments/E2_24_GIA_v2_5_7_GCA_MHA_margin_residual_conditional}
+  E2_24_MHA_MARGIN_CONFIG=${E2_24_MHA_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_mha_margin_residual.yaml}
+  E2_24_W4=${E2_24_W4:-0.5}
+  E2_24_BATCH=${E2_24_BATCH:-16}
+  E2_24_GNN_TYPES=${E2_24_GNN_TYPES:-"gca gcn gat graphsage gin"}
+
+  for REQUIRED_FILE in "$E2_24_STAGE1_CKPT" "$E2_24_MHA_MARGIN_CONFIG" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.24 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+    --label E2_24_GIA_v2_5_7_GCA_MHA_margin_residual_conditional \
+    --data "$DATA" \
+    --stage1-checkpoint "$E2_24_STAGE1_CKPT" \
+    --stage1-epochs 100 \
+    --stage2-epochs 100 \
+    --variant mha_margin_residual="$E2_24_MHA_MARGIN_CONFIG" \
+    --gnn-types $E2_24_GNN_TYPES \
+    --skip-existing \
+    --w4 "$E2_24_W4" \
+    --batch "$E2_24_BATCH" \
+    --seed 0 \
+    --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+    --com-path "$COM_CONDITIONAL_PATH" \
+    --project "$E2_24_PROJECT" || exit $?
+fi
+
+# E2.25: direct Stage2 training of feature-logit MHA + conditional
+# margin-residual graphs.  This is the feature-aware companion to E2.24:
+# attribute features provide the queries and attribute logits provide the
+# keys/values before the same five graph operators are applied.  It produces
+# five additional jobs and is opt-in.
+if [ "${RUN_E2_25_GCA_FEATURE_LOGIT_MHA_BATCH:-0}" = "1" ]; then
+  E2_25_STAGE1_CKPT=${E2_25_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
+  E2_25_PROJECT=${E2_25_PROJECT:-runs/experiments/E2_25_GIA_v2_5_7_GCA_feature_logit_MHA_margin_residual_conditional}
+  E2_25_CONFIG=${E2_25_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_feature_logit_mha_margin_residual.yaml}
+  E2_25_W4=${E2_25_W4:-0.5}
+  E2_25_BATCH=${E2_25_BATCH:-16}
+  E2_25_GNN_TYPES=${E2_25_GNN_TYPES:-"gca gcn gat graphsage gin"}
+
+  for REQUIRED_FILE in "$E2_25_STAGE1_CKPT" "$E2_25_CONFIG" "$COM_CONDITIONAL_PATH"; do
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      echo "Missing E2.25 input: $REQUIRED_FILE" >&2
+      exit 1
+    fi
+  done
+
+  "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2 \
+    --label E2_25_GIA_v2_5_7_GCA_feature_logit_MHA_margin_residual_conditional \
+    --data "$DATA" \
+    --stage1-checkpoint "$E2_25_STAGE1_CKPT" \
+    --stage1-epochs 100 \
+    --stage2-epochs 100 \
+    --variant feature_logit_mha_margin_residual="$E2_25_CONFIG" \
+    --gnn-types $E2_25_GNN_TYPES \
+    --skip-existing \
+    --w4 "$E2_25_W4" \
+    --batch "$E2_25_BATCH" \
+    --seed 0 \
+    --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2 \
+    --com-path "$COM_CONDITIONAL_PATH" \
+    --project "$E2_25_PROJECT" || exit $?
+fi
