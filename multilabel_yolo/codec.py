@@ -1,5 +1,7 @@
 """Deterministic encoding of label combinations used by the native transforms."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import json
 from typing import Iterable, Tuple
