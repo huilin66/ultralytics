@@ -986,14 +986,15 @@ if [ "${RUN_GIA_GCA_TOP5_STABILITY:-0}" = "1" ]; then
   done
 fi
 
-# E2.23: conditional margin-residual GCA warm-up ablation.
-# Each run first trains the GIA/Baseline path with an identity GCA for k1
-# epochs, then freezes that path and trains only the GCA/GNN residual heads for
-# k2 epochs.  The five margin-residual operators are evaluated for k1/k2 =
-# 50/50 and 66/34, giving 10 final checkpoints.  This block is opt-in.
+# E2.23: conditional margin-residual GCA staged ablation.
+# Each run first trains only the original attribute head (cv4/one2one_cv4) for
+# k1 epochs with the GCA residual fixed at identity, then freezes the complete
+# original path and trains only the GCA/GNN residual heads for k2 epochs.  The
+# five margin-residual operators are evaluated for k1/k2 = 50/50 and 66/34,
+# giving 10 final checkpoints.  This block is opt-in.
 if [ "${RUN_E2_23_GCA_WARMUP_BATCH:-0}" = "1" ]; then
   E2_23_STAGE1_CKPT=${E2_23_STAGE1_CKPT:-runs/experiments/E2_1_GIA_v2_position/E2_1_GIA_v2_position_gia_v2_5_7_stage1_100_w4_0p5_seed_0/weights/best.pt}
-  E2_23_PROJECT=${E2_23_PROJECT:-runs/experiments/E2_23_GIA_v2_5_7_GCA_warmup_conditional}
+  E2_23_PROJECT=${E2_23_PROJECT:-runs/experiments/E2_23_GIA_v2_5_7_GCA_attr_warmup_conditional}
   E2_23_MARGIN_CONFIG=${E2_23_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}
   E2_23_W4=${E2_23_W4:-0.5}
   E2_23_BATCH=${E2_23_BATCH:-16}
@@ -1010,7 +1011,7 @@ if [ "${RUN_E2_23_GCA_WARMUP_BATCH:-0}" = "1" ]; then
     E2_23_K1=${E2_23_SCHEDULE%%:*}
     E2_23_K2=${E2_23_SCHEDULE##*:}
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-warmup \
-      --label E2_23_GIA_v2_5_7_GCA_warmup_conditional \
+      --label E2_23_GIA_v2_5_7_GCA_attr_warmup_conditional \
       --data "$DATA" \
       --stage1-checkpoint "$E2_23_STAGE1_CKPT" \
       --k1-epochs "$E2_23_K1" \

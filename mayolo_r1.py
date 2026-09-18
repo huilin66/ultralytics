@@ -110,6 +110,15 @@ def myolo_train_full(
 
 
 GCA_TRAINABLE_PATTERNS = (".gat_head.", ".one2one_gat_head.")
+# The original attribute prediction branch.  The explicit ``*_out`` entries
+# keep this policy correct for the separated attribute-head layouts as well as
+# the default shared layout used by the current E2.23 model.
+ATTRIBUTE_HEAD_TRAINABLE_PATTERNS = (
+    ".cv4.",
+    ".one2one_cv4.",
+    ".cv4_out.",
+    ".one2one_cv4_out.",
+)
 
 
 def _gca_residual_modules(model):
@@ -141,13 +150,14 @@ def myolo_train_gca_warmup(
     project="runs/experiments",
     **kwargs,
 ):
-    """Train a baseline warm-up followed by GCA/GNN-only optimization.
+    """Train an attribute-head warm-up followed by GCA/GNN-only optimization.
 
-    Phase 1 freezes both one-to-many and one-to-one GCA heads and trains the
-    original model path.  Phase 2 freezes every parameter except those heads,
-    including BatchNorm statistics in the frozen path, and trains only the
-    GCA/GNN residual modules.  The phase-1 best checkpoint is automatically
-    used as the phase-2 initialization.
+    Phase 1 trains only the original one-to-many and one-to-one attribute-head
+    branches (``cv4``/``cv4_out``), while the backbone, detection branches,
+    GIA blocks, and GCA heads remain fixed.  Phase 2 freezes that complete
+    baseline attribute path and trains only the GCA/GNN residual modules.
+    The phase-1 best checkpoint is automatically used as the phase-2
+    initialization.
     """
     if k1_epochs < 1 or k2_epochs < 1:
         raise ValueError("k1_epochs and k2_epochs must be positive")
@@ -171,16 +181,18 @@ def myolo_train_gca_warmup(
         train_params.update({"optimizer": "AdamW", "lr0": 0.0001})
     train_params.update(kwargs)
 
-    # Phase 1: exact identity GCA, train the baseline/GIA path.
+    # Phase 1: exact identity GCA, train only the original attribute head.
     phase1_params = dict(train_params)
     phase1_params.update(
         {
             "epochs": k1_epochs,
             "name": stage1_name,
             "patience": k1_epochs,
-            "freeze_head": list(GCA_TRAINABLE_PATTERNS),
+            "freeze": None,
+            "freeze_head": [],
+            "freeze_att_head": None,
             "freeze_bn": True,
-            "train_only": None,
+            "train_only": list(ATTRIBUTE_HEAD_TRAINABLE_PATTERNS),
         }
     )
     model.train(**phase1_params)
