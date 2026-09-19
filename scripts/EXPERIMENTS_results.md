@@ -12,8 +12,19 @@
 GIA、GCA/GNN、GIA+GCA 以及 HO 实验。主结果优先采用修正后的固定 Stage1、
 Stage2=100、`w4=0.5` 协议；早期未匹配协议的结果只作为历史记录保留。
 
-本文档及论文只报告 Test split 指标。验证集仅在训练过程中用于选择 `best.pt`，
-不在结果表、结论或后续汇总中展示验证指标。
+本文档及论文只报告 Test split 指标。
+
+## 当前实验决策：主路线剔除，结果保留
+
+基于 `gia_v2_5_7` Stage1 seed=0 checkpoint 的 E2.24（logits → MHA →
+GCA/GNN）和 E2.25（feature + logits → MHA → GCA/GNN）共 10 个 Test 结果，
+所有结构的 Test mAP50 均为 `0.689341`，Test mAP50-95 均为 `0.472128`；
+最高 Test F1_attr@0.5 为 `0.656026`，低于 GIA-v2.5.7 参照的 `0.657020`。
+
+因此，本轮 MHA-GCA/GNN 扩展判定为无有效提升，不纳入最终模型选择、主结果表或
+后续论文实验路线；但作为负结果/消融记录保留在本 results 文档中，必要时可用于回应
+审稿人关于该方向是否经过实验验证的询问。相关权重和 Test 汇总保留，不再作为后续
+实验的初始化依据。
 
 ## 1. 指标与实验口径
 
@@ -349,6 +360,134 @@ E2.21 直接复用 E2.20 的 `Conditional + GIN + adaptive` seed=1、2 checkpoin
 表述为检测性能优先的 HO 方案，同时必须报告 Test 属性 F1；该结果不是单纯的
 属性性能全面提升。
 
+### 6.3 E2.26：Baseline/GIA 的 HO 对照
+
+E2.26 对 Baseline 与 `gia_v2_5_7` 分别重新加载 checkpoint，比较 native 与
+one-to-many 两种输出方式，不重新训练。seed=0 严格采用用户指定的两个 checkpoint：
+Baseline 为 E1 的 Stage2 权重，GIA 为 E2.1 的 `gia_v2_5_7` Stage1 权重。
+
+#### seed=0：指定 checkpoint
+
+| 模型 | 推理模式 | Test mAP50 | Test mAP50-95 | Test F1_attr@0.5 |
+|---|---|---:|---:|---:|
+| Baseline | native | 0.666443 | 0.453483 | 0.645716 |
+| Baseline | one-to-many | 0.659656 | 0.456900 | 0.643358 |
+| GIA-v2.5.7 | native | 0.689341 | 0.472128 | 0.657020 |
+| GIA-v2.5.7 | one-to-many | 0.687286 | 0.483173 | 0.626513 |
+
+相对 native，Baseline 的差值为 `mAP50 -0.006788`、`mAP50-95 +0.003417`、
+`F1 -0.002358`；GIA 的差值为 `mAP50 -0.002054`、`mAP50-95 +0.011045`、
+`F1 -0.030508`。
+
+#### seed=1、2：`confirm_seedfix` 同口径 Stage1 checkpoint
+
+以下两组使用 `E2_1_GIA_v2_confirm_seedfix` 中 Baseline/GIA 各自的 Stage1
+checkpoint。差值均为 `one-to-many − native`。
+
+| 模型 | seed | native Test mAP50 | one-to-many Test mAP50 | Δ mAP50 | native Test mAP50-95 | one-to-many Test mAP50-95 | Δ mAP50-95 | native Test F1 | one-to-many Test F1 | Δ F1 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | 1 | 0.621977 | 0.651164 | +0.029187 | 0.413646 | 0.431233 | +0.017587 | 0.623962 | 0.621529 | −0.002433 |
+| Baseline | 2 | 0.635101 | 0.645083 | +0.009982 | 0.453514 | 0.459855 | +0.006341 | 0.609263 | 0.595448 | −0.013815 |
+| GIA-v2.5.7 | 1 | 0.659499 | 0.676708 | +0.017209 | 0.472072 | 0.487498 | +0.015426 | 0.634876 | 0.646294 | +0.011418 |
+| GIA-v2.5.7 | 2 | 0.589792 | 0.617214 | +0.027421 | 0.393598 | 0.416509 | +0.022911 | 0.555470 | 0.581406 | +0.025935 |
+
+三 seed 的解释必须保持口径区分：Baseline seed=1、2 的 mAP50 均提升但 F1
+下降；GIA seed=1、2 的三个 Test 指标均提升。seed=0 的指定 checkpoint 中，
+两者的 mAP50 和 F1 均下降。因此 HO 存在 seed 敏感性，不能表述为稳定的全面提升；
+在 GIA 上可以表述为“多数 seed 有利于检测和属性 F1，但 seed=0 出现退化”。
+
+E2.26 输出路径：
+
+```text
+runs/experiments/E2_26_HO_baseline_gia/final/baseline_test_summary.csv
+runs/experiments/E2_26_HO_baseline_gia/final/gia_v2_5_7_test_summary.csv
+runs/experiments/E2_26_HO_baseline_gia/confirm_seedfix/baseline_seed1_test_summary.csv
+runs/experiments/E2_26_HO_baseline_gia/confirm_seedfix/baseline_seed2_test_summary.csv
+runs/experiments/E2_26_HO_baseline_gia/confirm_seedfix/gia_v2_5_7_seed1_test_summary.csv
+runs/experiments/E2_26_HO_baseline_gia/confirm_seedfix/gia_v2_5_7_seed2_test_summary.csv
+```
+
+### 6.4 E2.27：Baseline/GIA 五个 Seed 的 Stage2 稳定性
+
+E2.27 对 Baseline 与 `gia_v2_5_7` 分别使用 seed=0、1、2、3、4 完成
+Stage1+Stage2 训练；最终比较只使用各自的 Stage2 权重，共 10 个 Test 结果。
+
+| seed | Baseline Test mAP50 | Baseline Test F1_macro | GIA Test mAP50 | GIA Test F1_macro |
+|---:|---:|---:|---:|---:|
+| 0 | 0.666443 | 0.645716 | 0.689341 | 0.656026 |
+| 1 | 0.621977 | 0.624775 | 0.659499 | 0.642142 |
+| 2 | 0.635101 | 0.646610 | 0.589792 | 0.593163 |
+| 3 | 0.617033 | 0.635252 | 0.657618 | 0.573754 |
+| 4 | 0.580827 | 0.542371 | 0.601946 | 0.588384 |
+
+E2.27 的 Test 汇总路径：
+
+```text
+runs/experiments/E2_27_baseline_gia_seed5/summary.csv
+```
+
+## E4：RT-DETR 多规模属性检测
+
+E4 使用 RT-DETR-L 与 RT-DETR-X 完成 Stage1+Stage2 训练，以下为最终 Stage2
+权重的 Test 结果。
+
+| 模型 | mAP50_test | mAP50-95_test | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RT-DETR-L | 0.509574 | 0.329548 | 0.968627 | 0.491973 | 0.492032 | 0.484314 | 0.500000 |
+| RT-DETR-X | 0.556197 | 0.373912 | 0.967130 | 0.491577 | 0.491645 | 0.483565 | 0.500000 |
+
+E4 Test 汇总路径：
+
+```text
+runs/experiments/E4_rtdetr_LX/summary.csv
+```
+
+## E5：真正的多标签目标检测 YOLOv10
+
+E5 每个物理目标只保留一个检测框，并使用 2 个目标类别计算检测 mAP；
+属性指标基于 mAP50 中 IoU≥0.5 且目标类别正确的匹配框，对 10 维属性向量计算。
+
+| 指标 | Test |
+|---|---:|
+| mAP50_test | 0.409310 |
+| mAP50-95_test | 0.235047 |
+| P_macro_test | 0.534732 |
+| R_macro_test | 0.508019 |
+| F1_macro_test@IoU0.5 | 0.507001 |
+
+本次 Test 共 62 张图像、247 个真实目标，其中 191 个目标完成 IoU≥0.5
+匹配。此前将属性展开为独立检测类别得到的结果不纳入正式结果。
+
+E5 权重：
+
+```text
+runs/experiments/E5_multilabel/yolov10x/weights/best.pt
+```
+
+## E6：目标检测 + 多标签分类双阶段
+
+E6 使用 E3 YOLOv10x Stage2 检测器生成预测框，再由 E6 YOLOv10x-cls
+分类器对预测框裁剪图进行多属性分类。检测指标来自检测阶段；宏平均指标基于
+IoU≥0.5 且目标类别正确的匹配目标，并使用分类器输出的属性结果计算。
+
+| 指标 | Test |
+|---|---:|
+| mAP50_test | 0.630217 |
+| mAP50-95_test | 0.431025 |
+| P_macro_test | 0.540765 |
+| R_macro_test | 0.528227 |
+| F1_macro_test@IoU0.5 | 0.530298 |
+
+本次 Test 共 62 张图像、247 个真实目标，其中 195 个目标完成 IoU≥0.5
+匹配。
+
+E6 权重与来源：
+
+```text
+检测器：runs/experiments/E3_versions/E3_versions_yolov10x_w4_0p5_seed_0_stage2/weights/best.pt
+分类器：runs/experiments/E6_two_stage_yolov10x/detector_yolov10x_classifier_yolov10x_cls/weights/best.pt
+```
+
 ## 7. 历史结果（不纳入主比较）
 
 早期 E2.2/E2.3 使用了未完全匹配的完整两阶段训练协议，保留用于追溯，但不与
@@ -381,6 +520,9 @@ runs/experiments/E2_13_GCA_GIA_test3_seed/summary.csv
 runs/experiments/E2_15_GIA_stage2_control/summary.csv
 runs/experiments/E2_20_GIA_GCA_top5_stability/summary.csv
 runs/experiments/E2_21_HO_GIA_GCA_gin_adaptive/test_summary.csv
+runs/experiments/E2_24_GIA_v2_5_7_GCA_MHA_margin_residual_conditional/test_summary.csv
+runs/experiments/E2_25_GIA_v2_5_7_GCA_feature_logit_MHA_margin_residual_conditional/test_summary.csv
+runs/experiments/E2_27_baseline_gia_seed5/summary.csv
 runs/experiments/E2_16_HO_cross_gcn.log
 runs/experiments/E2_16_HO_cross_gcn_test.log
 ```
