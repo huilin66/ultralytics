@@ -6,6 +6,8 @@ The launcher supports the normal two-stage protocol and two schedule studies:
 * ``stage2-sweep`` independently trains stage 2 from one fixed stage-1
   checkpoint for several epoch budgets.
 * ``gca-stage2`` compares GCA/GNN variants from one fixed stage-1 checkpoint;
+* ``gca-stage2-seeds`` repeats the same GCA/GNN comparison from explicitly
+  matched stage-1 checkpoints for several random seeds;
 * ``gca-warmup`` runs a baseline warm-up followed by GCA/GNN-only training;
 * ``prior-stage2`` compares fixed co-occurrence-prior attention heads from one
   fixed stage-1 checkpoint;
@@ -62,6 +64,19 @@ Examples (PowerShell):
         --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml `
         --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml `
         --gnn-types gca gcn gat graphsage gin `
+        --com-path path/to/co_occurrence_matrix_train.csv
+
+    python scripts/train_mdet_experiments.py gca-stage2-seeds `
+        --label E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross `
+        --data path/to/billboard_mdet.yaml `
+        --stage1-checkpoint-map 0=runs/.../seed_0_stage1/weights/best.pt `
+        --stage1-checkpoint-map 1=runs/.../seed_1_stage1/weights/best.pt `
+        --stage1-checkpoint-map 2=runs/.../seed_2_stage1/weights/best.pt `
+        --stage1-checkpoint-map 3=runs/.../seed_3_stage1/weights/best.pt `
+        --stage1-checkpoint-map 4=runs/.../seed_4_stage1/weights/best.pt `
+        --variant margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml `
+        --gnn-types gca gcn gat graphsage gin `
+        --seeds 0 1 2 3 4 `
         --com-path path/to/co_occurrence_matrix_train.csv
 
     python scripts/train_mdet_experiments.py versions `
@@ -861,6 +876,57 @@ def _run_gca_stage2(args: argparse.Namespace) -> None:
             )
 
 
+def _run_gca_stage2_seeds(args: argparse.Namespace) -> None:
+    """Run Stage2 GCA/GNN comparisons with an explicit seed/checkpoint map.
+
+    This is the controlled multi-seed counterpart of ``gca-stage2``.  Each
+    Stage2 run receives the Stage1 checkpoint trained with the same seed, and
+    the same seed is forwarded to the trainer.  The explicit map is required
+    to make an accidental seed/checkpoint mismatch impossible when the jobs
+    are resumed or moved between machines.
+    """
+    _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
+    _validate_epoch_values([args.stage2_epochs], "--stage2-epochs")
+    if not args.seeds or len(set(args.seeds)) != len(args.seeds):
+        raise ValueError("--seeds must contain at least one unique integer")
+
+    checkpoints = _parse_key_value(args.stage1_checkpoint_map, "--stage1-checkpoint-map")
+    missing = [str(seed) for seed in args.seeds if str(seed) not in checkpoints]
+    if missing:
+        raise ValueError(
+            "Missing Stage1 checkpoint mappings for seeds: "
+            + ", ".join(missing)
+            + ". Use SEED=CHECKPOINT for every value in --seeds."
+        )
+
+    variants = _parse_key_value(args.variant, "--variant")
+    gnn_types = args.gnn_types or ["gca", "gcn", "gat", "graphsage", "gin"]
+    for gnn_type in gnn_types:
+        for seed in args.seeds:
+            checkpoint = checkpoints[str(seed)]
+            for name, config in variants.items():
+                combo_name = f"{gnn_type}_{name}"
+                run_name = (
+                    f"{_slug(args.label)}_{_slug(combo_name)}_stage1_{args.stage1_epochs}"
+                    f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{seed}"
+                )
+                _train_direct_stage(
+                    args,
+                    label=args.label,
+                    variant_name=combo_name,
+                    config=config,
+                    pretrain=checkpoint,
+                    w4=args.w4,
+                    seed=seed,
+                    epochs=args.stage2_epochs,
+                    retrain=True,
+                    stage1_epochs=args.stage1_epochs,
+                    run_name=run_name,
+                    network_name="yolo",
+                    gnn_type=gnn_type,
+                )
+
+
 def _train_gca_warmup(
     args: argparse.Namespace,
     *,
@@ -1192,6 +1258,58 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    gca_stage2_seeds = subparsers.add_parser(
+        "gca-stage2-seeds",
+        help="Stage2-only GCA/GNN comparison with seed-matched Stage1 checkpoints",
+    )
+    _add_common_train_arguments(gca_stage2_seeds)
+    gca_stage2_seeds.add_argument(
+        "--label",
+        default="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed",
+        help="experiment label; include the matrix name when running cross/conditional separately",
+    )
+    gca_stage2_seeds.add_argument(
+        "--stage1-checkpoint-map",
+        action="append",
+        required=True,
+        metavar="SEED=CHECKPOINT",
+        help="repeat once per seed; the checkpoint is loaded by the matching Stage2 seed",
+    )
+    gca_stage2_seeds.add_argument(
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=[0, 1, 2, 3, 4],
+        help="seeds to train; every seed must have a matching --stage1-checkpoint-map entry",
+    )
+    gca_stage2_seeds.add_argument(
+        "--stage1-epochs",
+        type=int,
+        default=DEFAULT_STAGE1_EPOCHS,
+        help="Stage1 epoch budget represented by each supplied checkpoint",
+    )
+    gca_stage2_seeds.add_argument(
+        "--stage2-epochs",
+        type=int,
+        default=DEFAULT_STAGE2_EPOCHS,
+        help="Stage2 epoch budget for every GCA/GNN variant",
+    )
+    gca_stage2_seeds.add_argument(
+        "--variant",
+        action="append",
+        required=True,
+        metavar="NAME=CONFIG_YAML",
+        help="repeat for each structural base YAML; combine with --gnn-types",
+    )
+    gca_stage2_seeds.add_argument(
+        "--gnn-types",
+        nargs="+",
+        choices=("gca", "gcn", "gat", "graphsage", "gin"),
+        default=["gca", "gcn", "gat", "graphsage", "gin"],
+        metavar="GNN",
+        help="margin-residual graph operators to materialize for every seed",
+    )
+
     gca_warmup = subparsers.add_parser(
         "gca-warmup",
         help="GCA warm-up: train the baseline for k1 epochs, then GCA/GNN only for k2 epochs",
@@ -1348,6 +1466,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         _run_stage2_sweep(args)
     elif args.experiment == "gca-stage2":
         _run_gca_stage2(args)
+    elif args.experiment == "gca-stage2-seeds":
+        _run_gca_stage2_seeds(args)
     elif args.experiment == "gca-warmup":
         _run_gca_warmup(args)
     elif args.experiment == "prior-stage2":

@@ -1107,3 +1107,90 @@ if [ "${RUN_E2_25_GCA_FEATURE_LOGIT_MHA_BATCH:-0}" = "1" ]; then
     --com-path "$COM_CONDITIONAL_PATH" \
     --project "$E2_25_PROJECT" || exit $?
 fi
+
+# E2.28: five-seed GIA-v2.5.7 margin-residual GCA/GNN repeatability study.
+# Each Stage2 job loads the GIA-v2.5.7 Stage1 checkpoint produced with the
+# same seed.  The new launcher requires an explicit seed->checkpoint map so
+# a resumed batch cannot silently pair a Stage2 seed with another seed's
+# initialization.  Run this block twice in parallel with
+# E2_28_MATRIX_MODE=cross on GPU0 and E2_28_MATRIX_MODE=conditional on GPU1.
+# Each matrix produces 5 operators x 5 seeds = 25 Stage2-only jobs.
+if [ "${RUN_E2_28_GIA_5SEED_GCA_BATCH:-0}" = "1" ]; then
+  E2_28_STAGE1_ROOT=${E2_28_STAGE1_ROOT:-runs/experiments/E2_27_baseline_gia_seed5}
+  E2_28_STAGE1_PREFIX=${E2_28_STAGE1_PREFIX:-E2_27_baseline_gia_seed5_gia_v2_5_7_w4_0p5_seed_}
+  E2_28_MARGIN_CONFIG=${E2_28_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}
+  E2_28_CROSS_PROJECT=${E2_28_CROSS_PROJECT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross}
+  E2_28_CONDITIONAL_PROJECT=${E2_28_CONDITIONAL_PROJECT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional}
+  E2_28_MATRIX_MODE=${E2_28_MATRIX_MODE:-both}
+  E2_28_DEVICE=${E2_28_DEVICE:-0}
+  E2_28_W4=${E2_28_W4:-0.5}
+  E2_28_BATCH=${E2_28_BATCH:-16}
+  E2_28_SEEDS=${E2_28_SEEDS:-"0 1 2 3 4"}
+  E2_28_GNN_TYPES=${E2_28_GNN_TYPES:-"gca gcn gat graphsage gin"}
+
+  E2_28_CHECKPOINT_ARGS=()
+  for E2_28_SEED in $E2_28_SEEDS; do
+    E2_28_CHECKPOINT="${E2_28_STAGE1_ROOT}/${E2_28_STAGE1_PREFIX}${E2_28_SEED}_stage1/weights/best.pt"
+    if [ ! -f "$E2_28_CHECKPOINT" ]; then
+      echo "Missing E2.28 Stage1 checkpoint for seed ${E2_28_SEED}: $E2_28_CHECKPOINT" >&2
+      exit 1
+    fi
+    E2_28_CHECKPOINT_ARGS+=("${E2_28_SEED}=${E2_28_CHECKPOINT}")
+  done
+
+  if [ ! -f "$E2_28_MARGIN_CONFIG" ]; then
+    echo "Missing E2.28 margin-residual config: $E2_28_MARGIN_CONFIG" >&2
+    exit 1
+  fi
+  if [ ! -f "$COM_PATH" ]; then
+    echo "Missing E2.28 cross matrix: $COM_PATH" >&2
+    exit 1
+  fi
+  if [ ! -f "$COM_CONDITIONAL_PATH" ]; then
+    echo "Missing E2.28 conditional matrix: $COM_CONDITIONAL_PATH" >&2
+    exit 1
+  fi
+
+  run_e2_28_matrix() {
+    local matrix_name="$1"
+    local matrix_path="$2"
+    local project="$3"
+
+    E2_28_COMMAND=("$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2-seeds
+      --label "E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_${matrix_name}"
+      --data "$DATA"
+      --stage1-epochs 100
+      --stage2-epochs 100
+      --device "$E2_28_DEVICE"
+      --variant margin_residual="$E2_28_MARGIN_CONFIG"
+      --gnn-types $E2_28_GNN_TYPES
+      --seeds $E2_28_SEEDS
+      --w4 "$E2_28_W4"
+      --batch "$E2_28_BATCH"
+      --skip-existing
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2
+      --com-path "$matrix_path"
+      --project "$project")
+    for E2_28_CHECKPOINT_ARG in "${E2_28_CHECKPOINT_ARGS[@]}"; do
+      E2_28_COMMAND+=(--stage1-checkpoint-map "$E2_28_CHECKPOINT_ARG")
+    done
+    "${E2_28_COMMAND[@]}" || exit $?
+  }
+
+  case "$E2_28_MATRIX_MODE" in
+    cross)
+      run_e2_28_matrix cross "$COM_PATH" "$E2_28_CROSS_PROJECT"
+      ;;
+    conditional)
+      run_e2_28_matrix conditional "$COM_CONDITIONAL_PATH" "$E2_28_CONDITIONAL_PROJECT"
+      ;;
+    both)
+      run_e2_28_matrix cross "$COM_PATH" "$E2_28_CROSS_PROJECT"
+      run_e2_28_matrix conditional "$COM_CONDITIONAL_PATH" "$E2_28_CONDITIONAL_PROJECT"
+      ;;
+    *)
+      echo "E2_28_MATRIX_MODE must be cross, conditional, or both; got: $E2_28_MATRIX_MODE" >&2
+      exit 1
+      ;;
+  esac
+fi
