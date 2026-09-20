@@ -739,7 +739,7 @@ summary.csv 相对路径：
 
 以下为 E3_versions 各原生模型 Stage2 权重的 Test 结果；每个模型尺寸一行。
 YOLOv10b 也保留，因为它存在于远程 summary.csv。
-`MAYOLO` 作为最终方法单独加入：YOLOv10 + GIA-v2.5.7 + Cross-GIN
+`MAYOLOx` 作为最终方法单独加入：YOLOv10x + GIA-v2.5.7 + Cross-GIN
 margin-residual + HO(one-to-many)，采用 seed=0 结果。
 
 | 模型 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
@@ -777,18 +777,18 @@ margin-residual + HO(one-to-many)，采用 seed=0 结果。
 | YOLOv26m | 0.580546 | 0.365375 | 0.969124 | 0.578885 | 0.631897 | 0.613400 | 0.564752 |
 | YOLOv26l | 0.608445 | 0.423884 | 0.971921 | 0.624476 | 0.692812 | 0.684553 | 0.612041 |
 | YOLOv26x | 0.629516 | 0.453110 | 0.966667 | 0.623032 | 0.695129 | 0.654507 | 0.640941 |
-| MAYOLO | 0.687286 | 0.483173 | 0.973575 | 0.637203 | 0.724806 | 0.689353 | 0.619723 |
+| MAYOLOx | 0.687286 | 0.483173 | 0.973575 | 0.637203 | 0.724806 | 0.689353 | 0.619723 |
 
 summary.csv 相对路径：
 
     runs/experiments/E3_versions/summary.csv
 
-MAYOLO 行 summary.csv 相对路径：
+MAYOLOx 行 summary.csv 相对路径：
 
     runs/experiments/E2_7_Baseline_GIA_GCA_HO_test/summary.csv
 
 原生 E3 模型中，Test mAP50 最高为 YOLOv8x（0.666529），Test mAP50-95 最高为
-YOLOv9e（0.474799），Test F1_macro 最高为 YOLOv11x（0.684342）。MAYOLO 的
+YOLOv9e（0.474799），Test F1_macro 最高为 YOLOv11x（0.684342）。MAYOLOx 的
 最终方法结果单独列出，不与原生模型的尺寸比较混淆。
 
 ### E4：RT-DETR 多规模属性检测
