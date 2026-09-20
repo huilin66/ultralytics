@@ -445,11 +445,11 @@ E5 每个物理目标只保留一个检测框，并使用 2 个目标类别计�
 
 | 方案 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| E5 YOLOv10 真多标签检测 | 0.409310 | 0.235047 | — | 0.507001 | — | 0.534732 | 0.508019 |
+| E5 YOLOv10 真多标签检测 | 0.459027 | 0.260997 | 0.969266 | 0.514020 | 0.533282 | 0.610034 | 0.511734 |
 
-summary.csv 相对路径：未生成；当前原始产物为：
+summary.csv 相对路径：
 
-    runs/experiments/E5_multilabel/yolov10x/weights/best.pt
+    runs/experiments/E5_multilabel/summary.csv
 
 ### E6：目标检测 + 多标签分类双阶段
 
@@ -459,11 +459,11 @@ IoU≥0.5 且目标类别正确的匹配目标，并使用分类器输出的属�
 
 | 方案 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| E6 检测 + 多标签分类 | 0.630217 | 0.431025 | — | 0.530298 | — | 0.540765 | 0.528227 |
+| E6 检测 + 多标签分类 | 0.630217 | 0.431025 | 0.963077 | 0.536394 | 0.581465 | 0.538733 | 0.536492 |
 
-summary.csv 相对路径：未生成；当前原始产物为：
+summary.csv 相对路径：
 
-    runs/experiments/E6_two_stage_yolov10x/
+    runs/experiments/E6_two_stage_yolov10x/summary.csv
 
 ## 5. 鲁棒性实验
 
