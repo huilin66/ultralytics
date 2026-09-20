@@ -857,18 +857,37 @@ summary.csv 相对路径：
 
 ### 5.1 Test 集定量敏感性测试
 
-对 clean test 集和完全相同的模型输入生成以下测试变体：
+对 clean test 集和完全相同的模型输入生成以下测试变体。图像像素先归一化到 [0,1]，
+每种变体设置轻度、中度和重度三个等级；同一张图像的变换参数由固定 seed 生成，
+保证所有模型使用完全相同的变体图像。
 
-- 照明：暗光、过曝、局部阴影、局部眩光；
-- 图像退化：Gaussian/motion blur、局部遮挡；必要时加入可控雨雾或噪声；
-- 视角与尺度：使用 perspective/affine、scale 和 translate 变换模拟合成视角与目标
-  尺度变化，并同步变换 bounding box。
+| Category | Variant | Operation | Mild | Moderate | Severe |
+|---|---|---|---:|---:|---:|
+| Illumination | Low light | Global brightness gain I′=clip(kI) | k=0.75 | k=0.50 | k=0.30 |
+| Illumination | Overexposure | Global brightness gain with highlight clipping I′=clip(kI) | k=1.25 | k=1.60 | k=2.00 |
+| Illumination | Local shadow | Soft elliptical/polygonal mask, I′=clip(I×(1−aM)) | a=0.25, area 15% | a=0.50, area 30% | a=0.75, area 45% |
+| Illumination | Local glare | Radial Gaussian mask blended toward white, I′=clip((1−aM)I+aM) | a=0.25, area 15% | a=0.50, area 30% | a=0.75, area 45% |
+| Image degradation | Gaussian blur | Gaussian convolution with fixed kernel and sigma | sigma=1 | sigma=2 | sigma=4 |
+| Image degradation | Motion blur | Linear convolution kernel with a seed-determined fixed angle | length=5 px | length=10 px | length=20 px |
+| Image degradation | Local occlusion | Cutout/CoarseDropout rectangular or polygonal mask | area 5% | area 15% | area 30% |
+| Image degradation | Gaussian noise | Additive zero-mean Gaussian noise | sigma=0.02 | sigma=0.05 | sigma=0.10 |
+| Image degradation | Fog | White veil with alpha blending, I′=(1−a)I+a | a=0.10 | a=0.25 | a=0.40 |
+| Image degradation | Rain | Procedural rain-streak overlay with fixed direction and seed | alpha=0.15 | alpha=0.30 | alpha=0.45 |
+| Viewpoint and scale | Perspective | Perspective homography with corner displacement proportional to image size | shift 2% | shift 5% | shift 10% |
+| Viewpoint and scale | Affine | Affine rotation and shear with a fixed direction | ±3°/0.03 | ±7°/0.07 | ±12°/0.12 |
+| Viewpoint and scale | Scale | Center-based image scaling to simulate target distance | 0.85× | 0.70× | 0.55× |
+| Viewpoint and scale | Translation | Target-position translation with seed-determined direction | 2% | 5% | 10% |
+
+perspective、affine、scale 和 translate 变换后同步变换 bounding box；亮度、模糊、
+噪声和雨雾不改变 bounding box。局部遮挡只在原属性标签仍具有明确语义时用于属性指标。
+雨、雾和 Gaussian noise 属于可选退化，正式实验前固定实际纳入的变体。
 
 这些变体只在 test 推理阶段生成，不进入模型训练数据。
 
 每个模型、每个测试变体均按照第 3 节的格式报告以下 Test 指标：
 
 Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test
+
 
 ### 5.2 少量真实感退化案例
 
