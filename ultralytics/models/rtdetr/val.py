@@ -152,7 +152,13 @@ class RTDETRValidator(DetectionValidator):
                 args=self.args,
                 _callbacks=self.callbacks,
             )
-            return validator(trainer=trainer, model=model)
+            # ``Model.val`` returns ``validator.metrics`` from this outer
+            # RT-DETR validator.  Keep it aligned with the attribute-aware
+            # validator; otherwise the console prints valid mdet metrics but
+            # callers receive the empty vanilla detection metrics object.
+            result = validator(trainer=trainer, model=model)
+            self.metrics = validator.metrics
+            return result
         return super().__call__(trainer=trainer, model=model)
 
     def build_dataset(self, img_path, mode="val", batch=None):
