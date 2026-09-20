@@ -849,9 +849,11 @@ summary.csv 相对路径：
 
 ## 5. 鲁棒性实验
 
-本实验只比较 `YOLOv10x` 与最终 `MAYOLOx`，不重新训练模型。实验分为 test
-集上的定量敏感性测试、少量真实感退化案例，以及外部场景的定性测试。由于没有
-跨相机标注数据，不测试 camera appearance shift；因此不对跨相机泛化作结论。
+本实验在不重新训练模型的前提下，对以下九个模型使用完全相同的 test 集和扰动协议：
+`YOLOv8x`、`YOLOv9e`、`YOLOv10x`、`YOLOv11x`、`YOLOv12x`、`YOLOv13x`、
+`YOLO26x`、`RT-DETR-x`（`rtdetrx`）和最终 `MAYOLOx`。实验分为 test 集上的
+定量敏感性测试、少量真实感退化案例，以及外部场景的定性测试。由于没有跨相机标注
+数据，不测试 camera appearance shift；因此不对跨相机泛化作结论。
 
 ### 5.1 Test 集定量敏感性测试
 
@@ -865,17 +867,28 @@ summary.csv 相对路径：
 这些变体只在 test 推理阶段生成，不加入训练集或验证集。Mosaic、MixUp 和
 Copy-Paste 不作为 viewpoint/scale robustness 的主要模拟方式。
 
-每个条件使用相同的 YOLOv10x 和 MAYOLOx checkpoint，报告：
+每个条件使用上述九个模型各自的 clean-test checkpoint，报告：
 
+- clean test 结果，作为每个模型的基准；
 - Test mAP50（主指标）；
 - Test mAP50-95（补充指标）；
 - `F1_attr@IoU0.5`；
-- 相对于 clean test 的绝对值和相对下降比例。
+- 相对于该模型 clean test 的绝对值和相对下降比例；
+- 对关键属性报告 per-attribute 的 F1/Recall 变化，避免整体平均值掩盖某一属性的退化。
+
+所有模型必须使用相同的输入尺寸、预处理、扰动参数、score threshold、IoU matching、
+NMS 和 one-to-many 推理设置。属性指标仍只在 IoU≥0.5 且类别正确的检测匹配框上计算，
+不能将不同模型的未匹配背景框写入属性结果。
 
 建议生成：
 
     runs/experiments/E5_robustness/robustness_summary.csv
     runs/experiments/E5_robustness/robustness_per_attribute.csv
+    runs/experiments/E5_robustness/robustness_delta_from_clean.csv
+
+其中结果表至少包含 `model, condition, severity, split, mAP50, mAP50_95,
+F1_attr, clean_value, absolute_delta, relative_drop`，并确保九个模型在每个
+condition/severity 下都有记录。
 
 该部分称为 illumination/corruption/viewpoint sensitivity 或 robustness，不把不同
 扰动条件之间的标准差解释为 epistemic uncertainty。
@@ -883,8 +896,8 @@ Copy-Paste 不作为 viewpoint/scale robustness 的主要模拟方式。
 ### 5.2 少量真实感退化案例
 
 从 test 集固定选择 3–5 张具有代表性的原始图像，使用图像到图像生成模拟夜间、
-阴影、眩光、雨雾或遮挡等更真实的退化。每个案例保留原图、退化图、YOLOv10x
-结果和 MAYOLOx 结果，并记录样本 ID、退化类型和生成提示词。
+阴影、眩光、雨雾或遮挡等更真实的退化。每个案例保留原图、退化图和上述九个模型
+的结果，并记录样本 ID、退化类型和生成提示词。
 
 该部分只作定性展示，不计算总体 mAP/F1。生成后必须人工确认目标位置、类别和属性
 没有被改变；如果生成图改变了目标几何或属性，则不能直接复用原始标注，也不能将
@@ -894,7 +907,7 @@ Copy-Paste 不作为 viewpoint/scale robustness 的主要模拟方式。
 
 可从公开网络收集少量与任务相关、且不出现在训练/验证/test 集中的广告牌图像，
 用于补充不同场景或区域的定性案例。记录图片来源、许可信息和场景说明，并使用
-YOLOv10x 与 MAYOLOx 进行相同推理。
+上述九个模型进行相同推理。
 
 如果外部图像没有人工标注，只展示检测框和属性预测，不计算 mAP/F1，也不称为
 定量的 cross-region generalization。只有在补充 box、类别和属性标注后，才能进行
@@ -926,6 +939,13 @@ YOLOv10x 与 MAYOLOx 进行相同推理。
 - 指标：逐 attribute、逐 level 的 support、Precision、Recall、F1；同时报告 level
   macro-F1、两个 level 的 confusion matrix 和总体 Macro-F1。可补充 balanced
   accuracy，但不把 OA 作为主要结论。
+- 细粒度指标：除 level 汇总外，必须按 `attribute × level` 报告 support、TP、FP、FN、
+  TN、Precision、Recall、F1、balanced accuracy；对每个 attribute 的每个 level 使用
+  one-vs-rest 方式计算 PR 曲线和 AUPRC，并同时给出 macro/micro PR-AUC 汇总。
+- 诊断分析：为每个 attribute 生成 2×2 confusion matrix（同时保留 normalized 版本）；
+  使用属性头的 softmax 概率生成 per-attribute/per-level reliability diagram，并报告
+  ECE、Brier score 和 NLL。校准参数（如采用 temperature scaling）只能在 validation
+  集拟合，test 集只使用固定参数进行最终评估。
 - 数据：优先报告 validation 和 test；模型选择只能使用 validation，test 仅用于最终
   对比。
 
@@ -933,22 +953,27 @@ YOLOv10x 与 MAYOLOx 进行相同推理。
 
 1. 使用现有 YOLOv10x 和 MAYOLOx checkpoint 生成 raw predictions。
 2. 按完全相同的匹配规则生成 `risk_level_per_attribute.csv`，至少包含
-   `model, attribute, level, support, precision, recall, f1`。
+   `model, attribute, level, support, tp, fp, fn, tn, precision, recall, f1, balanced_accuracy`。
 3. 生成 `risk_level_confusion.csv`，记录每个模型、每个 attribute 的 2×2 confusion
    matrix；同时生成模型级 macro 汇总。
-4. 将 YOLOv10x 与 MAYOLOx 的 level 0、level 1 和 macro 结果放入同一张表，并报告
+4. 生成 `risk_level_pr.csv` 和对应的 PR 曲线图，记录每个模型、每个 attribute、每个
+   level 的 threshold、precision、recall、AUPRC，并给出 macro/micro PR-AUC 汇总。
+5. 生成 `risk_level_calibration.csv` 和 reliability diagram，记录每个模型、每个
+   attribute、每个 level 的 bin、样本数、平均置信度、实际准确率、ECE、Brier score
+   和 NLL；若使用 calibration 参数，必须单独记录 validation 拟合结果。
+6. 将 YOLOv10x 与 MAYOLOx 的 level 0、level 1 和 macro 结果放入同一张表，并报告
    差值。若已有多个 seed，报告 mean±SD，不只展示单次最佳结果。
 
 结果表模板：
 
-| 模型 | level | support | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|---:|
-| YOLOv10x | 0 | 待计算 | 待计算 | 待计算 | 待计算 |
-| YOLOv10x | 1 | 待计算 | 待计算 | 待计算 | 待计算 |
-| YOLOv10x | macro | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | 0 | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | 1 | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | macro | 待计算 | 待计算 | 待计算 | 待计算 |
+| 模型 | attribute | level | support | Precision | Recall | F1 | Balanced Acc. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | attr-1 | 0 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| YOLOv10x | attr-1 | 1 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| YOLOv10x | all | macro | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| MAYOLOx | attr-1 | 0 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| MAYOLOx | attr-1 | 1 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| MAYOLOx | all | macro | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
 
 ### 6.3 多 level 扩展边界
 
