@@ -28,6 +28,11 @@ __all__ = "OBB", "Classify", "Detect", "Pose", "RTDETRDecoder", "Segment", "v10D
 # region added gat
 
 
+def _canonical_gnn_type(gnn_type):
+    """Normalize the former ``gca`` operator name to its new ``fga`` name."""
+    return "fga" if gnn_type == "gca" else gnn_type
+
+
 class GAT(nn.Module):
     def __init__(
         self,
@@ -410,19 +415,19 @@ class GCAMarginResidual(nn.Module):
     exclusive logits.  With ``nal == 2`` the decision variable is the risk
     margin ``logit(1) - logit(0)``.  This module propagates that margin through
     a train-only attribute graph and reconstructs the logits while preserving
-    their mean.  ``gnn_type`` selects the graph aggregator so GCA and the
+    their mean.  ``gnn_type`` selects the graph aggregator so FGA and the
     reviewer-requested GCN/GAT/GraphSAGE/GIN comparison share exactly the same
     multiclass-aware residual interface.
     """
 
     expects_multiclass = True
-    supported_gnn_types = {"gca", "gcn", "gat", "graphsage", "gin"}
+    supported_gnn_types = {"fga", "gcn", "gat", "graphsage", "gin"}
 
-    def __init__(self, na, nal, com_path=None, hidden_chs=None, gate_init=0.1, gnn_type="gca"):
+    def __init__(self, na, nal, com_path=None, hidden_chs=None, gate_init=0.1, gnn_type="fga"):
         super().__init__()
         self.na = int(na)
         self.nal = int(nal)
-        self.gnn_type = gnn_type
+        self.gnn_type = _canonical_gnn_type(gnn_type)
         if self.na < 1 or self.nal < 2:
             raise ValueError("GCAMarginResidual requires at least one attribute and nal >= 2")
         if self.gnn_type not in self.supported_gnn_types:
@@ -432,8 +437,9 @@ class GCAMarginResidual(nn.Module):
         graph = _load_attribute_graph(com_path, self.na)
         eye = torch.eye(self.na, dtype=graph.dtype)
 
-        if self.gnn_type == "gca":
-            # Paper-style fixed GCA: row-wise softmax over a train-only
+        if self.gnn_type == "fga":
+            # Fixed Graph Aggregation (the former GCA operator): row-wise
+            # softmax over a train-only
             # co-occurrence matrix, including self information.  A directed
             # conditional P(j|i) matrix can be supplied by generate_com.py.
             self.register_buffer("adjacency", torch.softmax(graph + eye, dim=-1))
@@ -486,7 +492,7 @@ class GCAMarginResidual(nn.Module):
             raise RuntimeError(f"Expected {self.na} attribute channels, got {channels}")
 
         nodes = values.permute(0, 2, 3, 1).reshape(batch, height * width, self.na)
-        if self.gnn_type in {"gca", "gcn"}:
+        if self.gnn_type in {"fga", "gcn"}:
             adjacency = self.adjacency.to(device=values.device, dtype=values.dtype)
             hidden = self.activation(self.node_in(nodes.unsqueeze(-1)))
             # Keep the direct Eq. (10)-style graph message as a strong prior;
@@ -571,7 +577,7 @@ class GCAMultiHeadMarginResidual(GCAMarginResidual):
         com_path=None,
         hidden_chs=None,
         gate_init=0.1,
-        gnn_type="gca",
+        gnn_type="fga",
         attention_chs=32,
         attention_heads=4,
         attention_dropout=0.0,
@@ -650,7 +656,7 @@ class GCAFeatureLogitMultiHeadResidual(nn.Module):
         com_path=None,
         hidden_chs=None,
         gate_init=0.1,
-        gnn_type="gca",
+        gnn_type="fga",
         attention_chs=32,
         attention_heads=4,
         attention_dropout=0.0,
@@ -661,6 +667,7 @@ class GCAFeatureLogitMultiHeadResidual(nn.Module):
         self.nal = int(nal)
         if self.channels < 1 or self.na < 1 or self.nal < 2:
             raise ValueError("GCAFeatureLogitMultiHeadResidual requires positive channels/na and nal >= 2")
+        gnn_type = _canonical_gnn_type(gnn_type)
         if gnn_type not in self.supported_gnn_types:
             raise ValueError(f"Unsupported feature-logit graph type: {gnn_type}")
 
@@ -754,14 +761,14 @@ class GCAContextResidual(nn.Module):
     5. add the bounded correction through a learnable residual gate.
 
     ``gnn_type`` selects the graph operator while all other parts remain
-    unchanged, making the reviewer-requested GCA/GCN/GAT/GraphSAGE/GIN
+    unchanged, making the reviewer-requested FGA/GCN/GAT/GraphSAGE/GIN
     comparison controlled and directly comparable.  The row of the matrix is
     the target attribute and the column is the source attribute, so a
     conditional matrix ``P(source | target)`` can be used directly.
     """
 
     expects_multiclass = True
-    supported_gnn_types = {"gca", "gcn", "gat", "graphsage", "gin"}
+    supported_gnn_types = {"fga", "gcn", "gat", "graphsage", "gin"}
 
     def __init__(
         self,
@@ -772,12 +779,12 @@ class GCAContextResidual(nn.Module):
         gate_init=0.1,
         temperature=0.5,
         margin_scale=2.0,
-        gnn_type="gca",
+        gnn_type="fga",
     ):
         super().__init__()
         self.na = int(na)
         self.nal = int(nal)
-        self.gnn_type = str(gnn_type)
+        self.gnn_type = _canonical_gnn_type(str(gnn_type))
         self.margin_scale = float(margin_scale)
         if self.na < 1 or self.nal < 2:
             raise ValueError("GCAContextResidual requires at least one attribute and nal >= 2")
@@ -793,7 +800,7 @@ class GCAContextResidual(nn.Module):
         self.temperature = float(temperature)
         graph = _load_attribute_graph(com_path, self.na)
         eye = torch.eye(self.na, dtype=graph.dtype)
-        if self.gnn_type == "gca":
+        if self.gnn_type == "fga":
             adjacency = torch.softmax((graph + eye) / self.temperature, dim=-1)
             self.register_buffer("adjacency", adjacency)
         elif self.gnn_type == "gcn":
@@ -856,7 +863,7 @@ class GCAContextResidual(nn.Module):
 
     def _aggregate_context(self, signal, confidence):
         """Apply the selected GNN operator to per-pixel attribute signals."""
-        if self.gnn_type in {"gca", "gcn", "graphsage"}:
+        if self.gnn_type in {"fga", "gcn", "graphsage"}:
             adjacency = self.adjacency.to(device=signal.device, dtype=signal.dtype)
             weights = adjacency.view(1, 1, self.na, self.na) * confidence.unsqueeze(-2)
             context = (weights * signal.unsqueeze(-2)).sum(dim=-1) / weights.sum(dim=-1).clamp_min(1e-6)
@@ -2619,11 +2626,13 @@ class MDetect(nn.Module):
                 GraphGIN(self.na, self.na, com_path=self.com_path, res=True) for x in ch
             )
         elif self.gat in {
+            "fga_margin_residual",
             "com_gat_margin_residual",
             "gcn_margin_residual",
             "gat_margin_residual",
             "graphsage_margin_residual",
             "gin_margin_residual",
+            "fga_mha_margin_residual",
             "com_gat_mha_margin_residual",
             "gcn_mha_margin_residual",
             "gat_mha_margin_residual",
@@ -2633,14 +2642,16 @@ class MDetect(nn.Module):
             # These variants consume all na*nal logits at once so they can
             # propagate the two-class risk margin for every attribute.
             margin_variants = {
-                "com_gat_margin_residual": "gca",
+                "fga_margin_residual": "fga",
+                "com_gat_margin_residual": "fga",  # legacy token
                 "gcn_margin_residual": "gcn",
                 "gat_margin_residual": "gat",
                 "graphsage_margin_residual": "graphsage",
                 "gin_margin_residual": "gin",
             }
             mha_margin_variants = {
-                "com_gat_mha_margin_residual": "gca",
+                "fga_mha_margin_residual": "fga",
+                "com_gat_mha_margin_residual": "fga",  # legacy token
                 "gcn_mha_margin_residual": "gcn",
                 "gat_mha_margin_residual": "gat",
                 "graphsage_mha_margin_residual": "graphsage",
@@ -2657,6 +2668,7 @@ class MDetect(nn.Module):
                 for x in ch
             )
         elif self.gat in {
+            "fga_feature_logit_mha_margin_residual",
             "com_gat_feature_logit_mha_margin_residual",
             "gcn_feature_logit_mha_margin_residual",
             "gat_feature_logit_mha_margin_residual",
@@ -2667,7 +2679,8 @@ class MDetect(nn.Module):
             # raw attribute logits.  The feature-logit cross-attention is
             # applied before the selected margin-residual graph operator.
             gnn_type = {
-                "com_gat_feature_logit_mha_margin_residual": "gca",
+                "fga_feature_logit_mha_margin_residual": "fga",
+                "com_gat_feature_logit_mha_margin_residual": "fga",  # legacy token
                 "gcn_feature_logit_mha_margin_residual": "gcn",
                 "gat_feature_logit_mha_margin_residual": "gat",
                 "graphsage_feature_logit_mha_margin_residual": "graphsage",
@@ -2784,6 +2797,7 @@ class MDetect(nn.Module):
                 "twohop": GCATwoHopResidual,
                 "conv_adapter": GCAConvAdapterResidual,
             }.get(variant)
+            gnn_type = _canonical_gnn_type(gnn_type)
             if gnn_type not in GCAContextResidual.supported_gnn_types or variant_class is None:
                 self.gat_head = None
             else:

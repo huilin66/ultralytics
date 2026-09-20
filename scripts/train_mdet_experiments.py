@@ -63,7 +63,7 @@ Examples (PowerShell):
         --variant gat=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml `
         --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml `
         --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml `
-        --gnn-types gca gcn gat graphsage gin `
+        --gnn-types fga gcn gat graphsage gin `
         --com-path path/to/co_occurrence_matrix_train.csv
 
     python scripts/train_mdet_experiments.py gca-stage2-seeds `
@@ -75,7 +75,7 @@ Examples (PowerShell):
         --stage1-checkpoint-map 3=runs/.../seed_3_stage1/weights/best.pt `
         --stage1-checkpoint-map 4=runs/.../seed_4_stage1/weights/best.pt `
         --variant margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml `
-        --gnn-types gca gcn gat graphsage gin `
+        --gnn-types fga gcn gat graphsage gin `
         --seeds 0 1 2 3 4 `
         --com-path path/to/co_occurrence_matrix_train.csv
 
@@ -178,7 +178,7 @@ def _materialize_config(
     The ablation YAMLs in ``exp_ablation`` contain an absolute Linux path
     to the co-occurrence matrix.  Replacing it in a generated copy keeps the
     experiment reproducible and avoids changing the checked-in configuration.
-    For the 5x5 GCA study, the checked-in YAML keeps the ``com_gca_*`` token
+    For the 5x5 GCA study, the checked-in YAML keeps the ``com_fga_*`` token
     and this function materializes the requested GNN-specific token in the
     per-project generated copy.  Feature-graph YAMLs may receive an optional
     trailing residual gain in the same generated copy, so the source YAML
@@ -192,29 +192,30 @@ def _materialize_config(
     changed = False
 
     if gnn_type is not None:
-        valid_gnn_types = {"gca", "gcn", "gat", "graphsage", "gin"}
+        # ``gca`` remains accepted only as a legacy programmatic alias; new
+        # runs use the canonical ``fga`` name for the former fixed graph
+        # aggregation operator.
+        if gnn_type == "gca":
+            gnn_type = "fga"
+        valid_gnn_types = {"fga", "gcn", "gat", "graphsage", "gin"}
         if gnn_type not in valid_gnn_types:
             raise ValueError(f"Unsupported --gnn-types value: {gnn_type!r}")
 
-        # The standard GCA variants are defined once in YAML. Replace only
+        # The standard FGA variants are defined once in YAML. Replace only
         # the operator token, preserving the selected structural variant:
-        # com_gca_context_residual -> com_gcn_context_residual, etc.
+        # com_fga_context_residual -> com_gcn_context_residual, etc.
         # The margin-residual base YAML historically uses
-        # ``com_gat_margin_residual`` for the GCA implementation. It is
+        # ``com_gat_margin_residual`` for the former GCA implementation. It is
         # materialized separately because the other margin-residual
         # operators do not carry the ``com_`` prefix.  The MHA variants follow
         # the same convention with ``*_mha_margin_residual`` tokens.  The
         # feature-logit variant adds ``feature_logit_`` before that suffix.
         feature_logit_mha_pattern = re.compile(
-            r"(?P<quote>['\"]?)com_gat_feature_logit_mha_margin_residual(?P=quote)"
+            r"(?P<quote>['\"]?)(?:com_gat|fga)_feature_logit_mha_margin_residual(?P=quote)"
         )
 
         def replace_feature_logit_mha(match: re.Match) -> str:
-            token = (
-                "com_gat_feature_logit_mha_margin_residual"
-                if gnn_type == "gca"
-                else f"{gnn_type}_feature_logit_mha_margin_residual"
-            )
+            token = f"{gnn_type}_feature_logit_mha_margin_residual"
             return f"{match.group('quote')}{token}{match.group('quote')}"
 
         updated, feature_logit_mha_count = feature_logit_mha_pattern.subn(
@@ -222,34 +223,26 @@ def _materialize_config(
         )
 
         mha_margin_pattern = re.compile(
-            r"(?P<quote>['\"]?)com_gat_mha_margin_residual(?P=quote)"
+            r"(?P<quote>['\"]?)(?:com_gat|fga)_mha_margin_residual(?P=quote)"
         )
 
         def replace_mha_margin(match: re.Match) -> str:
-            token = (
-                "com_gat_mha_margin_residual"
-                if gnn_type == "gca"
-                else f"{gnn_type}_mha_margin_residual"
-            )
+            token = f"{gnn_type}_mha_margin_residual"
             return f"{match.group('quote')}{token}{match.group('quote')}"
 
         updated, mha_margin_count = mha_margin_pattern.subn(replace_mha_margin, updated)
 
         margin_pattern = re.compile(
-            r"(?P<quote>['\"]?)com_gat_margin_residual(?P=quote)"
+            r"(?P<quote>['\"]?)(?:com_gat|fga)_margin_residual(?P=quote)"
         )
         def replace_margin(match: re.Match) -> str:
-            token = (
-                "com_gat_margin_residual"
-                if gnn_type == "gca"
-                else f"{gnn_type}_margin_residual"
-            )
+            token = f"{gnn_type}_margin_residual"
             return f"{match.group('quote')}{token}{match.group('quote')}"
 
         updated, margin_count = margin_pattern.subn(replace_margin, updated)
 
         gnn_pattern = re.compile(
-            r"(?P<quote>['\"]?)com_gca_"
+            r"(?P<quote>['\"]?)com_(?:gca|fga)_"
             r"(?P<variant>context|adaptive|twohop|conv_adapter)_residual"
             r"(?P=quote)"
         )
@@ -263,9 +256,9 @@ def _materialize_config(
         if feature_logit_mha_count + mha_margin_count + margin_count + standard_count == 0:
             raise ValueError(
                 f"{source} does not contain one of the materializable "
-                "GCA residual tokens. Expected a standard com_gca_*_residual "
-                "token, com_gat_margin_residual, com_gat_mha_margin_residual, "
-                "or com_gat_feature_logit_mha_margin_residual."
+                "FGA residual tokens. Expected a standard com_fga_*_residual "
+                "token, fga_margin_residual, fga_mha_margin_residual, "
+                "or fga_feature_logit_mha_margin_residual."
             )
         changed = True
 
@@ -900,7 +893,7 @@ def _run_gca_stage2_seeds(args: argparse.Namespace) -> None:
         )
 
     variants = _parse_key_value(args.variant, "--variant")
-    gnn_types = args.gnn_types or ["gca", "gcn", "gat", "graphsage", "gin"]
+    gnn_types = args.gnn_types or ["fga", "gcn", "gat", "graphsage", "gin"]
     for gnn_type in gnn_types:
         for seed in args.seeds:
             checkpoint = checkpoints[str(seed)]
@@ -1249,7 +1242,7 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_stage2.add_argument(
         "--gnn-types",
         nargs="+",
-        choices=("gca", "gcn", "gat", "graphsage", "gin"),
+        choices=("fga", "gcn", "gat", "graphsage", "gin"),
         default=None,
         metavar="GNN",
         help=(
@@ -1304,8 +1297,8 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_stage2_seeds.add_argument(
         "--gnn-types",
         nargs="+",
-        choices=("gca", "gcn", "gat", "graphsage", "gin"),
-        default=["gca", "gcn", "gat", "graphsage", "gin"],
+        choices=("fga", "gcn", "gat", "graphsage", "gin"),
+        default=["fga", "gcn", "gat", "graphsage", "gin"],
         metavar="GNN",
         help="margin-residual graph operators to materialize for every seed",
     )
@@ -1333,7 +1326,7 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_warmup.add_argument(
         "--gnn-types",
         nargs="+",
-        choices=("gca", "gcn", "gat", "graphsage", "gin"),
+        choices=("fga", "gcn", "gat", "graphsage", "gin"),
         default=None,
         metavar="GNN",
         help="materialize the selected GNN operators in the margin-residual YAML",
@@ -1426,10 +1419,10 @@ def _build_parser() -> argparse.ArgumentParser:
         if name == "gca-structure":
             variant_parser.add_argument(
                 "--gnn-type",
-                choices=("gca", "gcn", "gat", "graphsage", "gin"),
+                choices=("fga", "gcn", "gat", "graphsage", "gin"),
                 default=None,
                 help=(
-                    "materialize one GNN operator in com_gca_* structural YAMLs; "
+                    "materialize one GNN operator in com_fga_* structural YAMLs; "
                     "useful when running a full stage1+stage2 GCA variant"
                 ),
             )

@@ -173,7 +173,7 @@ PYTHON_BIN=${PYTHON_BIN:-python3}
 #     --variant adaptive=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_adaptive_residual.yaml \
 #     --variant twohop=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_twohop_residual.yaml \
 #     --variant conv_adapter=ultralytics/cfg/models/exp_ablation/yolov10x_GCA_conv_adapter_residual.yaml \
-#     --gnn-types gca gcn gat graphsage gin \
+#     --gnn-types fga gcn gat graphsage gin \
 #     --w4 0.5 \
 #     --batch 16 \
 #     --seed 0 \
@@ -823,7 +823,7 @@ if [ "${RUN_E2_3_GIA_GCA_BATCH:-0}" = "1" ]; then
   E2_3_W4=${E2_3_W4:-0.5}
   E2_3_BATCH=${E2_3_BATCH:-16}
   E2_3_SEED=${E2_3_SEED:-0}
-  E2_3_GNN_TYPES=${E2_3_GNN_TYPES:-"gca gcn gat graphsage gin"}
+  E2_3_GNN_TYPES=${E2_3_GNN_TYPES:-"fga gcn gat graphsage gin"}
 
   # If a real old E2.3 output exists, preserve it under the requested archive
   # name before creating the new E2.3 projects; never overwrite an archive.
@@ -892,7 +892,7 @@ if [ "${RUN_GIA_GCA_5X6_BATCH:-0}" = "1" ]; then
   GIA_5X6_W4=${GIA_5X6_W4:-0.5}
   GIA_5X6_BATCH=${GIA_5X6_BATCH:-16}
   GIA_5X6_SEED=${GIA_5X6_SEED:-0}
-  GIA_5X6_GNN_TYPES=${GIA_5X6_GNN_TYPES:-"gca gcn gat graphsage gin"}
+  GIA_5X6_GNN_TYPES=${GIA_5X6_GNN_TYPES:-"fga gcn gat graphsage gin"}
 
   for REQUIRED_FILE in "$GIA_5X6_STAGE1_CKPT" "$GIA_5X6_CONTEXT_CONFIG" "$GIA_5X6_ADAPTIVE_CONFIG" "$GIA_5X6_TWOHOP_CONFIG" "$GIA_5X6_CONV_CONFIG" "$GIA_5X6_MARGIN_CONFIG" "$COM_PATH" "$COM_CONDITIONAL_PATH"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
@@ -978,9 +978,9 @@ if [ "${RUN_GIA_GCA_TOP5_STABILITY:-0}" = "1" ]; then
   }
 
   for GIA_TOP5_SEED in $GIA_TOP5_SEEDS; do
-    run_gia_top5_one "$GIA_TOP5_SEED" context_conditional "$GIA_TOP5_CONTEXT_CONFIG" gca
-    run_gia_top5_one "$GIA_TOP5_SEED" context_cross "$GIA_TOP5_CONTEXT_CONFIG" gca
-    run_gia_top5_one "$GIA_TOP5_SEED" twohop "$GIA_TOP5_TWOHOP_CONFIG" gca
+    run_gia_top5_one "$GIA_TOP5_SEED" context_conditional "$GIA_TOP5_CONTEXT_CONFIG" fga
+    run_gia_top5_one "$GIA_TOP5_SEED" context_cross "$GIA_TOP5_CONTEXT_CONFIG" fga
+    run_gia_top5_one "$GIA_TOP5_SEED" twohop "$GIA_TOP5_TWOHOP_CONFIG" fga
     run_gia_top5_one "$GIA_TOP5_SEED" adaptive "$GIA_TOP5_ADAPTIVE_CONFIG" gin
     run_gia_top5_one "$GIA_TOP5_SEED" twohop "$GIA_TOP5_TWOHOP_CONFIG" graphsage
   done
@@ -998,7 +998,7 @@ if [ "${RUN_E2_23_GCA_WARMUP_BATCH:-0}" = "1" ]; then
   E2_23_MARGIN_CONFIG=${E2_23_MARGIN_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}
   E2_23_W4=${E2_23_W4:-0.5}
   E2_23_BATCH=${E2_23_BATCH:-16}
-  E2_23_GNN_TYPES=${E2_23_GNN_TYPES:-"gca gcn gat graphsage gin"}
+  E2_23_GNN_TYPES=${E2_23_GNN_TYPES:-"fga gcn gat graphsage gin"}
 
   for REQUIRED_FILE in "$E2_23_STAGE1_CKPT" "$E2_23_MARGIN_CONFIG" "$COM_CONDITIONAL_PATH"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
@@ -1042,7 +1042,7 @@ if [ "${RUN_E2_24_GCA_MHA_BATCH:-0}" = "1" ]; then
   E2_24_DEVICE=${E2_24_DEVICE:-0}
   E2_24_W4=${E2_24_W4:-0.5}
   E2_24_BATCH=${E2_24_BATCH:-16}
-  E2_24_GNN_TYPES=${E2_24_GNN_TYPES:-"gca gcn gat graphsage gin"}
+  E2_24_GNN_TYPES=${E2_24_GNN_TYPES:-"fga gcn gat graphsage gin"}
 
   for REQUIRED_FILE in "$E2_24_STAGE1_CKPT" "$E2_24_MHA_MARGIN_CONFIG" "$COM_CONDITIONAL_PATH"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
@@ -1081,7 +1081,7 @@ if [ "${RUN_E2_25_GCA_FEATURE_LOGIT_MHA_BATCH:-0}" = "1" ]; then
   E2_25_DEVICE=${E2_25_DEVICE:-1}
   E2_25_W4=${E2_25_W4:-0.5}
   E2_25_BATCH=${E2_25_BATCH:-16}
-  E2_25_GNN_TYPES=${E2_25_GNN_TYPES:-"gca gcn gat graphsage gin"}
+  E2_25_GNN_TYPES=${E2_25_GNN_TYPES:-"fga gcn gat graphsage gin"}
 
   for REQUIRED_FILE in "$E2_25_STAGE1_CKPT" "$E2_25_CONFIG" "$COM_CONDITIONAL_PATH"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
@@ -1126,7 +1126,7 @@ if [ "${RUN_E2_28_GIA_5SEED_GCA_BATCH:-0}" = "1" ]; then
   E2_28_W4=${E2_28_W4:-0.5}
   E2_28_BATCH=${E2_28_BATCH:-16}
   E2_28_SEEDS=${E2_28_SEEDS:-"0 1 2 3 4"}
-  E2_28_GNN_TYPES=${E2_28_GNN_TYPES:-"gca gcn gat graphsage gin"}
+  E2_28_GNN_TYPES=${E2_28_GNN_TYPES:-"fga gcn gat graphsage gin"}
 
   E2_28_CHECKPOINT_ARGS=()
   for E2_28_SEED in $E2_28_SEEDS; do
