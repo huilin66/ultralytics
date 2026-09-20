@@ -256,6 +256,10 @@ E2.29 基于 E2.27 Baseline 五个 seed 的 Stage1 checkpoint，分别使用 Con
 | 3 | 0.635252 | 0.626502 | 0.626502 | 0.627960 | 0.627960 | **0.633735** |
 | 4 | 0.542371 | 0.541939 | 0.541939 | 0.541939 | 0.541939 | **0.546675** |
 
+summary.csv 相对路径：
+
+    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_conditional/summary.csv
+
 | seed | Test mAP50 | Test mAP50-95 |
 |---:|---:|---:|
 | 0 | 0.666443 | 0.453483 |
@@ -263,6 +267,10 @@ E2.29 基于 E2.27 Baseline 五个 seed 的 Stage1 checkpoint，分别使用 Con
 | 2 | 0.635101 | 0.453514 |
 | 3 | 0.617033 | 0.421210 |
 | 4 | 0.580827 | 0.373583 |
+
+summary.csv 相对路径：
+
+    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_conditional/summary.csv
 
 | 方法 | F1_macro_test | 相对 Baseline |
 |---|---:|---:|
@@ -273,7 +281,7 @@ E2.29 基于 E2.27 Baseline 五个 seed 的 Stage1 checkpoint，分别使用 Con
 | GraphSAGE | 0.607881 ± 0.037035 | −0.011064 |
 | GIN | 0.615036 ± 0.039846 | −0.003909 |
 
-Conditional 结果路径：
+summary.csv 相对路径：
 
     runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_conditional/summary.csv
 
@@ -287,6 +295,10 @@ Conditional 结果路径：
 | 3 | 0.635252 | 0.626502 | 0.631024 | 0.626502 | 0.627960 | **0.633930** |
 | 4 | 0.542371 | **0.541939** | **0.541939** | **0.541939** | **0.541939** | 0.540919 |
 
+summary.csv 相对路径：
+
+    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_cross/summary.csv
+
 | seed | Test mAP50 | Test mAP50-95 |
 |---:|---:|---:|
 | 0 | 0.666443 | 0.453483 |
@@ -294,6 +306,10 @@ Conditional 结果路径：
 | 2 | 0.635101 | 0.453514 |
 | 3 | 0.617033 | 0.421210 |
 | 4 | 0.580827 | 0.373583 |
+
+summary.csv 相对路径：
+
+    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_cross/summary.csv
 
 | 方法 | F1_macro_test | 相对 Baseline |
 |---|---:|---:|
@@ -304,7 +320,7 @@ Conditional 结果路径：
 | GraphSAGE | 0.612182 ± 0.040498 | −0.006763 |
 | GIN | 0.618524 ± 0.045419 | −0.000420 |
 
-Cross 结果路径：
+summary.csv 相对路径：
 
     runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_cross/summary.csv
 
