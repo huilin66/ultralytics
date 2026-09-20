@@ -109,11 +109,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default="/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv",
     )
     parser.add_argument("--pretrain-dir", default=None)
-    parser.add_argument(
+    skip_group = parser.add_mutually_exclusive_group()
+    skip_group.add_argument(
         "--skip-existing",
-        action=argparse.BooleanOptionalAction,
+        dest="skip_existing",
+        action="store_true",
         default=True,
-        help="skip completed size runs (use --no-skip-existing to retrain them)",
+        help="skip completed size runs (default)",
+    )
+    skip_group.add_argument(
+        "--no-skip-existing",
+        dest="skip_existing",
+        action="store_false",
+        help="retrain size runs even when a completed result exists",
     )
     parser.add_argument("--dry-run", action="store_true")
     return parser
