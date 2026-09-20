@@ -849,7 +849,113 @@ summary.csv 相对路径：
 
 ## 5. 鲁棒性实验
 
-当前留白，待后续鲁棒性实验完成后补充。
+本实验只比较 `YOLOv10x` 与最终 `MAYOLOx`，不重新训练模型。实验分为 test
+集上的定量敏感性测试、少量真实感退化案例，以及外部场景的定性测试。由于没有
+跨相机标注数据，不测试 camera appearance shift；因此不对跨相机泛化作结论。
+
+### 5.1 Test 集定量敏感性测试
+
+对 clean test 集和完全相同的模型输入生成以下测试变体：
+
+- 照明：暗光、过曝、局部阴影、局部眩光；
+- 图像退化：Gaussian/motion blur、局部遮挡；必要时加入可控雨雾或噪声；
+- 视角与尺度：使用 perspective/affine、scale 和 translate 变换模拟合成视角与目标
+  尺度变化，并同步变换 bounding box。
+
+这些变体只在 test 推理阶段生成，不加入训练集或验证集。Mosaic、MixUp 和
+Copy-Paste 不作为 viewpoint/scale robustness 的主要模拟方式。
+
+每个条件使用相同的 YOLOv10x 和 MAYOLOx checkpoint，报告：
+
+- Test mAP50（主指标）；
+- Test mAP50-95（补充指标）；
+- `F1_attr@IoU0.5`；
+- 相对于 clean test 的绝对值和相对下降比例。
+
+建议生成：
+
+    runs/experiments/E5_robustness/robustness_summary.csv
+    runs/experiments/E5_robustness/robustness_per_attribute.csv
+
+该部分称为 illumination/corruption/viewpoint sensitivity 或 robustness，不把不同
+扰动条件之间的标准差解释为 epistemic uncertainty。
+
+### 5.2 少量真实感退化案例
+
+从 test 集固定选择 3–5 张具有代表性的原始图像，使用图像到图像生成模拟夜间、
+阴影、眩光、雨雾或遮挡等更真实的退化。每个案例保留原图、退化图、YOLOv10x
+结果和 MAYOLOx 结果，并记录样本 ID、退化类型和生成提示词。
+
+该部分只作定性展示，不计算总体 mAP/F1。生成后必须人工确认目标位置、类别和属性
+没有被改变；如果生成图改变了目标几何或属性，则不能直接复用原始标注，也不能将
+该样本用于定量指标。
+
+### 5.3 外部场景/区域案例
+
+可从公开网络收集少量与任务相关、且不出现在训练/验证/test 集中的广告牌图像，
+用于补充不同场景或区域的定性案例。记录图片来源、许可信息和场景说明，并使用
+YOLOv10x 与 MAYOLOx 进行相同推理。
+
+如果外部图像没有人工标注，只展示检测框和属性预测，不计算 mAP/F1，也不称为
+定量的 cross-region generalization。只有在补充 box、类别和属性标注后，才能进行
+外部数据集指标比较。
+
+### 5.4 实验边界
+
+- camera appearance shift：因缺少跨相机标注数据，放弃；
+- cross-region/scene：当前只做外部样本定性案例，不能替代真正的 held-out domain
+  quantitative evaluation；
+- 真实感生成样本不进入训练或验证流程；
+- 当前结果只能支持有限的 robustness/sensitivity 结论，不能支持 epistemic
+  uncertainty 已被缓解或已完成真实城市环境泛化验证。
+
+## 6. 二级属性/风险等级对比：YOLOv10x vs MAYOLOx
+
+当前数据集中的每个属性只有两个 level。本节用于比较基础多属性检测器
+`YOLOv10x` 与最终模型 `MAYOLOx` 在两个 level 上的识别能力，不用于证明已经完成
+多级风险识别。由于现有属性头已经使用 `nal=2` 输出两个 level 的 logits，以下工作
+只需要使用现有 checkpoint 重新评估，不需要重新训练。
+
+### 6.1 评估协议
+
+- 模型：E3 中的 `YOLOv10x` 与最终 `MAYOLOx`；两者使用相同的数据划分和评估代码。
+- 检测匹配：预测框与 GT 的 IoU≥0.5 且目标类别正确时，才把该目标纳入属性/level
+  评估；漏检、类别错误和背景框不直接写入属性 confusion matrix，避免背景污染。
+- 输出：对每个 attribute 的两个 level 分别统计预测结果；固定 score、IoU、NMS 和
+  one-to-many 推理设置。若使用多个 seed，两个模型必须使用相同的 seed 集合。
+- 指标：逐 attribute、逐 level 的 support、Precision、Recall、F1；同时报告 level
+  macro-F1、两个 level 的 confusion matrix 和总体 Macro-F1。可补充 balanced
+  accuracy，但不把 OA 作为主要结论。
+- 数据：优先报告 validation 和 test；模型选择只能使用 validation，test 仅用于最终
+  对比。
+
+### 6.2 需要生成的结果
+
+1. 使用现有 YOLOv10x 和 MAYOLOx checkpoint 生成 raw predictions。
+2. 按完全相同的匹配规则生成 `risk_level_per_attribute.csv`，至少包含
+   `model, attribute, level, support, precision, recall, f1`。
+3. 生成 `risk_level_confusion.csv`，记录每个模型、每个 attribute 的 2×2 confusion
+   matrix；同时生成模型级 macro 汇总。
+4. 将 YOLOv10x 与 MAYOLOx 的 level 0、level 1 和 macro 结果放入同一张表，并报告
+   差值。若已有多个 seed，报告 mean±SD，不只展示单次最佳结果。
+
+结果表模板：
+
+| 模型 | level | support | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| YOLOv10x | 0 | 待计算 | 待计算 | 待计算 | 待计算 |
+| YOLOv10x | 1 | 待计算 | 待计算 | 待计算 | 待计算 |
+| YOLOv10x | macro | 待计算 | 待计算 | 待计算 | 待计算 |
+| MAYOLOx | 0 | 待计算 | 待计算 | 待计算 | 待计算 |
+| MAYOLOx | 1 | 待计算 | 待计算 | 待计算 | 待计算 |
+| MAYOLOx | macro | 待计算 | 待计算 | 待计算 | 待计算 |
+
+### 6.3 多 level 扩展边界
+
+当前实验只验证两个 level。方法层面通过 `nal` 参数控制每个属性的 level 数，理论上
+可将输出扩展为 `na×nal`，但没有真实多 level 标注时，不应把该能力写成已经验证的
+多级风险识别结果。论文中应表述为“two-level attribute/risk recognition with a
+`nal`-parameterized extensible head”，多 level 的实际效果留作后续工作。
 
 ## 100. 原始结果位置
 
