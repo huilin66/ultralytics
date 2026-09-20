@@ -392,7 +392,7 @@ python scripts/train_mdet_experiments.py versions `
   --pretrain-map yolov10x=yolov10x.pt `
   --pretrain-map yolov11x=path/to/yolo11x.pt `
   --pretrain-map yolov12x=path/to/yolo12x.pt `
-  --pretrain-map yolov13x=path/to/yolo13x.pt `
+  --pretrain-map yolov13x=path/to/yolov13x.pt `
   --pretrain-map yolov26x=yolo26x.pt `
   --pretrain-map mayolox=path/to/mayolovx.pt `
   --w4 0.5 --project runs/experiments/E3_versions

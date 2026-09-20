@@ -502,6 +502,28 @@ def _get_hsv_values(
     return values
 
 
+def _resolve_pretrain_checkpoint(variant_name: str, pretrain: str) -> str:
+    """Resolve known historical checkpoint aliases without hiding real missing files.
+
+    The official YOLO13 checkpoint names contain ``yolov13``.  Some older
+    launch commands used the shortened ``yolo13`` spelling, which caused a
+    completed model matrix to stop before the YOLO13 variants.  Accept that
+    alias only when the canonical file exists beside the requested path.
+    """
+    requested = Path(pretrain).expanduser()
+    if requested.is_file():
+        return str(requested)
+
+    if variant_name.startswith("yolov13"):
+        size = variant_name[len("yolov13") :]
+        if requested.name == f"yolo13{size}.pt":
+            canonical = requested.with_name(f"yolov13{size}.pt")
+            if canonical.is_file():
+                print(f"[checkpoint-alias] {requested} -> {canonical}")
+                return str(canonical)
+    return pretrain
+
+
 def _training_kwargs(
     args: argparse.Namespace,
     w4: float,
@@ -1079,6 +1101,8 @@ def _run_variants(args: argparse.Namespace) -> None:
     label = args.label or args.experiment
     for name, config in variants.items():
         pretrain = checkpoints.get(name, args.pretrain)
+        if pretrain:
+            pretrain = _resolve_pretrain_checkpoint(name, pretrain)
         if not pretrain and name in YOLO26_MDET_CONFIGS:
             pretrain = f"yolo26{name[-1]}.pt"
         if not pretrain:

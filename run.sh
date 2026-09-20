@@ -685,6 +685,10 @@ if [ "${RUN_E3_VERSIONS:-0}" = "1" ]; then
         yolov12)
           E3_PRETRAIN="yolo12${E3_SIZE}.pt"
           ;;
+        yolov13)
+          # Official YOLO13 checkpoints use the ``yolov13`` prefix.
+          E3_PRETRAIN="yolov13${E3_SIZE}.pt"
+          ;;
         yolov26)
           E3_PRETRAIN="yolo26${E3_SIZE}.pt"
           ;;
