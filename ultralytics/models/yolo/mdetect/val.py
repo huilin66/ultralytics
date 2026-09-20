@@ -41,6 +41,8 @@ class MDetectionValidator(BaseValidator):
         self.iouv = torch.linspace(0.5, 0.95, 10)  # IoU vector for mAP@0.5:0.95
         self.niou = self.iouv.numel()
         self.lb = []  # for autolabelling
+        self.level_targets = []
+        self.level_probs = []
 
     def preprocess(self, batch):
         """Preprocesses batch of images for YOLO training."""
@@ -92,6 +94,12 @@ class MDetectionValidator(BaseValidator):
         self.metrics.na = self.na
         self.metrics.nal = self.nal
         self.metrics.reset_attribute_metrics()
+        # Detailed level/PR-AUC artifacts are collected only for an explicit
+        # test pass so normal training-time evaluations keep their memory and
+        # runtime behavior unchanged.
+        self.collect_detailed_level_metrics = str(getattr(self.args, "split", "")) == "test"
+        self.level_targets = []
+        self.level_probs = []
         self.confusion_matrix = MConfusionMatrix(
             nc=self.nc,
             na=self.na,
@@ -198,7 +206,18 @@ class MDetectionValidator(BaseValidator):
 
             # Evaluate
             if nl:
-                stat["tp"], stat["ap"], stat["conf_mat"], stat["filter_small_gt"], stat["filter_small_pred"] = self._process_batch(predn, bbox, cls, mdet_attributes)
+                (
+                    stat["tp"],
+                    stat["ap"],
+                    stat["conf_mat"],
+                    stat["filter_small_gt"],
+                    stat["filter_small_pred"],
+                    matched_targets,
+                    matched_probs,
+                ) = self._process_batch(predn, bbox, cls, mdet_attributes)
+                if self.collect_detailed_level_metrics and matched_targets.numel() and matched_probs.numel():
+                    self.level_targets.append(matched_targets.detach().cpu().numpy())
+                    self.level_probs.append(matched_probs.detach().cpu().numpy())
                 if stat["filter_small_gt"] is not None:
                     stat["target_cls"] = stat["target_cls"][stat["filter_small_gt"]]
                     stat["target_attributes"] = stat["target_attributes"][stat["filter_small_gt"]]
@@ -227,11 +246,18 @@ class MDetectionValidator(BaseValidator):
         """Returns metrics statistics and results dictionary."""
         stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items() if k not in ['filter_small_gt', 'filter_small_pred']}  # to numpy
 
+        if self.level_targets:
+            level_targets = np.concatenate(self.level_targets, axis=0)
+            level_probs = np.concatenate(self.level_probs, axis=0)
+        else:
+            level_targets = None
+            level_probs = None
+
         self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
         self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
         stats.pop("target_img", None)
         if len(stats) and stats["tp"].any():
-            self.metrics.process(**stats)
+            self.metrics.process(**stats, level_targets=level_targets, level_probs=level_probs)
         else:
             # A short smoke test or an early training epoch may have no
             # prediction with IoU >= 0.5.  Keep all attribute metrics defined
@@ -409,7 +435,31 @@ class MDetectionValidator(BaseValidator):
             ap = torch.cat(ap, dim=0)
         else:
             ap = torch.zeros((0, gt_attributes.shape[-1]), device=self.device)
-        return correct, ap, batch_conf_mat, keep_gt, keep_pred
+
+        # Keep the same IoU=0.5/class-correct matches used by the integrated
+        # attribute confusion matrix, but retain the softmax probabilities for
+        # threshold-independent level metrics such as PR-AUC.
+        matched_gt_idx, matched_pred_idx = torch.where(matched_box)
+        matched_targets = gt_attributes[matched_gt_idx].long()
+        if matched_pred_idx.numel():
+            if multiclass_attributes:
+                matched_probs = pred_attributes[matched_pred_idx].reshape(-1, self.na, self.nal).float()
+                if (matched_probs < 0).any() or not torch.allclose(
+                    matched_probs.sum(dim=-1),
+                    torch.ones_like(matched_probs.sum(dim=-1)),
+                    atol=1e-4,
+                    rtol=1e-4,
+                ):
+                    matched_probs = matched_probs.softmax(dim=-1)
+            elif self.nal == 2 and pred_attributes.shape[-1] == self.na:
+                positive = pred_attributes[matched_pred_idx].reshape(-1, self.na).float().clamp(0, 1)
+                matched_probs = torch.stack((1.0 - positive, positive), dim=-1)
+            else:
+                matched_probs = pred_attributes.new_empty((0, self.na, self.nal), dtype=torch.float32)
+        else:
+            matched_probs = pred_attributes.new_empty((0, self.na, self.nal), dtype=torch.float32)
+
+        return correct, ap, batch_conf_mat, keep_gt, keep_pred, matched_targets, matched_probs
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

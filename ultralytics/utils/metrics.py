@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 
 from ultralytics.utils import LOGGER, SimpleClass, TryExcept, plt_settings
+from ultralytics.utils.attribute_metrics import compute_attribute_level_metrics
 
 OKS_SIGMA = (
     np.array([0.26, 0.25, 0.25, 0.35, 0.35, 0.79, 0.79, 0.72, 0.72, 0.62, 0.62, 1.07, 1.07, 0.87, 0.87, 0.89, 0.89])
@@ -1394,6 +1395,7 @@ class MDetMetrics(SimpleClass):
         self.attributes.all_f1_macro = np.zeros(self.na, dtype=np.float64)
         self.attributes.all_precision = np.zeros(self.na, dtype=np.float64)
         self.attributes.all_recall = np.zeros(self.na, dtype=np.float64)
+        self.attributes.detailed = None
 
     def get_attribute_names(self):
         attribute_dict = self.attribute_names
@@ -1409,7 +1411,7 @@ class MDetMetrics(SimpleClass):
                 print('Error in get_attribute_names')
         self.attribute_names = attribute_names
 
-    def process(self, tp, ap, conf, pred_cls, target_cls, conf_mat, **kwargs):
+    def process(self, tp, ap, conf, pred_cls, target_cls, conf_mat, level_targets=None, level_probs=None, **kwargs):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1427,6 +1429,12 @@ class MDetMetrics(SimpleClass):
         ap = np.asarray(ap)
         self.attributes.all_ap = np.mean(ap, axis=0) if ap.size else np.zeros(self.na, dtype=np.float64)
         self.attributes.all_conf_mat = np.sum(conf_mat, axis=0)
+        if level_targets is not None and level_probs is not None:
+            self.attributes.detailed = compute_attribute_level_metrics(
+                level_targets,
+                level_probs,
+                attribute_names=self.attribute_names,
+            )
 
 
     @property
