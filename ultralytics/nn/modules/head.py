@@ -491,8 +491,13 @@ class GCAMarginResidual(nn.Module):
         if channels != self.na:
             raise RuntimeError(f"Expected {self.na} attribute channels, got {channels}")
 
+        # Checkpoints created before the FGA rename retain ``gnn_type='gca'``
+        # on the serialized module.  Canonicalize at runtime as well as in
+        # ``__init__`` because unpickling an existing module does not rerun
+        # its constructor.
+        gnn_type = _canonical_gnn_type(self.gnn_type)
         nodes = values.permute(0, 2, 3, 1).reshape(batch, height * width, self.na)
-        if self.gnn_type in {"fga", "gcn"}:
+        if gnn_type in {"fga", "gcn"}:
             adjacency = self.adjacency.to(device=values.device, dtype=values.dtype)
             hidden = self.activation(self.node_in(nodes.unsqueeze(-1)))
             # Keep the direct Eq. (10)-style graph message as a strong prior;
@@ -500,7 +505,7 @@ class GCAMarginResidual(nn.Module):
             direct_message = torch.einsum("ij,bnj->bni", adjacency, nodes)
             aggregated = torch.einsum("ij,bnjd->bnid", adjacency, hidden)
             message = direct_message + self.node_out(aggregated).squeeze(-1)
-        elif self.gnn_type == "gat":
+        elif gnn_type == "gat":
             hidden = self.activation(self.node_proj(nodes.unsqueeze(-1)))
             src = self.att_src(hidden).squeeze(-1)
             dst = self.att_dst(hidden).squeeze(-1)
@@ -511,7 +516,7 @@ class GCAMarginResidual(nn.Module):
             direct_message = torch.einsum("bnij,bnj->bni", attention, nodes)
             aggregated = torch.einsum("bnij,bnjd->bnid", attention, hidden)
             message = direct_message + self.node_out(aggregated).squeeze(-1)
-        elif self.gnn_type == "graphsage":
+        elif gnn_type == "graphsage":
             adjacency = self.adjacency.to(device=values.device, dtype=values.dtype)
             neighbors = torch.einsum("ij,bnj->bni", adjacency, nodes)
             hidden = self.activation(
