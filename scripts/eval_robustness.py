@@ -83,6 +83,16 @@ def _set_one2many(model: Any) -> None:
     switch()
 
 
+def _load_checkpoint(label: str, weights: str) -> Any:
+    """Load YOLO and RT-DETR checkpoints through their task-specific wrappers."""
+    from ultralytics import RTDETR, YOLO
+
+    normalized_label = label.lower().replace("-", "").replace("_", "")
+    if "rtdetr" in normalized_label or "rtdetr" in weights.lower():
+        return RTDETR(weights)
+    return YOLO(weights, task="mdetect")
+
+
 def _write_summary(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
@@ -193,10 +203,8 @@ def main() -> None:
 
     # Import and load each checkpoint once.  The model is reused across all
     # variants, while each validation call receives a fresh deterministic loader.
-    from ultralytics import YOLO
-
     for label, weights, mode in models:
-        model = YOLO(weights, task="mdetect")
+        model = _load_checkpoint(label, weights)
         if mode == "one2many":
             _set_one2many(model)
         for variant in variants:
