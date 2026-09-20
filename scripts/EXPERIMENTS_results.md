@@ -11,12 +11,17 @@
 本文档只报告 Test split 指标。主结果按当前实验路线组织；旧版 GCA、GIA+GCA
 和相关 HO 结果统一放在文末 102.x 历史备份区，不参与新版主比较。
 
+## 当前 MAYOLO 最终结构选择
+
+当前 MAYOLO 定义为：`YOLOv10 + GIA-v2.5.7 + Cross-GIN margin-residual +
+HO(one-to-many)`。其中 GCA 采用 GIN 图消息传播算子，关联矩阵采用 Cross。
+
 ### GCA/FGA 命名说明
 
 五种图消息传播结构比较中的原 `GCA` 分支是固定图聚合实现，现统一更名为
 `FGA`（Fixed Graph Aggregation）。论文中的 `GCA` 方法名称保留，最终采用哪一种
-图消息传播算子尚未确定；若后续选择 GIN，则明确记作 `GCA-GIN`。历史实验目录和
-路径不变，表格中的结构名称按新命名记录。
+图消息传播算子当前确定为 GIN，论文中明确记作 `GCA-GIN`。历史实验目录和路径
+不变，表格中的结构名称按新命名记录。
 
 ## 1. 指标与实验口径
 
@@ -732,8 +737,10 @@ summary.csv 相对路径：
 
 ## 3. 各模型及尺寸对比
 
-以下为 E3_versions 各模型 Stage2 权重的 Test 结果；每个模型尺寸一行。
+以下为 E3_versions 各原生模型 Stage2 权重的 Test 结果；每个模型尺寸一行。
 YOLOv10b 也保留，因为它存在于远程 summary.csv。
+`MAYOLO` 作为最终方法单独加入：YOLOv10 + GIA-v2.5.7 + Cross-GIN
+margin-residual + HO(one-to-many)，采用 seed=0 结果。
 
 | 模型 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -770,13 +777,19 @@ YOLOv10b 也保留，因为它存在于远程 summary.csv。
 | YOLOv26m | 0.580546 | 0.365375 | 0.969124 | 0.578885 | 0.631897 | 0.613400 | 0.564752 |
 | YOLOv26l | 0.608445 | 0.423884 | 0.971921 | 0.624476 | 0.692812 | 0.684553 | 0.612041 |
 | YOLOv26x | 0.629516 | 0.453110 | 0.966667 | 0.623032 | 0.695129 | 0.654507 | 0.640941 |
+| MAYOLO | 0.687286 | 0.483173 | 0.973575 | 0.637203 | 0.724806 | 0.689353 | 0.619723 |
 
 summary.csv 相对路径：
 
     runs/experiments/E3_versions/summary.csv
 
-按单项指标，Test mAP50 最高为 YOLOv8x（0.666529），Test mAP50-95 最高为
-YOLOv9e（0.474799），Test F1_macro 最高为 YOLOv11x（0.684342）。
+MAYOLO 行 summary.csv 相对路径：
+
+    runs/experiments/E2_7_Baseline_GIA_GCA_HO_test/summary.csv
+
+原生 E3 模型中，Test mAP50 最高为 YOLOv8x（0.666529），Test mAP50-95 最高为
+YOLOv9e（0.474799），Test F1_macro 最高为 YOLOv11x（0.684342）。MAYOLO 的
+最终方法结果单独列出，不与原生模型的尺寸比较混淆。
 
 ### E4：RT-DETR 多规模属性检测
 
