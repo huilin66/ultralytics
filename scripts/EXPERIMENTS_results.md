@@ -926,48 +926,131 @@ condition/severity 下都有记录。
 
 本节只报告 test 结果。当前每个属性输出两个 level，因此正文统一表述为
 two-level attribute/level recognition；除非存在独立且有明确标注标准的风险标签，
-不把它扩展表述为已经验证的三级风险识别。
+不把它扩展表述为已经验证的三级风险识别。表中数值保留 6 位小数。
 
-### 6.1 总体与逐属性 test 指标
+### 6.1 Test 总览
 
-`YOLOv10x` 与 `MAYOLOx` 使用相同的 test 推理和框匹配设置。对总体结果和每个
-attribute 均报告以下指标：`OA_test`、`F1_macro_test`、`F1_macro_global_test`、
-`F1_micro_test`、`P_macro_test`、`R_macro_test`。
+两套模型使用相同的 test 推理和框匹配设置。匹配样本数是进入属性指标计算的
+IoU=0.5、类别正确的检测框数量。
 
-| 模型 | 范围 | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test |
-|---|---|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | overall / attribute-1…10 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | overall / attribute-1…10 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| 模型 | 推理模式 | 匹配样本数 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | native | 1890 | 0.629825 | 0.431061 | 0.964550 | 0.604273 | 0.645543 | 0.964550 | 0.609672 | 0.608510 | 0.660914 |
+| MAYOLOx | one2many | 1930 | 0.686741 | 0.482401 | 0.973575 | 0.637203 | 0.724806 | 0.973575 | 0.689353 | 0.619723 | 0.657251 |
 
-### 6.2 各 attribute、各 level 的 test 指标
+summary.csv 相对路径：
 
-对每个模型、每个 attribute 和 level 0/1，报告 support、TP/FP/FN/TN、Precision、
-Recall、F1、Balanced Accuracy 和 PR-AUC；TP/FP/FN/TN 同时作为该 level 的 2×2
-confusion matrix，避免只给总体 OA。PR-AUC 使用 softmax 输出概率，对每个 level
-采用 one-vs-rest 方式计算，并补充两个 level 的 macro 平均。
+    runs/experiments/E3_risk_level_test/smoke_v1/summary.csv
+
+新计算结果与 Ultralytics 已集成的属性结果逐项对比，最大绝对差异约为
+5×10⁻⁹，说明框匹配、属性预测和指标聚合口径一致。
+
+### 6.2 逐 attribute 的 test 指标
+
+每个 attribute 的 support 是参与该 attribute 计算的匹配框数；
+F1_macro_global_test 在单个二级 attribute 内与该 attribute 的 macro-F1 数值相同。
+
+| 模型 | attribute | support | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | surface_missing | 189 | 0.989418 | 0.830645 | 0.830645 | 0.989418 | 0.830645 | 0.830645 | 0.951374 |
+| YOLOv10x | surface_incomplete | 189 | 0.994709 | 0.498674 | 0.498674 | 0.994709 | 0.497354 | 0.500000 | 0.583305 |
+| YOLOv10x | surface_corroded | 189 | 0.936508 | 0.650000 | 0.650000 | 0.936508 | 0.692308 | 0.625128 | 0.658579 |
+| YOLOv10x | frame_corroded | 189 | 0.920635 | 0.538048 | 0.538048 | 0.920635 | 0.556011 | 0.531410 | 0.573010 |
+| YOLOv10x | surface_peeling | 189 | 0.962963 | 0.490566 | 0.490566 | 0.962963 | 0.489247 | 0.491892 | 0.565009 |
+| YOLOv10x | surface_fade | 189 | 0.947090 | 0.708333 | 0.708333 | 0.947090 | 0.708333 | 0.708333 | 0.777241 |
+| YOLOv10x | surface_deformed | 189 | 0.952381 | 0.641517 | 0.641517 | 0.952381 | 0.683696 | 0.616713 | 0.633324 |
+| YOLOv10x | frame_deformed | 189 | 0.994709 | 0.498674 | 0.498674 | 0.994709 | 0.497354 | 0.500000 | 0.502437 |
+| YOLOv10x | disconnected | 189 | 0.994709 | 0.498674 | 0.498674 | 0.994709 | 0.497354 | 0.500000 | 0.522583 |
+| YOLOv10x | added_billboard | 189 | 0.952381 | 0.687603 | 0.687603 | 0.952381 | 0.644413 | 0.780978 | 0.842277 |
+| MAYOLOx | surface_missing | 193 | 0.989637 | 0.747382 | 0.747382 | 0.989637 | 0.994792 | 0.666667 | 0.741623 |
+| MAYOLOx | surface_incomplete | 193 | 0.994819 | 0.498701 | 0.498701 | 0.994819 | 0.497409 | 0.500000 | 0.549945 |
+| MAYOLOx | surface_corroded | 193 | 0.958549 | 0.789071 | 0.789071 | 0.958549 | 0.858784 | 0.744475 | 0.750029 |
+| MAYOLOx | frame_corroded | 193 | 0.948187 | 0.708635 | 0.708635 | 0.948187 | 0.811943 | 0.661142 | 0.748553 |
+| MAYOLOx | surface_peeling | 193 | 0.979275 | 0.494764 | 0.494764 | 0.979275 | 0.489637 | 0.500000 | 0.570897 |
+| MAYOLOx | surface_fade | 193 | 0.943005 | 0.745718 | 0.745718 | 0.943005 | 0.705906 | 0.811594 | 0.760294 |
+| MAYOLOx | surface_deformed | 193 | 0.958549 | 0.589362 | 0.589362 | 0.958549 | 0.650877 | 0.566052 | 0.633742 |
+| MAYOLOx | frame_deformed | 193 | 0.994819 | 0.498701 | 0.498701 | 0.994819 | 0.497409 | 0.500000 | 0.506423 |
+| MAYOLOx | disconnected | 193 | 0.994819 | 0.498701 | 0.498701 | 0.994819 | 0.497409 | 0.500000 | 0.510086 |
+| MAYOLOx | added_billboard | 193 | 0.974093 | 0.800990 | 0.800990 | 0.974093 | 0.889362 | 0.747297 | 0.800914 |
+
+per_attribute_test.csv 相对路径：
+
+    runs/experiments/E3_risk_level_test/smoke_v1/per_attribute_test.csv
+
+### 6.3 各 attribute、各 level 的 test 指标
+
+每个模型、attribute 和 level 0/1 均报告 support、TP/FP/FN/TN、
+Precision、Recall、F1、Balanced Accuracy 和 PR-AUC。TP/FP/FN/TN 同时构成
+该 level 的 2×2 confusion matrix。PR-AUC 使用 softmax 输出概率，对每个 level
+按 one-vs-rest 计算；末尾的 all 行是跨 attribute 的 level 汇总。
 
 | 模型 | attribute | level | support | TP | FP | FN | TN | Precision_test | Recall_test | F1_test | Balanced_Accuracy_test | PR_AUC_test |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | attr-1…10 | 0 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
-| YOLOv10x | attr-1…10 | 1 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
-| YOLOv10x | all | level macro | — | — | — | — | — | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | attr-1…10 | 0 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | attr-1…10 | 1 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
-| MAYOLOx | all | level macro | — | — | — | — | — | 待计算 | 待计算 | 待计算 | 待计算 | 待计算 |
+| YOLOv10x | surface_missing | 0 | 186 | 185 | 1 | 1 | 2 | 0.994624 | 0.994624 | 0.994624 | 0.830645 | 0.999971 |
+| YOLOv10x | surface_missing | 1 | 3 | 2 | 1 | 1 | 185 | 0.666667 | 0.666667 | 0.666667 | 0.830645 | 0.902778 |
+| YOLOv10x | surface_incomplete | 0 | 188 | 188 | 1 | 0 | 0 | 0.994709 | 1.000000 | 0.997347 | 0.500000 | 0.999943 |
+| YOLOv10x | surface_incomplete | 1 | 1 | 0 | 0 | 1 | 188 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.166667 |
+| YOLOv10x | surface_corroded | 0 | 178 | 174 | 8 | 4 | 3 | 0.956044 | 0.977528 | 0.966667 | 0.625128 | 0.994763 |
+| YOLOv10x | surface_corroded | 1 | 11 | 3 | 4 | 8 | 174 | 0.428571 | 0.272727 | 0.333333 | 0.625128 | 0.322395 |
+| YOLOv10x | frame_corroded | 0 | 178 | 173 | 10 | 5 | 1 | 0.945355 | 0.971910 | 0.958449 | 0.531410 | 0.987123 |
+| YOLOv10x | frame_corroded | 1 | 11 | 1 | 5 | 10 | 173 | 0.166667 | 0.090909 | 0.117647 | 0.531410 | 0.158898 |
+| YOLOv10x | surface_peeling | 0 | 185 | 182 | 4 | 3 | 0 | 0.978495 | 0.983784 | 0.981132 | 0.491892 | 0.998046 |
+| YOLOv10x | surface_peeling | 1 | 4 | 0 | 3 | 4 | 182 | 0.000000 | 0.000000 | 0.000000 | 0.491892 | 0.131972 |
+| YOLOv10x | surface_fade | 0 | 180 | 175 | 5 | 5 | 4 | 0.972222 | 0.972222 | 0.972222 | 0.708333 | 0.996511 |
+| YOLOv10x | surface_fade | 1 | 9 | 4 | 5 | 5 | 175 | 0.444444 | 0.444444 | 0.444444 | 0.708333 | 0.557971 |
+| YOLOv10x | surface_deformed | 0 | 181 | 178 | 6 | 3 | 2 | 0.967391 | 0.983425 | 0.975342 | 0.616713 | 0.969555 |
+| YOLOv10x | surface_deformed | 1 | 8 | 2 | 3 | 6 | 178 | 0.400000 | 0.250000 | 0.307692 | 0.616713 | 0.297092 |
+| YOLOv10x | frame_deformed | 0 | 188 | 188 | 1 | 0 | 0 | 0.994709 | 1.000000 | 0.997347 | 0.500000 | 0.997628 |
+| YOLOv10x | frame_deformed | 1 | 1 | 0 | 0 | 1 | 188 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.007246 |
+| YOLOv10x | disconnected | 0 | 188 | 188 | 1 | 0 | 0 | 0.994709 | 1.000000 | 0.997347 | 0.500000 | 0.999711 |
+| YOLOv10x | disconnected | 1 | 1 | 0 | 0 | 1 | 188 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.045455 |
+| YOLOv10x | added_billboard | 0 | 184 | 177 | 2 | 7 | 3 | 0.988827 | 0.961957 | 0.975207 | 0.780978 | 0.998431 |
+| YOLOv10x | added_billboard | 1 | 5 | 3 | 7 | 2 | 177 | 0.300000 | 0.600000 | 0.400000 | 0.780978 | 0.686122 |
+| YOLOv10x | all | level 0 macro | 1836 | — | — | — | — | 0.978708 | 0.984545 | 0.981568 | 0.608510 | 0.994168 |
+| YOLOv10x | all | level 1 macro | 54 | — | — | — | — | 0.240635 | 0.232475 | 0.226978 | 0.608510 | 0.327659 |
+| MAYOLOx | surface_missing | 0 | 190 | 190 | 2 | 0 | 1 | 0.989583 | 1.000000 | 0.994764 | 0.666667 | 0.997920 |
+| MAYOLOx | surface_missing | 1 | 3 | 1 | 0 | 2 | 190 | 1.000000 | 0.333333 | 0.500000 | 0.666667 | 0.485326 |
+| MAYOLOx | surface_incomplete | 0 | 192 | 192 | 1 | 0 | 0 | 0.994819 | 1.000000 | 0.997403 | 0.500000 | 0.999891 |
+| MAYOLOx | surface_incomplete | 1 | 1 | 0 | 0 | 1 | 192 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.100000 |
+| MAYOLOx | surface_corroded | 0 | 181 | 179 | 6 | 2 | 6 | 0.967568 | 0.988950 | 0.978142 | 0.744475 | 0.991035 |
+| MAYOLOx | surface_corroded | 1 | 12 | 6 | 2 | 6 | 179 | 0.750000 | 0.500000 | 0.600000 | 0.744475 | 0.509023 |
+| MAYOLOx | frame_corroded | 0 | 181 | 179 | 8 | 2 | 4 | 0.957219 | 0.988950 | 0.972826 | 0.661142 | 0.992284 |
+| MAYOLOx | frame_corroded | 1 | 12 | 4 | 2 | 8 | 179 | 0.666667 | 0.333333 | 0.444444 | 0.661142 | 0.504822 |
+| MAYOLOx | surface_peeling | 0 | 189 | 189 | 4 | 0 | 0 | 0.979275 | 1.000000 | 0.989529 | 0.500000 | 0.998423 |
+| MAYOLOx | surface_peeling | 1 | 4 | 0 | 0 | 4 | 189 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.143372 |
+| MAYOLOx | surface_fade | 0 | 184 | 176 | 3 | 8 | 6 | 0.983240 | 0.956522 | 0.969697 | 0.811594 | 0.991972 |
+| MAYOLOx | surface_fade | 1 | 9 | 6 | 8 | 3 | 176 | 0.428571 | 0.666667 | 0.521739 | 0.811594 | 0.528616 |
+| MAYOLOx | surface_deformed | 0 | 186 | 184 | 6 | 2 | 1 | 0.968421 | 0.989247 | 0.978723 | 0.566052 | 0.990157 |
+| MAYOLOx | surface_deformed | 1 | 7 | 1 | 2 | 6 | 184 | 0.333333 | 0.142857 | 0.200000 | 0.566052 | 0.277326 |
+| MAYOLOx | frame_deformed | 0 | 192 | 192 | 1 | 0 | 0 | 0.994819 | 1.000000 | 0.997403 | 0.500000 | 0.998958 |
+| MAYOLOx | frame_deformed | 1 | 1 | 0 | 0 | 1 | 192 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.013889 |
+| MAYOLOx | disconnected | 0 | 192 | 192 | 1 | 0 | 0 | 0.994819 | 1.000000 | 0.997403 | 0.500000 | 0.999339 |
+| MAYOLOx | disconnected | 1 | 1 | 0 | 0 | 1 | 192 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.020833 |
+| MAYOLOx | added_billboard | 0 | 185 | 184 | 4 | 1 | 4 | 0.978723 | 0.994595 | 0.986595 | 0.747297 | 0.995157 |
+| MAYOLOx | added_billboard | 1 | 8 | 4 | 1 | 4 | 184 | 0.800000 | 0.500000 | 0.615385 | 0.747297 | 0.606671 |
+| MAYOLOx | all | level 0 macro | 1872 | — | — | — | — | 0.980849 | 0.991826 | 0.986248 | 0.619723 | 0.995514 |
+| MAYOLOx | all | level 1 macro | 58 | — | — | — | — | 0.397857 | 0.247619 | 0.288157 | 0.619723 | 0.318988 |
 
-### 6.3 指标口径与边界
+结果文件相对路径：
 
-- `P_macro_test`、`R_macro_test` 和 `F1_macro_test` 明确标注为 macro 指标；
-  `F1_macro_global_test` 保留为 pooled macro-F1，不再称为 Micro-F1。
-- 为回应 R3.3/R4.6，标准 `F1_micro_test` 由全局 pooled TP/FP/FN 单独计算，
-  不能用已平均的 Precision/Recall 代替。
-- `PR_AUC_test` 使用连续的 softmax level 概率而不是 hard label；level 0 和 level 1
+    runs/experiments/E3_risk_level_test/smoke_v1/per_level_test.csv
+    runs/experiments/E3_risk_level_test/smoke_v1/confusion_test.csv
+
+### 6.4 指标口径与边界
+
+- P_macro_test、R_macro_test 和 F1_macro_test 明确标注为 macro 指标；
+  F1_macro_global_test 保留为 pooled macro-F1，不再称为 Micro-F1。
+- 标准 F1_micro_test 由全局 pooled TP/FP/FN 单独计算，不能用已平均的
+  Precision/Recall 代替。
+- PR_AUC_test 使用连续的 softmax level 概率而不是 hard label；level 0 和 level 1
   分别按 one-vs-rest 计算，再报告 level macro PR-AUC。
-- 目标检测的 mAP50:95、per-class AP、框匹配规则、IoU/score 阈值、漏检和重复预测
-  处理在统一指标协议中说明；本节只补充属性与 level 结果。
-- 若实际数据只有二级属性标签，则删除没有真实监督依据的 no-risk/low-risk/high-risk、
-  ordinal error、校准风险等级等表述；数据集的 level 定义、编码、标注流程、标注者、
-  仲裁、IAA 和联合分布需在数据集章节单独补齐。
+- 目标检测的 mAP50、mAP50-95、per-class AP、框匹配规则、IoU/score 阈值、
+  漏检和重复预测处理在统一指标协议中说明；本节补充属性与 level 结果。
+- 若实际数据只有二级属性标签，则不扩展为没有真实监督依据的三级风险等级、
+  ordinal error 或校准风险等级结论；level 定义、编码、标注流程、标注者、
+  仲裁、IAA 和联合分布需在数据集章节单独说明。
+
+
 
 ## 100. 原始结果位置
 
