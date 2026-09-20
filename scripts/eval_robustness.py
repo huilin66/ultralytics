@@ -61,7 +61,10 @@ def _parse_model(spec: str) -> tuple[str, str, str]:
     return label, weights, mode
 
 
-def _as_float(value: Any) -> float:
+def _as_optional_float(value: Any) -> float | None:
+    """Convert a metric value while preserving metrics unsupported by a model."""
+    if value is None:
+        return None
     return float(value.item() if hasattr(value, "item") else value)
 
 
@@ -152,7 +155,13 @@ def _evaluate(
         "seed": args.seed,
     }
     for output_key, metrics_key in METRIC_KEYS:
-        row[output_key] = _as_float(values[metrics_key])
+        value = values.get(metrics_key)
+        if value is None and metrics_key.startswith("metrics/") and "(A)" in metrics_key:
+            LOGGER.warning(
+                f"[robustness] model={label}, variant={variant_id}: "
+                f"attribute metric {metrics_key} is unavailable; writing an empty CSV field"
+            )
+        row[output_key] = _as_optional_float(value)
     return row
 
 
