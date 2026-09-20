@@ -45,6 +45,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--project", required=True)
     parser.add_argument("--name", default="seed0")
+    parser.add_argument("--variant", action="append", dest="variant_filter", help="Evaluate only the selected variant(s)")
     parser.add_argument("--resume", action="store_true", help="Skip model/variant pairs already in summary.csv")
     return parser
 
@@ -168,6 +169,9 @@ def main() -> None:
         },
         *manifest["variants"],
     ]
+    if args.variant_filter:
+        selected = set(args.variant_filter)
+        variants = [variant for variant in variants if variant["variant"] == "clean" or variant["variant"] in selected]
     models = [_parse_model(spec) for spec in args.model]
     output_dir = Path(args.project).expanduser().resolve() / args.name
     summary_path = output_dir / "summary.csv"
