@@ -739,8 +739,9 @@ summary.csv 相对路径：
 
 以下为 E3_versions 各原生模型 Stage2 权重的 Test 结果；每个模型尺寸一行。
 YOLOv10b 也保留，因为它存在于远程 summary.csv。
-`MAYOLOx` 作为最终方法单独加入：YOLOv10x + GIA-v2.5.7 + Cross-GIN
-margin-residual + HO(one-to-many)，采用 seed=0 结果。
+`MAYOLOx` 以及新训练的 `MAYOLOn/s/m/l/b` 均表示：YOLOv10 + GIA-v2.5.7
+Cross-GIN margin-residual + HO(one-to-many)，采用 seed=0 的 one-to-many 结果。
+native head 结果仅作为对照，不计入 Mayolo 主结果。
 
 | 模型 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -755,9 +756,9 @@ margin-residual + HO(one-to-many)，采用 seed=0 结果。
 | YOLOv10n | 0.465214 | 0.284948 | 0.967453 | 0.564844 | 0.612564 | 0.595129 | 0.553109 |
 | YOLOv10s | 0.592470 | 0.391802 | 0.968780 | 0.581380 | 0.628388 | 0.633483 | 0.577299 |
 | YOLOv10m | 0.664197 | 0.465267 | 0.975635 | 0.600760 | 0.686093 | 0.717489 | 0.572290 |
+| YOLOv10b | 0.628559 | 0.433340 | 0.967742 | 0.601332 | 0.658402 | 0.605742 | 0.600477 |
 | YOLOv10l | 0.645974 | 0.441497 | 0.966332 | 0.574083 | 0.638746 | 0.580847 | 0.572612 |
 | YOLOv10x | 0.630217 | 0.431025 | 0.964550 | 0.604273 | 0.645543 | 0.609672 | 0.608510 |
-| YOLOv10b | 0.628559 | 0.433340 | 0.967742 | 0.601332 | 0.658402 | 0.605742 | 0.600477 |
 | YOLOv11n | 0.556583 | 0.342523 | 0.963445 | 0.554184 | 0.584109 | 0.576321 | 0.550382 |
 | YOLOv11s | 0.579094 | 0.369805 | 0.966527 | 0.566977 | 0.614084 | 0.595103 | 0.556600 |
 | YOLOv11m | 0.612307 | 0.417180 | 0.971564 | 0.623482 | 0.666646 | 0.694105 | 0.601597 |
@@ -777,6 +778,11 @@ margin-residual + HO(one-to-many)，采用 seed=0 结果。
 | YOLOv26m | 0.580546 | 0.365375 | 0.969124 | 0.578885 | 0.631897 | 0.613400 | 0.564752 |
 | YOLOv26l | 0.608445 | 0.423884 | 0.971921 | 0.624476 | 0.692812 | 0.684553 | 0.612041 |
 | YOLOv26x | 0.629516 | 0.453110 | 0.966667 | 0.623032 | 0.695129 | 0.654507 | 0.640941 |
+| MAYOLOn | 0.537693 | 0.328319 | 0.966810 | 0.532433 | 0.549015 | 0.542534 | 0.535698 |
+| MAYOLOs | 0.574422 | 0.387305 | 0.970558 | 0.602742 | 0.655266 | 0.634143 | 0.597642 |
+| MAYOLOm | 0.634911 | 0.449811 | 0.975369 | 0.608194 | 0.696093 | 0.650811 | 0.593616 |
+| MAYOLOb | 0.655022 | 0.455851 | 0.972449 | 0.617954 | 0.663697 | 0.651576 | 0.616220 |
+| MAYOLOl | 0.648740 | 0.455189 | 0.971078 | 0.596228 | 0.645557 | 0.654698 | 0.583258 |
 | MAYOLOx | 0.687286 | 0.483173 | 0.973575 | 0.637203 | 0.724806 | 0.689353 | 0.619723 |
 
 summary.csv 相对路径：
@@ -786,6 +792,14 @@ summary.csv 相对路径：
 MAYOLOx 行 summary.csv 相对路径：
 
     runs/experiments/E2_7_Baseline_GIA_GCA_HO_test/summary.csv
+
+MAYOLOn/s/m/l/b one-to-many 结果 summary.csv 相对路径：
+
+    runs/experiments/E3_versions/E3_MAYOLO_test/mayolon_seed0_test_summary.csv
+    runs/experiments/E3_versions/E3_MAYOLO_test/mayolos_seed0_test_summary.csv
+    runs/experiments/E3_versions/E3_MAYOLO_test/mayolom_seed0_test_summary.csv
+    runs/experiments/E3_versions/E3_MAYOLO_test/mayolol_seed0_test_summary.csv
+    runs/experiments/E3_versions/E3_MAYOLO_test/mayolob_seed0_test_summary.csv
 
 原生 E3 模型中，Test mAP50 最高为 YOLOv8x（0.666529），Test mAP50-95 最高为
 YOLOv9e（0.474799），Test F1_macro 最高为 YOLOv11x（0.684342）。MAYOLOx 的
