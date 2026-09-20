@@ -307,11 +307,17 @@ def _write_label(path: Path, objects: Iterable[Any], transform: np.ndarray | Non
 
 
 def _dataset_yaml(path: Path, root: Path, source_raw: dict[str, Any]) -> None:
+    # Keep every split path absolute.  This is intentional: Ultralytics may
+    # resolve a temporary validation YAML relative to its current working
+    # directory, so relying on ``path`` + ``test.txt`` can silently redirect
+    # an offline variant to the repository root.  Absolute paths make the
+    # generated dataset self-contained and reproducible from any cwd.
+    split_file = (root / "test.txt").resolve()
     data = {
         "path": str(root.resolve()),
-        "train": "test.txt",
-        "val": "test.txt",
-        "test": "test.txt",
+        "train": str(split_file),
+        "val": str(split_file),
+        "test": str(split_file),
         "names": source_raw["names"],
         "attributes": source_raw["attributes"],
     }
@@ -390,7 +396,7 @@ def main() -> None:
                 objects = parse_mdet_label_file(source_label, expected_attributes=len(spec.attribute_names))
                 output_label = labels_root / f"{Path(output_name).stem}.txt"
                 label_counts.append(_write_label(output_label, objects, transform, image.shape[1], image.shape[0]))
-                test_entries.append(f"images/{output_name}")
+                test_entries.append(str(output_image.resolve()))
 
             (variant_root / "test.txt").write_text("\n".join(test_entries) + "\n", encoding="utf-8")
             data_yaml = variant_root / "data.yaml"
