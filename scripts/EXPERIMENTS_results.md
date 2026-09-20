@@ -864,41 +864,11 @@ summary.csv 相对路径：
 - 视角与尺度：使用 perspective/affine、scale 和 translate 变换模拟合成视角与目标
   尺度变化，并同步变换 bounding box。
 
-这些变体只在 test 推理阶段生成，不进入模型训练数据。Mosaic、MixUp 和
-Copy-Paste 不作为 viewpoint/scale robustness 的主要模拟方式。
+这些变体只在 test 推理阶段生成，不进入模型训练数据。
 
-每个条件使用上述九个模型各自的同一份 clean checkpoint，报告：
+每个模型、每个测试变体均按照第 3 节的格式报告以下 Test 指标：
 
-- clean test 结果，作为每个模型的基准；
-- Test mAP50（主指标）；
-- Test mAP50-95（补充指标）；
-- F1_attr@IoU0.5，其定义与当前 F1_macro_test 相同；
-- 相对于该模型 clean test 的绝对差值和相对变化率；
-- 对各属性报告 per-attribute 的 F1/Recall 变化，避免整体平均值掩盖某一属性的退化。
-
-其中相对变化率定义为：
-
-    relative_change = (perturbed_value - clean_value) / clean_value × 100%
-
-属性指标仍只在 IoU≥0.5 且类别正确的检测匹配框上计算，因此需要结合
-Test mAP50 一起解释；不得将未匹配背景框写入属性结果。表格同时记录
-condition、severity、clean_value、perturbed_value、absolute_delta 和
-relative_change。
-
-所有模型必须使用相同的输入尺寸、预处理、扰动参数、score threshold 和 IoU
-matching 设置；各模型保留其对应的 native 或 one-to-many 推理模式，不强制统一
-不同模型的检测 head 或后处理方式。
-
-建议生成：
-
-    runs/experiments/E5_robustness/robustness_summary.csv
-    runs/experiments/E5_robustness/robustness_per_attribute.csv
-    runs/experiments/E5_robustness/robustness_delta_from_clean.csv
-
-其中结果表至少包含 model、mode、condition、severity、mAP50_test、
-mAP50-95_test、F1_attr@IoU0.5、clean_value、perturbed_value、
-absolute_delta、relative_change，并确保九个模型在每个
-condition/severity 下都有记录。
+Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test
 
 ### 5.2 少量真实感退化案例
 
