@@ -68,6 +68,10 @@ def _as_optional_float(value: Any) -> float | None:
     return float(value.item() if hasattr(value, "item") else value)
 
 
+def _display_metric(value: float | None) -> str:
+    return "NA" if value is None else f"{value:.6f}"
+
+
 def _set_one2many(model: Any) -> None:
     detector = getattr(model, "model", None)
     layers = getattr(detector, "model", None)
@@ -214,7 +218,8 @@ def main() -> None:
             _write_summary(summary_path, rows)
             print(
                 f"[done] {label} {variant['variant']} "
-                f"mAP50={row['mAP50_test']:.6f} F1={row['F1_macro_test']:.6f}",
+                f"mAP50={_display_metric(row['mAP50_test'])} "
+                f"F1={_display_metric(row['F1_macro_test'])}",
                 flush=True,
             )
 
