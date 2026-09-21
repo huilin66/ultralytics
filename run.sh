@@ -1,4 +1,5 @@
 DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
+PYTHON_BIN=${PYTHON_BIN:-python3}
 
 # python scripts/gpu_memory_smoke_test.py \
 #   --data "$DATA" \
@@ -107,13 +108,157 @@ DATA=ultralytics/cfg/mayolo_r1/mayolo_v3.yaml
 #     --project runs/experiments/E2_1_GIA_v2_confirm_seedfix
 # done
 
+# E2.1 GIA position-sweep stability completion.
+# Seed=0 already exists; this opt-in block runs the same ten Stage1-only
+# position variants for seed=1,2,3,4.  The output root intentionally remains
+# E2_1_GIA_v2_position so all five seeds can be summarized together.
+# Example:
+#   RUN_E2_1_GIA_POSITION_STABILITY=1 E2_1_GIA_POSITION_DEVICE=0 bash run.sh
+if [ "${RUN_E2_1_GIA_POSITION_STABILITY:-0}" = "1" ]; then
+  E2_1_GIA_POSITION_PROJECT=${E2_1_GIA_POSITION_PROJECT:-runs/experiments/E2_1_GIA_v2_position}
+  E2_1_GIA_POSITION_DEVICE=${E2_1_GIA_POSITION_DEVICE:-0}
+  E2_1_GIA_POSITION_BATCH=${E2_1_GIA_POSITION_BATCH:-16}
+  E2_1_GIA_POSITION_WORKERS=${E2_1_GIA_POSITION_WORKERS:-8}
+  E2_1_GIA_POSITION_IMGSZ=${E2_1_GIA_POSITION_IMGSZ:-640}
+  E2_1_GIA_POSITION_W4=${E2_1_GIA_POSITION_W4:-0.5}
+  E2_1_GIA_POSITION_SEEDS=${E2_1_GIA_POSITION_SEEDS:-"1 2 3 4"}
+  E2_1_GIA_POSITION_VARIANTS=(
+    "gia_v2_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml"
+    "gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml"
+    "gia_v2_8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml"
+    "gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml"
+    "gia_v2_10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml"
+    "gia_v2_13=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_13.yaml"
+    "gia_v2_16=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_16.yaml"
+    "gia_v2_19=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_19.yaml"
+    "gia_v2_22=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_22.yaml"
+    "gia_v2_5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml"
+  )
+
+  for E2_1_GIA_POSITION_REQUIRED in "${E2_1_GIA_POSITION_VARIANTS[@]}"; do
+    E2_1_GIA_POSITION_CONFIG=${E2_1_GIA_POSITION_REQUIRED#*=}
+    if [ ! -f "$E2_1_GIA_POSITION_CONFIG" ]; then
+      echo "Missing E2.1 GIA position config: $E2_1_GIA_POSITION_CONFIG" >&2
+      exit 1
+    fi
+  done
+
+  for E2_1_GIA_POSITION_SEED in $E2_1_GIA_POSITION_SEEDS; do
+    E2_1_GIA_POSITION_COMMAND=(
+      "$PYTHON_BIN" scripts/train_mdet_experiments.py gia-position
+      --label E2_1_GIA_v2_position
+      --data "$DATA"
+      --pretrain yolov10x.pt
+      --stage1-only
+      --stage1-epochs 100
+      --imgsz "$E2_1_GIA_POSITION_IMGSZ"
+      --batch "$E2_1_GIA_POSITION_BATCH"
+      --workers "$E2_1_GIA_POSITION_WORKERS"
+      --device "$E2_1_GIA_POSITION_DEVICE"
+      --seed "$E2_1_GIA_POSITION_SEED"
+      --w4 "$E2_1_GIA_POSITION_W4"
+      --hsv-h 0 --hsv-s 0.2 --hsv-v 0.2
+      --skip-existing
+      --project "$E2_1_GIA_POSITION_PROJECT"
+    )
+    for E2_1_GIA_POSITION_VARIANT in "${E2_1_GIA_POSITION_VARIANTS[@]}"; do
+      E2_1_GIA_POSITION_COMMAND+=(--variant "$E2_1_GIA_POSITION_VARIANT")
+    done
+    "${E2_1_GIA_POSITION_COMMAND[@]}" || exit $?
+  done
+fi
+
+# E5 true multi-label detector stability completion.
+# The seed=0 result is already recorded under E5_multilabel; this block trains
+# the same YOLOv10x detector for seed=1,2,3,4 with seed-specific run names.
+# Example:
+#   RUN_E5_STABILITY=1 E5_STABILITY_DEVICE=0 bash run.sh
+if [ "${RUN_E5_STABILITY:-0}" = "1" ]; then
+  E5_STABILITY_DATA=${E5_STABILITY_DATA:-/localnvme/data/billboard/mayolo_v3_multilabel/data.yaml}
+  E5_STABILITY_MODEL=${E5_STABILITY_MODEL:-yolov10x.pt}
+  E5_STABILITY_PROJECT=${E5_STABILITY_PROJECT:-runs/experiments/E5_multilabel_stability}
+  E5_STABILITY_DEVICE=${E5_STABILITY_DEVICE:-0}
+  E5_STABILITY_BATCH=${E5_STABILITY_BATCH:-16}
+  E5_STABILITY_WORKERS=${E5_STABILITY_WORKERS:-8}
+  E5_STABILITY_IMGSZ=${E5_STABILITY_IMGSZ:-640}
+  E5_STABILITY_EPOCHS=${E5_STABILITY_EPOCHS:-100}
+  E5_STABILITY_SEEDS=${E5_STABILITY_SEEDS:-"1 2 3 4"}
+
+  for E5_STABILITY_REQUIRED in "$E5_STABILITY_DATA" "$E5_STABILITY_MODEL"; do
+    if [ ! -f "$E5_STABILITY_REQUIRED" ]; then
+      echo "Missing E5 stability input: $E5_STABILITY_REQUIRED" >&2
+      exit 1
+    fi
+  done
+
+  for E5_STABILITY_SEED in $E5_STABILITY_SEEDS; do
+    "$PYTHON_BIN" scripts/train_multilabel.py \
+      --model "$E5_STABILITY_MODEL" \
+      --data "$E5_STABILITY_DATA" \
+      --epochs "$E5_STABILITY_EPOCHS" \
+      --imgsz "$E5_STABILITY_IMGSZ" \
+      --batch "$E5_STABILITY_BATCH" \
+      --workers "$E5_STABILITY_WORKERS" \
+      --device "$E5_STABILITY_DEVICE" \
+      --project "$E5_STABILITY_PROJECT" \
+      --name "yolov10x_seed_${E5_STABILITY_SEED}" \
+      --seed "$E5_STABILITY_SEED" || exit $?
+  done
+fi
+
+# E6 detector-plus-multi-label-classifier stability completion.
+# The existing E6 protocol uses the fixed E3 YOLOv10x seed=0 detector and its
+# generated crop dataset; this block repeats the classifier training for
+# seed=1,2,3,4 and records the detector provenance in each manifest.
+# Example:
+#   RUN_E6_STABILITY=1 E6_STABILITY_DEVICE=1 bash run.sh
+if [ "${RUN_E6_STABILITY:-0}" = "1" ]; then
+  E6_STABILITY_DETECTOR_CHECKPOINT=${E6_STABILITY_DETECTOR_CHECKPOINT:-runs/experiments/E3_versions/E3_versions_yolov10x_w4_0p5_seed_0_stage2/weights/best.pt}
+  E6_STABILITY_DATA=${E6_STABILITY_DATA:-/localnvme/data/billboard/mayolo_v3_two_stage_crops/data.yaml}
+  E6_STABILITY_MODEL=${E6_STABILITY_MODEL:-ultralytics/cfg/models/v10/yolov10x-cls.yaml}
+  E6_STABILITY_PRETRAIN=${E6_STABILITY_PRETRAIN:-yolov10x.pt}
+  E6_STABILITY_PROJECT=${E6_STABILITY_PROJECT:-runs/experiments/E6_two_stage_yolov10x_stability}
+  E6_STABILITY_DEVICE=${E6_STABILITY_DEVICE:-0}
+  E6_STABILITY_BATCH=${E6_STABILITY_BATCH:-16}
+  E6_STABILITY_WORKERS=${E6_STABILITY_WORKERS:-8}
+  E6_STABILITY_IMGSZ=${E6_STABILITY_IMGSZ:-224}
+  E6_STABILITY_EPOCHS=${E6_STABILITY_EPOCHS:-100}
+  E6_STABILITY_SEEDS=${E6_STABILITY_SEEDS:-"1 2 3 4"}
+
+  for E6_STABILITY_REQUIRED in \
+    "$E6_STABILITY_DETECTOR_CHECKPOINT" \
+    "$E6_STABILITY_DATA" \
+    "$E6_STABILITY_MODEL" \
+    "$E6_STABILITY_PRETRAIN"; do
+    if [ ! -f "$E6_STABILITY_REQUIRED" ]; then
+      echo "Missing E6 stability input: $E6_STABILITY_REQUIRED" >&2
+      exit 1
+    fi
+  done
+
+  for E6_STABILITY_SEED in $E6_STABILITY_SEEDS; do
+    "$PYTHON_BIN" scripts/train_two_stage.py \
+      --detector-checkpoint "$E6_STABILITY_DETECTOR_CHECKPOINT" \
+      --model "$E6_STABILITY_MODEL" \
+      --pretrain "$E6_STABILITY_PRETRAIN" \
+      --data "$E6_STABILITY_DATA" \
+      --epochs "$E6_STABILITY_EPOCHS" \
+      --imgsz "$E6_STABILITY_IMGSZ" \
+      --batch "$E6_STABILITY_BATCH" \
+      --workers "$E6_STABILITY_WORKERS" \
+      --device "$E6_STABILITY_DEVICE" \
+      --project "$E6_STABILITY_PROJECT" \
+      --name "detector_yolov10x_classifier_yolov10x_cls_seed_${E6_STABILITY_SEED}" \
+      --seed "$E6_STABILITY_SEED" || exit $?
+  done
+fi
+
 
 # Override the train-only matrices when they are stored elsewhere:
 #   COM_PATH=/path/to/co_occurrence_matrix_train.csv \
 #   COM_CONDITIONAL_PATH=/path/to/co_occurrence_matrix_train_conditional.csv bash run.sh
 COM_PATH=${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}
 COM_CONDITIONAL_PATH=${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv}
-PYTHON_BIN=${PYTHON_BIN:-python3}
 
 # Previous active E2.2 multiclass-aware GCA/GNN comparison.  This block is
 # intentionally retained as comments for visual comparison and is not run.

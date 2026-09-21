@@ -79,6 +79,16 @@ def _as_float(value: Any) -> float:
     return float(value.item() if hasattr(value, "item") else value)
 
 
+def _dataset_class_names(data: str) -> dict[int, str]:
+    """Read object-class names from the dataset definition, not checkpoint metadata."""
+    from ultralytics.utils import yaml_load
+
+    names = yaml_load(data).get("names", {})
+    if isinstance(names, (list, tuple)):
+        return {index: str(name) for index, name in enumerate(names)}
+    return {int(index): str(name) for index, name in names.items()}
+
+
 def _write_rows(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     """Write heterogeneous detail rows while preserving first-seen column order."""
     rows = list(rows)
@@ -129,6 +139,76 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
         raise RuntimeError(
             "Detailed level metrics were not collected. Ensure split=test and the updated mdetect validator is loaded."
         )
+
+    # ``mAP`` is the mean over object classes.  Keep the class-wise AP values
+    # as well so section 6.1 can report exactly which object class contributes
+    # to the aggregate detection scores.
+    box_metrics = getattr(metrics, "box", None)
+    if box_metrics is None:
+        raise RuntimeError("The test validator did not expose box metrics for class-wise AP export.")
+    class_ap50 = np.asarray(getattr(box_metrics, "ap50", []), dtype=np.float64)
+    class_ap5095 = np.asarray(getattr(box_metrics, "ap", []), dtype=np.float64)
+    class_indices = np.asarray(getattr(box_metrics, "ap_class_index", []), dtype=np.int64)
+    if not (len(class_ap50) == len(class_ap5095) == len(class_indices)):
+        raise RuntimeError(
+            "Class-wise AP arrays have inconsistent lengths: "
+            f"AP50={len(class_ap50)}, AP50-95={len(class_ap5095)}, "
+            f"class_index={len(class_indices)}."
+        )
+    class_names = _dataset_class_names(args.data)
+    if not class_names:
+        class_names = getattr(metrics, "names", None) or getattr(model, "names", None) or {}
+    if isinstance(class_names, (list, tuple)):
+        class_names = {index: name for index, name in enumerate(class_names)}
+    per_class = [
+        {
+            "model": label,
+            "mode": mode,
+            "weight": weights,
+            "class_index": int(class_index),
+            "class_name": str(class_names.get(int(class_index), int(class_index))),
+            "AP50_test": float(ap50),
+            "AP50-95_test": float(ap5095),
+        }
+        for class_index, ap50, ap5095 in zip(class_indices, class_ap50, class_ap5095)
+    ]
+
+    detailed_by_class = getattr(getattr(metrics, "attributes", None), "detailed_by_class", None) or {}
+    per_class_attribute = []
+    per_class_attribute_detail = []
+    for class_index, class_detail in sorted(detailed_by_class.items()):
+        class_index = int(class_index)
+        class_name = str(class_names.get(class_index, class_index))
+        overall_by_class = class_detail["overall"]
+        per_class_attribute.append(
+            {
+                "model": label,
+                "mode": mode,
+                "weight": weights,
+                "class_index": class_index,
+                "class_name": class_name,
+                "matched_support": int(overall_by_class["matched_support"]),
+                "OA_test": _as_float(overall_by_class["OA_test"]),
+                "F1_macro_test": _as_float(overall_by_class["F1_macro_test"]),
+                "F1_macro_global_test": _as_float(overall_by_class["F1_macro_global_test"]),
+                "F1_micro_test": _as_float(overall_by_class["F1_micro_test"]),
+                "P_macro_test": _as_float(overall_by_class["P_macro_test"]),
+                "R_macro_test": _as_float(overall_by_class["R_macro_test"]),
+                "PR_AUC_macro_test": _as_float(overall_by_class["PR_AUC_macro_test"]),
+            }
+        )
+        for detail in class_detail["per_attribute"]:
+            detail = dict(detail)
+            detail.update(
+                {
+                    "model": label,
+                    "mode": mode,
+                    "weight": weights,
+                    "class_index": class_index,
+                    "class_name": class_name,
+                }
+            )
+            per_class_attribute_detail.append(detail)
 
     overall = detailed["overall"]
     row: dict[str, Any] = {
@@ -196,6 +276,9 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
 
     return {
         "summary": row,
+        "per_class": per_class,
+        "per_class_attribute": per_class_attribute,
+        "per_class_attribute_detail": per_class_attribute_detail,
         "per_attribute": detailed["per_attribute"],
         "per_level": per_level,
         "confusion": confusion_rows,
@@ -207,10 +290,22 @@ def main() -> None:
     output_dir = Path(args.project) / args.name
     results = [_evaluate_one(args, *_parse_model_spec(spec)) for spec in args.model]
     _write_rows(output_dir / "summary.csv", [result["summary"] for result in results])
+    _write_rows(output_dir / "per_class_test.csv", [row for result in results for row in result["per_class"]])
+    _write_rows(
+        output_dir / "per_class_attribute_test.csv",
+        [row for result in results for row in result["per_class_attribute"]],
+    )
+    _write_rows(
+        output_dir / "per_class_attribute_detail_test.csv",
+        [row for result in results for row in result["per_class_attribute_detail"]],
+    )
     _write_rows(output_dir / "per_attribute_test.csv", [row for result in results for row in result["per_attribute"]])
     _write_rows(output_dir / "per_level_test.csv", [row for result in results for row in result["per_level"]])
     _write_rows(output_dir / "confusion_test.csv", [row for result in results for row in result["confusion"]])
     print(f"[summary] {output_dir / 'summary.csv'}")
+    print(f"[details] {output_dir / 'per_class_test.csv'}")
+    print(f"[details] {output_dir / 'per_class_attribute_test.csv'}")
+    print(f"[details] {output_dir / 'per_class_attribute_detail_test.csv'}")
     print(f"[details] {output_dir / 'per_attribute_test.csv'}")
     print(f"[details] {output_dir / 'per_level_test.csv'}")
     print(f"[details] {output_dir / 'confusion_test.csv'}")
@@ -218,4 +313,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

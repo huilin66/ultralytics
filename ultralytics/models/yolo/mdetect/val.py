@@ -43,6 +43,7 @@ class MDetectionValidator(BaseValidator):
         self.lb = []  # for autolabelling
         self.level_targets = []
         self.level_probs = []
+        self.level_classes = []
 
     def preprocess(self, batch):
         """Preprocesses batch of images for YOLO training."""
@@ -100,6 +101,7 @@ class MDetectionValidator(BaseValidator):
         self.collect_detailed_level_metrics = str(getattr(self.args, "split", "")) == "test"
         self.level_targets = []
         self.level_probs = []
+        self.level_classes = []
         self.confusion_matrix = MConfusionMatrix(
             nc=self.nc,
             na=self.na,
@@ -214,10 +216,12 @@ class MDetectionValidator(BaseValidator):
                     stat["filter_small_pred"],
                     matched_targets,
                     matched_probs,
+                    matched_classes,
                 ) = self._process_batch(predn, bbox, cls, mdet_attributes)
                 if self.collect_detailed_level_metrics and matched_targets.numel() and matched_probs.numel():
                     self.level_targets.append(matched_targets.detach().cpu().numpy())
                     self.level_probs.append(matched_probs.detach().cpu().numpy())
+                    self.level_classes.append(matched_classes.detach().cpu().numpy())
                 if stat["filter_small_gt"] is not None:
                     stat["target_cls"] = stat["target_cls"][stat["filter_small_gt"]]
                     stat["target_attributes"] = stat["target_attributes"][stat["filter_small_gt"]]
@@ -249,15 +253,22 @@ class MDetectionValidator(BaseValidator):
         if self.level_targets:
             level_targets = np.concatenate(self.level_targets, axis=0)
             level_probs = np.concatenate(self.level_probs, axis=0)
+            level_classes = np.concatenate(self.level_classes, axis=0)
         else:
             level_targets = None
             level_probs = None
+            level_classes = None
 
         self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
         self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
         stats.pop("target_img", None)
         if len(stats) and stats["tp"].any():
-            self.metrics.process(**stats, level_targets=level_targets, level_probs=level_probs)
+            self.metrics.process(
+                **stats,
+                level_targets=level_targets,
+                level_probs=level_probs,
+                level_classes=level_classes,
+            )
         else:
             # A short smoke test or an early training epoch may have no
             # prediction with IoU >= 0.5.  Keep all attribute metrics defined
@@ -441,6 +452,7 @@ class MDetectionValidator(BaseValidator):
         # threshold-independent level metrics such as PR-AUC.
         matched_gt_idx, matched_pred_idx = torch.where(matched_box)
         matched_targets = gt_attributes[matched_gt_idx].long()
+        matched_classes = true_classes[matched_gt_idx].long()
         if matched_pred_idx.numel():
             if multiclass_attributes:
                 matched_probs = pred_attributes[matched_pred_idx].reshape(-1, self.na, self.nal).float()
@@ -459,7 +471,7 @@ class MDetectionValidator(BaseValidator):
         else:
             matched_probs = pred_attributes.new_empty((0, self.na, self.nal), dtype=torch.float32)
 
-        return correct, ap, batch_conf_mat, keep_gt, keep_pred, matched_targets, matched_probs
+        return correct, ap, batch_conf_mat, keep_gt, keep_pred, matched_targets, matched_probs, matched_classes
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

@@ -1764,7 +1764,28 @@ IoU=0.5、类别正确的检测框数量。
 
 summary.csv 相对路径：
 
-    runs/experiments/E3_risk_level_test/smoke_v1/summary.csv
+    runs/experiments/E3_risk_level_test/smoke_v4/summary.csv
+
+#### 按目标类别的检测与属性 Test 指标
+
+主表中的 Test mAP50 和 Test mAP50-95 是两个目标类别的宏平均；下表同时保留每个目标类别
+的检测 AP 与属性指标。属性指标仅统计 IoU=0.5、类别正确的匹配框。
+
+| 模型 | 推理模式 | 类别 | Test AP50 | Test AP50-95 | 匹配样本数 | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | native | projecting_signboard | 0.702634 | 0.478215 | 1040 | 0.950000 | 0.572734 | 0.615636 | 0.950000 | 0.581967 | 0.570737 | 0.681510 |
+| YOLOv10x | native | wall_signboard | 0.557015 | 0.383907 | 850 | 0.982353 | 0.571775 | 0.717739 | 0.982353 | 0.588865 | 0.567344 | 0.871831 |
+| MAYOLOx | one2many | projecting_signboard | 0.758642 | 0.521002 | 1050 | 0.963810 | 0.604879 | 0.711238 | 0.963810 | 0.652802 | 0.600255 | 0.656144 |
+| MAYOLOx | one2many | wall_signboard | 0.614840 | 0.443799 | 880 | 0.985227 | 0.562825 | 0.755509 | 0.985227 | 0.572217 | 0.556202 | 0.841545 |
+
+逐类别检测 AP 明细相对路径：
+
+    runs/experiments/E3_risk_level_test/smoke_v4/per_class_test.csv
+
+按目标类别、逐 attribute 的明细相对路径：
+
+    runs/experiments/E3_risk_level_test/smoke_v4/per_class_attribute_test.csv
+    runs/experiments/E3_risk_level_test/smoke_v4/per_class_attribute_detail_test.csv
 
 新计算结果与 Ultralytics 已集成的属性结果逐项对比，最大绝对差异约为
 5×10⁻⁹，说明框匹配、属性预测和指标聚合口径一致。
@@ -1873,217 +1894,3 @@ Precision、Recall、F1、Balanced Accuracy 和 PR-AUC。TP/FP/FN/TN 同时构�
 - 若实际数据只有二级属性标签，则不扩展为没有真实监督依据的三级风险等级、
   ordinal error 或校准风险等级结论；level 定义、编码、标注流程、标注者、
   仲裁、IAA 和联合分布需在数据集章节单独说明。
-
-
-
-## 100. 原始结果位置
-
-远程服务器项目根目录为 /localnvme/project/ultralytics：
-
-    runs/experiments/E0_hsv_ablation/summary.csv
-    runs/experiments/E0_stage1_sweep/summary.csv
-    runs/experiments/E0_stage2_sweep/summary.csv
-    runs/experiments/E1_w4/summary.csv
-    runs/experiments/E2_1_GIA_v2_position/summary.csv
-    runs/experiments/E2_27_baseline_gia_seed5/summary.csv
-    runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/
-    runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional/
-    runs/experiments/E4_rtdetr_LX/summary.csv
-    runs/experiments/E5_multilabel/yolov10x/weights/best.pt
-    runs/experiments/E6_two_stage_yolov10x/
-
-## 100.1 结果文件索引
-
-E2.1 confirm 与 confirm_seedfix 的原始文件：
-
-    runs/experiments/E2_1_GIA_v2_confirm/summary.csv
-    runs/experiments/E2_1_GIA_v2_confirm_seedfix/summary.csv
-
-旧版 GCA/GIA+GCA 文件：
-
-    runs/experiments/E2_2_GCA_stage2/summary.csv
-    runs/experiments/E2_2_GCA_GNN_margin_residual/summary.csv
-    runs/experiments/E2_2_GCA_GNN_margin_residual_conditional/summary.csv
-    runs/experiments/E2_2_GCA5x5_conditional/summary.csv
-    runs/experiments/E2_2_GCA5x5_cross/summary.csv
-    runs/experiments/E2_14_GCA_GNN_repeat_no_gia/summary.csv
-    runs/experiments/E2_13_GCA_GIA_test3_seed/summary.csv
-    runs/experiments/E2_15_GIA_stage2_control/summary.csv
-    runs/experiments/E2_20_GIA_GCA_top5_stability/summary.csv
-    runs/experiments/E2_21_HO_GIA_GCA_gin_adaptive/test_summary.csv
-    runs/experiments/E2_24_GIA_v2_5_7_GCA_MHA_margin_residual_conditional/test_summary.csv
-    runs/experiments/E2_25_GIA_v2_5_7_GCA_feature_logit_MHA_margin_residual_conditional/test_summary.csv
-    runs/experiments/E2_16_HO_cross_gcn.log
-    runs/experiments/E2_16_HO_cross_gcn_test.log
-
-E2.26 文件：
-
-    runs/experiments/E2_26_HO_baseline_gia/
-
-E2.27 文件：
-
-    runs/experiments/E2_27_baseline_gia_seed5/summary.csv
-
-## 102.1 旧版 GIA 确认与配对复现
-
-以下结果为旧版 GIA 确认实验，已被 E2.27 的五 seed 稳定性实验替代，仅作备份。
-
-### E2_1_GIA_v2_confirm
-
-| 模型 | Test mAP50 | Test mAP50-95 | Test F1_attr@0.5 |
-|---|---:|---:|---:|
-| Baseline | 0.666443 | 0.453483 | 0.602990 |
-| GIA-v2.5.7 | **0.689341** | **0.472128** | **0.657020** |
-
-### E2_1_GIA_v2_confirm_seedfix
-
-| seed | Baseline Test（mAP50 / mAP50-95 / F1） | GIA-v2.5.7 Test（mAP50 / mAP50-95 / F1） | 差值（mAP50 / mAP50-95 / F1） |
-|---:|---|---|---|
-| 0 | 0.666443 / 0.453483 / 0.602990 | 0.689341 / 0.472128 / 0.657020 | +0.022898 / +0.018645 / +0.054030 |
-| 1 | 0.621977 / 0.413646 / 0.623962 | 0.659499 / 0.472072 / 0.634876 | +0.037522 / +0.058426 / +0.010913 |
-| 2 | 0.635101 / 0.453514 / 0.609263 | 0.589792 / 0.393598 / 0.555470 | −0.045309 / −0.059916 / −0.053793 |
-| **均值** | **0.641174 / 0.440214 / 0.612072** | **0.646211 / 0.445933 / 0.615789** | **+0.005037 / +0.005719 / +0.003717** |
-
-## 102.2 旧版 GCA/GNN、GIA+GCA 及相关 HO 结果
-
-本节保留旧版 GCA 相关数据，不参与新版 2.2 的主结果。
-
-### E2_2：基于 baseline Stage2 的纯 GCA/GNN
-
-旧版 E2_2 中所有结构的 Test mAP50=0.666443、Test mAP50-95=0.453483，
-因此只比较 Test F1。
-
-#### E2_2_GCA_stage2
-
-| 结构 | n | Test F1_attr@0.5 |
-|---|---:|---:|
-| Baseline Stage2 | 1 | **0.645716** |
-| GAT learned | 1 | 0.589428 |
-| GCA com | 1 | 0.577278 |
-| GCA current | 1 | 0.583349 |
-| GCN | 1 | 0.589533 |
-| GIN | 1 | 0.586960 |
-| GraphSAGE | 1 | 0.622928 |
-
-#### E2_2_GCA_GNN_margin_residual
-
-| 结构 | n | Test F1_attr@0.5 |
-|---|---:|---:|
-| GAT margin residual | 2 | 0.601624 |
-| FGA margin residual | 2 | 0.618513 |
-| **GCN margin residual** | 2 | **0.645847** |
-| GIN margin residual | 2 | 0.617948 |
-| GraphSAGE margin residual | 2 | 0.620039 |
-
-#### E2_2_GCA_GNN_margin_residual_conditional
-
-| 结构 | n | Test F1_attr@0.5 |
-|---|---:|---:|
-| GAT margin residual | 1 | 0.616151 |
-| FGA margin residual | 1 | 0.618513 |
-| **GCN margin residual** | 1 | **0.645847** |
-| GIN margin residual | 1 | 0.633257 |
-| GraphSAGE margin residual | 1 | 0.618513 |
-
-#### E2_2_GCA5x5_conditional
-
-| GNN / 结构 | adaptive | context_conditional | context_cross | conv_adapter | twohop |
-|---|---:|---:|---:|---:|---:|
-| FGA | **0.645716** | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| GCN | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| GAT | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| GraphSAGE | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| GIN | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-
-#### E2_2_GCA5x5_cross
-
-| GNN / 结构 | adaptive | context_conditional | context_cross | conv_adapter | twohop |
-|---|---:|---:|---:|---:|---:|
-| FGA | 0.645716 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| GCN | 0.645716 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| GAT | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-| **GraphSAGE** | **0.645847** | 0.620039 | 0.620039 | 0.620039 | 0.620039 |
-| GIN | 0.629567 | 0.627916 | 0.627916 | 0.627916 | 0.627916 |
-
-### E2.14：不使用 GIA 初始化的 GCA/GNN
-
-| GCA/GNN 结构 | n | Test mAP50 | Test F1_attr@0.5 |
-|---|---:|---:|---:|
-| Conditional-GCN margin residual | 2 | 0.6664 | 0.6208±0.0254 |
-| **Cross-GCN margin residual** | 2 | 0.6664 | 0.6207±0.0253 |
-| GraphSAGE adaptive residual | 2 | 0.6664 | 0.6128±0.00005 |
-
-### E2.13、E2.15：旧版 GIA+GCA matched comparison
-
-| 结构 | n | Test mAP50 | Test F1_attr@0.5 | 相对 GIA control 的 Test F1 |
-|---|---:|---:|---:|---:|
-| GIA only（E2.15 control） | 3 | 0.6042 | 0.6460±0.0063 | — |
-| GIA + Conditional-GCN | 3 | 0.6042 | 0.6529±0.0036 | +0.0069 |
-| GIA + **Cross-GCN** | 3 | 0.6042 | 0.6552±0.0122 | +0.0093 |
-| GIA + GraphSAGE adaptive | 3 | 0.6042 | **0.6699±0.0151** | **+0.0239** |
-
-### E2.20：旧版 GIA+GCA Top-5 稳定性
-
-| seed | Test mAP50 | Test mAP50-95 | Test F1_attr@0.5 |
-|---:|---:|---:|---:|
-| 1 | 0.6047 | 0.4332 | **0.6733** |
-| 2 | 0.6047 | 0.4332 | **0.6600** |
-| **均值±样本标准差** | **0.6047** | **0.4332** | **0.6666±0.0094** |
-
-旧版最终结构记录为 Conditional + GIN + adaptive；该结果不作为新版 GCA
-稳定性主结果。
-
-### E2.16、E2.21：旧版 GIA+GCA 的 HO 结果
-
-#### E2.16：Cross-GCN
-
-| 推理模式 | n | Test mAP50 | Test mAP50-95 | Test F1_attr@0.5 |
-|---|---:|---:|---:|---:|
-| Native one-to-one | 3 | 0.6042 | 0.4328 | 0.6552±0.0122 |
-| One-to-many | 3 | ≈0.623 | ≈0.450 | ≈0.649±0.023 |
-| 差值 | — | ≈+0.0188 | ≈+0.0172 | ≈−0.0066 |
-
-#### E2.21：Conditional + GIN + adaptive
-
-| seed | Native Test mAP50 | Native Test mAP50-95 | Native Test F1_attr@0.5 | One-to-many Test mAP50 | One-to-many Test mAP50-95 | One-to-many Test F1_attr@0.5 |
-|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 0.6047 | 0.4332 | 0.6733 | **0.6226** | **0.4502** | **0.6792** |
-| 2 | 0.6047 | 0.4332 | 0.6600 | **0.6226** | **0.4502** | **0.6703** |
-| **均值±样本标准差** | **0.6047** | **0.4332** | **0.6666±0.0094** | **0.6226** | **0.4502** | **0.6748±0.0063** |
-
-### E2.24、E2.25：MHA-GCA/GNN 负结果
-
-基于 gia_v2_5_7 Stage1 seed=0 checkpoint 的两组 MHA-GCA/GNN 扩展共 10 个
-Test 结果，所有结构的 Test mAP50 为 0.689341，Test mAP50-95 为 0.472128；
-最高 Test F1_attr@0.5 为 0.656026，低于 GIA-v2.5.7 参照值 0.657020。
-
-该方向不纳入新版模型选择和主结果，仅保留为旧版负结果记录。
-
-### 其它旧版 GCA 结果
-
-| 历史实验 | Test mAP50 | Test F1_attr@0.5 | 备注 |
-|---|---:|---:|---|
-| E2.2 original GCA stage2 | 0.5988 | 0.5987 | 早期完整 GCA 结构 |
-| E2.3 original GIA+GCA stage2 | 0.6132 | 0.5918 | 未使用后续 matched Stage1 protocol |
-
-## 102.3 其它旧版 HO 对照
-
-### E2.26：Baseline/GIA 的旧版 HO 对照
-
-#### seed=0：指定 checkpoint
-
-| 模型 | 推理模式 | Test mAP50 | Test mAP50-95 | Test F1_attr@0.5 |
-|---|---|---:|---:|---:|
-| Baseline | native | 0.666443 | 0.453483 | 0.645716 |
-| Baseline | one-to-many | 0.659656 | 0.456900 | 0.643358 |
-| GIA-v2.5.7 | native | 0.689341 | 0.472128 | 0.657020 |
-| GIA-v2.5.7 | one-to-many | 0.687286 | 0.483173 | 0.626513 |
-
-#### seed=1、2：confirm_seedfix 同口径 Stage1 checkpoint
-
-| 模型 | seed | native Test mAP50 | one-to-many Test mAP50 | Δ mAP50 | native Test mAP50-95 | one-to-many Test mAP50-95 | Δ mAP50-95 | native Test F1 | one-to-many Test F1 | Δ F1 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Baseline | 1 | 0.621977 | 0.651164 | +0.029187 | 0.413646 | 0.431233 | +0.017587 | 0.623962 | 0.621529 | −0.002433 |
-| Baseline | 2 | 0.635101 | 0.645083 | +0.009982 | 0.453514 | 0.459855 | +0.006341 | 0.609263 | 0.595448 | −0.013815 |
-| GIA-v2.5.7 | 1 | 0.659499 | 0.676708 | +0.017209 | 0.472072 | 0.487498 | +0.015426 | 0.634876 | 0.646294 | +0.011418 |
-| GIA-v2.5.7 | 2 | 0.589792 | 0.617214 | +0.027421 | 0.393598 | 0.416509 | +0.022911 | 0.555470 | 0.581406 | +0.025935 |

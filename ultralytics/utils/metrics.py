@@ -1396,6 +1396,7 @@ class MDetMetrics(SimpleClass):
         self.attributes.all_precision = np.zeros(self.na, dtype=np.float64)
         self.attributes.all_recall = np.zeros(self.na, dtype=np.float64)
         self.attributes.detailed = None
+        self.attributes.detailed_by_class = None
 
     def get_attribute_names(self):
         attribute_dict = self.attribute_names
@@ -1411,7 +1412,19 @@ class MDetMetrics(SimpleClass):
                 print('Error in get_attribute_names')
         self.attribute_names = attribute_names
 
-    def process(self, tp, ap, conf, pred_cls, target_cls, conf_mat, level_targets=None, level_probs=None, **kwargs):
+    def process(
+        self,
+        tp,
+        ap,
+        conf,
+        pred_cls,
+        target_cls,
+        conf_mat,
+        level_targets=None,
+        level_probs=None,
+        level_classes=None,
+        **kwargs,
+    ):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1435,6 +1448,21 @@ class MDetMetrics(SimpleClass):
                 level_probs,
                 attribute_names=self.attribute_names,
             )
+            if level_classes is not None:
+                level_classes = np.asarray(level_classes, dtype=np.int64).reshape(-1)
+                if len(level_classes) != len(level_targets):
+                    raise ValueError(
+                        "level_classes must have one object-class label per matched attribute sample: "
+                        f"got {len(level_classes)} for {len(level_targets)} samples"
+                    )
+                self.attributes.detailed_by_class = {
+                    int(class_index): compute_attribute_level_metrics(
+                        level_targets[level_classes == class_index],
+                        level_probs[level_classes == class_index],
+                        attribute_names=self.attribute_names,
+                    )
+                    for class_index in np.unique(level_classes)
+                }
 
 
     @property
