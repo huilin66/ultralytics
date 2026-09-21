@@ -67,7 +67,11 @@ fi
 if [ "$RUN_E5" = "1" ]; then
   E5_DATA=${E5_DATA:-/localnvme/data/billboard/mayolo_v3_multilabel/data.yaml}
   E5_MODEL=${E5_MODEL:-yolov10x.pt}
-  E5_PROJECT=${E5_PROJECT:-runs/experiments/E5_multilabel}
+  E5_PROJECT=${E5_PROJECT:-runs/experiments/E5_multilabel_200}
+  E5_EPOCHS=${E5_EPOCHS:-200}
+  E5_SEEDS=${E5_SEEDS:-"0 1 2 3 4"}
+  E5_NAME_PREFIX=${E5_NAME_PREFIX:-yolov10x}
+  E5_SKIP_EXISTING=${E5_SKIP_EXISTING:-1}
 
   for REQUIRED_FILE in "$E5_DATA" "$E5_MODEL"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
@@ -76,16 +80,27 @@ if [ "$RUN_E5" = "1" ]; then
     fi
   done
 
-  "$PYTHON_BIN" scripts/train_multilabel.py \
-    --model "$E5_MODEL" \
-    --data "$E5_DATA" \
-    --epochs 100 \
-    --imgsz 640 \
-    --batch "$BATCH" \
-    --device "$DEVICE" \
-    --project "$E5_PROJECT" \
-    --name yolov10x \
-    --seed "$SEED"
+  read -r -a E5_SEED_LIST <<< "$E5_SEEDS"
+  for E5_SEED in "${E5_SEED_LIST[@]}"; do
+    E5_RUN_NAME="${E5_NAME_PREFIX}_seed${E5_SEED}"
+    E5_RUN_DIR="$E5_PROJECT/$E5_RUN_NAME"
+    if [ "$E5_SKIP_EXISTING" = "1" ] && [ -f "$E5_RUN_DIR/weights/best.pt" ]; then
+      echo "Skipping existing E5 seed $E5_SEED: $E5_RUN_DIR/weights/best.pt"
+      continue
+    fi
+
+    echo "Starting E5 seed=$E5_SEED for $E5_EPOCHS epochs"
+    "$PYTHON_BIN" scripts/train_multilabel.py \
+      --model "$E5_MODEL" \
+      --data "$E5_DATA" \
+      --epochs "$E5_EPOCHS" \
+      --imgsz 640 \
+      --batch "$BATCH" \
+      --device "$DEVICE" \
+      --project "$E5_PROJECT" \
+      --name "$E5_RUN_NAME" \
+      --seed "$E5_SEED"
+  done
 fi
 
 if [ "$RUN_E6" = "1" ]; then
