@@ -859,16 +859,16 @@ YOLOv9e（0.474799），Test F1_macro 最高为 YOLOv11x（0.684342）。MAYOLOx
 
 ### E4：RT-DETR 多规模属性检测
 
-E4 使用 RT-DETR-L 与 RT-DETR-X 完成 Stage1+Stage2 训练。
+E4 使用 RT-DETR-L 与 RT-DETR-X 完成 Stage1+Stage2 训练；以下为 seed=0、1、2、3、4 的 Test 结果均值±样本标准差。
 
 | 模型 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| RT-DETR-L | 0.509574 | 0.329548 | 0.968627 | 0.491973 | 0.492032 | 0.484314 | 0.500000 |
-| RT-DETR-X | 0.556197 | 0.373912 | 0.967130 | 0.491577 | 0.491645 | 0.483565 | 0.500000 |
+| RT-DETR-L | 0.508828 ± 0.016221 | 0.327857 ± 0.010068 | 0.968178 ± 0.000632 | 0.491852 ± 0.000170 | 0.491916 ± 0.000163 | 0.484089 ± 0.000316 | 0.500000 ± 0.000000 |
+| RT-DETR-X | 0.570191 ± 0.034095 | 0.378934 ± 0.018627 | 0.968090 ± 0.001039 | 0.491827 ± 0.000272 | 0.491893 ± 0.000268 | 0.484045 ± 0.000519 | 0.500000 ± 0.000000 |
 
-summary.csv 相对路径：
+完整五个 seed 的 summary.csv 相对路径：
 
-    runs/experiments/E4_rtdetr_LX/summary.csv
+    runs/experiments/E4_rtdetr_LX/test_summary_all_seeds.csv
 
 ## 4. 多标签目标检测与目标检测+多标签分类双阶段
 

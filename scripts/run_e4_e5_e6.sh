@@ -3,11 +3,13 @@ set -euo pipefail
 
 # Final E4/E5/E6 launch script.
 # Run from the repository root or let the script resolve its own root:
-#   CUDA_VISIBLE_DEVICES=1 bash scripts/run_e4_e5_e6.sh
+#   DEVICE=1 bash scripts/run_e4_e5_e6.sh
 #
-# DEVICE is the logical CUDA index inside CUDA_VISIBLE_DEVICES.  The defaults
-# below match the remote yolov8 environment and the generated remote datasets,
-# but every input can be overridden from the shell.
+# DEVICE is the physical CUDA index passed to Ultralytics.  When running two
+# jobs in parallel, use DEVICE=0 and DEVICE=1 in separate processes and do not
+# set a conflicting CUDA_VISIBLE_DEVICES mask.  The defaults below match the
+# remote yolov8 environment and the generated remote datasets, but every input
+# can be overridden from the shell.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -87,14 +89,21 @@ if [ "$RUN_E5" = "1" ]; then
 fi
 
 if [ "$RUN_E6" = "1" ]; then
-  # The detector checkpoint is the completed E3 YOLOv10x 100+100 run.  E6
-  # trains only the crop classifier for 100 epochs on the generated crops.
-  E6_DETECTOR_CHECKPOINT=${E6_DETECTOR_CHECKPOINT:-runs/experiments/E3_versions/E3_versions_yolov10x_w4_0p5_seed_0_stage2/weights/best.pt}
+  # E6 is a matched-seed two-stage pipeline.  For each seed, use the
+  # corresponding E3 YOLOv10x detector (its detector Stage1+Stage2 checkpoint)
+  # and train the E6 crop classifier with the same seed.  The classifier is
+  # trained on the shared GT-aligned crop dataset; the matching detector is
+  # used again during the final predicted-crop Test evaluation.
+  E6_DETECTOR_ROOT=${E6_DETECTOR_ROOT:-runs/experiments/E3_versions}
+  E6_DETECTOR_PREFIX=${E6_DETECTOR_PREFIX:-E3_versions_yolov10x_w4_0p5_seed_}
   E6_DATA=${E6_DATA:-/localnvme/data/billboard/mayolo_v3_two_stage_crops/data.yaml}
   E6_MODEL=${E6_MODEL:-ultralytics/cfg/models/v10/yolov10x-cls.yaml}
   E6_PROJECT=${E6_PROJECT:-runs/experiments/E6_two_stage_yolov10x}
+  E6_SEEDS=${E6_SEEDS:-"0 1 2 3 4"}
+  E6_EPOCHS=${E6_EPOCHS:-100}
+  E6_NAME=${E6_NAME:-detector_yolov10x_classifier_yolov10x_cls}
 
-  for REQUIRED_FILE in "$E6_DETECTOR_CHECKPOINT" "$E6_DATA" "$E6_MODEL"; do
+  for REQUIRED_FILE in "$E6_DATA" "$E6_MODEL"; do
     if [ ! -f "$REQUIRED_FILE" ]; then
       echo "Missing E6 input: $REQUIRED_FILE" >&2
       exit 1
@@ -110,17 +119,40 @@ if [ "$RUN_E6" = "1" ]; then
     exit 1
   fi
 
-  "$PYTHON_BIN" scripts/train_two_stage.py \
-    --detector-checkpoint "$E6_DETECTOR_CHECKPOINT" \
-    --model "$E6_MODEL" \
-    --pretrain "$E6_PRETRAIN" \
-    --data "$E6_DATA" \
-    --epochs 100 \
-    --imgsz 224 \
-    --batch "$BATCH" \
-    --workers "$WORKERS" \
-    --device "$DEVICE" \
-    --project "$E6_PROJECT" \
-    --name detector_yolov10x_classifier_yolov10x_cls \
-    --seed "$SEED"
+  read -r -a E6_SEED_LIST <<< "$E6_SEEDS"
+  for E6_SEED in "${E6_SEED_LIST[@]}"; do
+    E6_DETECTOR_CHECKPOINT="$E6_DETECTOR_ROOT/${E6_DETECTOR_PREFIX}${E6_SEED}_stage2/weights/best.pt"
+    if [ ! -f "$E6_DETECTOR_CHECKPOINT" ]; then
+      echo "Missing E6 detector checkpoint for seed $E6_SEED: $E6_DETECTOR_CHECKPOINT" >&2
+      exit 1
+    fi
+
+    # Keep seed=0 compatible with the original E6 path; use isolated projects
+    # for the additional seeds so manifests and classifier weights cannot clash.
+    if [ "$E6_SEED" = "0" ]; then
+      E6_SEED_PROJECT="$E6_PROJECT"
+    else
+      E6_SEED_PROJECT="${E6_PROJECT}_seed${E6_SEED}"
+    fi
+    E6_RUN_DIR="$E6_SEED_PROJECT/$E6_NAME"
+    if [ "${E6_SKIP_EXISTING:-1}" = "1" ] && [ -f "$E6_RUN_DIR/weights/best.pt" ]; then
+      echo "Skipping existing E6 seed $E6_SEED: $E6_RUN_DIR/weights/best.pt"
+      continue
+    fi
+
+    echo "Starting E6 seed=$E6_SEED with detector=$E6_DETECTOR_CHECKPOINT"
+    "$PYTHON_BIN" scripts/train_two_stage.py \
+      --detector-checkpoint "$E6_DETECTOR_CHECKPOINT" \
+      --model "$E6_MODEL" \
+      --pretrain "$E6_PRETRAIN" \
+      --data "$E6_DATA" \
+      --epochs "$E6_EPOCHS" \
+      --imgsz 224 \
+      --batch "$BATCH" \
+      --workers "$WORKERS" \
+      --device "$DEVICE" \
+      --project "$E6_SEED_PROJECT" \
+      --name "$E6_NAME" \
+      --seed "$E6_SEED"
+  done
 fi
