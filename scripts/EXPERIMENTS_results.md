@@ -1719,6 +1719,10 @@ Offline variant manifest relative path:
 没有被改变；如果生成图改变了目标几何或属性，则不能直接复用原始标注，也不能将
 该样本用于定量指标。
 
+结果目录（MAYOLOx 与 YOLOv10x）：
+
+    E:\data\0417_signboard\select\robustness_final_present_mayolox_yolov10x
+
 ### 5.3 外部场景/区域案例
 
 可从公开网络收集少量与任务相关、且不出现在训练/验证/test 集中的广告牌图像，
@@ -1728,6 +1732,10 @@ Offline variant manifest relative path:
 如果外部图像没有人工标注，只展示检测框和属性预测，不计算 mAP/F1，也不称为
 定量的 cross-region generalization。只有在补充 box、类别和属性标注后，才能进行
 外部数据集指标比较。
+
+结果目录（MAYOLOx 与 YOLOv10x）：
+
+    E:\data\0417_signboard\select\robustness_final_present_mayolox_yolov10x
 
 ### 5.4 实验边界
 
