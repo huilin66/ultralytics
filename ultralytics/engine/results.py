@@ -9,6 +9,7 @@ from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 
@@ -1287,46 +1288,118 @@ class MdetResults(SimpleClass):
             annotator.masks(pred_masks.data, colors=[colors(x, True) for x in idx], im_gpu=im_gpu)
 
         # Plot Detect results
-        poss = []
+        attribute_boxes = []
         if pred_boxes is not None and show_boxes:
             for d in reversed(pred_boxes):
                 c, conf, id = int(d.cls), float(d.conf) if conf else None, None if d.id is None else int(d.id.item())
                 name = ("" if id is None else f"id:{id} ") + names[c]
                 label = (f"{name} {conf:.2f}" if conf else name) if labels else None
                 box = d.xyxyxyxy.reshape(-1, 4, 2).squeeze() if is_obb else d.xyxy.squeeze()
-                pos = annotator.box_label(box, label, color=colors(c, True), rotated=is_obb)
-                poss.append(pos)
+                box_points = (d.xyxyxyxy if is_obb else d.xyxy).reshape(-1, 2)
+                if isinstance(box_points, torch.Tensor):
+                    box_points = box_points.detach().cpu().numpy()
+                else:
+                    box_points = np.asarray(box_points)
+                attribute_boxes.append(
+                    (
+                        float(box_points[:, 0].min()),
+                        float(box_points[:, 1].min()),
+                        float(box_points[:, 0].max()),
+                        float(box_points[:, 1].max()),
+                    )
+                )
+                annotator.box_label(box, label, color=colors(c, True), rotated=is_obb)
 
         # Plot Attribute results
-        if pred_attributes is not None and show_attributes:
-            for i, a in enumerate(reversed(pred_attributes)):
-                attribute = a.result
-                count = 0
-                re_count = 0
-                pos_base = poss[i]
-                br_poss = []
-                for idx, (k, v) in enumerate(attribute.items()):
-                    label = f'{k}-{v}'
-                    if filter_no and (not v or 'no' in str(v)):
-                        continue
-                    count += 1
-                    pos = [pos_base[0], pos_base[1]+15*(count+1)-10]
-                    br_pos = annotator.text(pos, label, txt_color=colors(idx, True))
-                    br_poss.append(br_pos)
-                if len(br_poss)>0:
-                    br_poss_np = np.array(br_poss)
-                    tl_pos = pos_base
-                    br_pos = (np.max(br_poss_np, axis=0)[0], br_poss_np[-1][1])
-                    annotator.rectangle_mask(box=tl_pos + br_pos, color=(255, 255, 255), alpha=0.5, )
+        if pred_attributes is not None and show_attributes and attribute_boxes:
+            image_h, image_w = self.orig_shape[:2]
+            attribute_rects = []
+            gap = max(int(annotator.lw * 2), 4)
+            pad = max(int(annotator.lw), 3)
 
-                for idx, (k, v) in enumerate(attribute.items()):
-                    label = f'{k}-{v}'
-                    if filter_no and (not v or 'no' in str(v)):
+            def _intersection_area(first, second):
+                """Return the intersection area of two xyxy rectangles."""
+                width = max(0, min(first[2], second[2]) - max(first[0], second[0]))
+                height = max(0, min(first[3], second[3]) - max(first[1], second[1]))
+                return width * height
+
+            for box_index, (a, box_rect) in enumerate(zip(reversed(pred_attributes), attribute_boxes)):
+                labels_to_draw = []
+                for idx, (key, value) in enumerate(a.result.items()):
+                    if filter_no and (not value or "no" in str(value)):
                         continue
-                    re_count += 1
-                    pos = [pos_base[0], pos_base[1]+15*(re_count+1)-10]
-                    br_pos = annotator.text(pos, label, txt_color=colors(idx, True))
-                    br_poss.append(br_pos)
+                    labels_to_draw.append((idx, f"{key}-{value}"))
+                if not labels_to_draw:
+                    continue
+
+                text_sizes = []
+                for _, text in labels_to_draw:
+                    if annotator.pil:
+                        text_width, text_height = annotator.font.getsize(text)
+                        text_baseline = 0
+                    else:
+                        (text_width, text_height), text_baseline = cv2.getTextSize(
+                            text, cv2.FONT_HERSHEY_SIMPLEX, annotator.sf, annotator.tf
+                        )
+                    text_sizes.append((int(text_width), int(text_height), int(text_baseline)))
+
+                max_text_width = max(size[0] for size in text_sizes)
+                text_height = max(size[1] for size in text_sizes)
+                text_baseline = max(size[2] for size in text_sizes)
+                line_height = max(text_height + text_baseline + 2, int(annotator.lw * 4))
+                panel_width = min(image_w, max_text_width + 2 * pad)
+                panel_height = min(image_h, len(labels_to_draw) * line_height + 2 * pad)
+                bx1, by1, bx2, by2 = box_rect
+
+                raw_candidates = [
+                    (bx1, by2 + gap),
+                    (bx1, by1 - panel_height - gap),
+                    (bx2 + gap, by1),
+                    (bx1 - panel_width - gap, by1),
+                ]
+                # Add deterministic fallback positions when neighboring boxes occupy all nearby space.
+                fallback_step = max(line_height, 1)
+                raw_candidates.extend(
+                    (bx1, y) for y in range(0, max(image_h - panel_height, 0) + 1, fallback_step)
+                )
+                raw_candidates.extend(
+                    (x, y)
+                    for x in (0, max(image_w - panel_width, 0))
+                    for y in range(0, max(image_h - panel_height, 0) + 1, fallback_step)
+                )
+
+                candidates = []
+                for order, (x, y) in enumerate(raw_candidates):
+                    x = int(max(0, min(x, image_w - panel_width)))
+                    y = int(max(0, min(y, image_h - panel_height)))
+                    candidates.append(((x, y, x + panel_width, y + panel_height), order))
+
+                def _placement_score(item):
+                    rect, order = item
+                    score = _intersection_area(rect, box_rect) * 100000
+                    score += sum(_intersection_area(rect, occupied) * 100000 for occupied in attribute_rects)
+                    score += sum(
+                        _intersection_area(rect, other_box) * 10
+                        for index, other_box in enumerate(attribute_boxes)
+                        if index != box_index
+                    )
+                    return score, order
+
+                panel_rect, _ = min(candidates, key=_placement_score)
+                attribute_rects.append(panel_rect)
+                if annotator.pil:
+                    annotator.rectangle(panel_rect, fill=(255, 255, 255))
+                else:
+                    annotator.rectangle_mask(box=panel_rect, color=(255, 255, 255), alpha=0.75)
+
+                panel_x, panel_y = panel_rect[:2]
+                for line_index, ((attribute_index, text), size) in enumerate(zip(labels_to_draw, text_sizes)):
+                    text_y = (
+                        panel_y + pad + line_index * line_height
+                        if annotator.pil
+                        else panel_y + pad + size[1] + line_index * line_height
+                    )
+                    annotator.text([panel_x + pad, text_y], text, txt_color=colors(attribute_index, True))
 
 
         # Plot Classify results
