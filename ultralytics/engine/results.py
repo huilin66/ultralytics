@@ -1314,7 +1314,6 @@ class MdetResults(SimpleClass):
         if pred_attributes is not None and show_attributes and attribute_boxes:
             image_h, image_w = self.orig_shape[:2]
             attribute_rects = []
-            gap = max(int(annotator.lw * 2), 4)
             pad = max(int(annotator.lw), 3)
 
             def _intersection_area(first, second):
@@ -1332,8 +1331,19 @@ class MdetResults(SimpleClass):
                 if not labels_to_draw:
                     continue
 
-                text_sizes = []
-                for _, text in labels_to_draw:
+                bx1, by1, bx2, by2 = box_rect
+
+                # Keep the attribute panel inside its detection box.  The previous
+                # collision-aware layout could move a panel below/above the box,
+                # which made it unclear which detection the attributes belonged to.
+                box_left = int(max(0, min(np.floor(bx1), image_w - 1)))
+                box_top = int(max(0, min(np.floor(by1), image_h - 1)))
+                box_right = int(max(box_left + 1, min(np.ceil(bx2), image_w)))
+                box_bottom = int(max(box_top + 1, min(np.ceil(by2), image_h)))
+                box_width = box_right - box_left
+                box_height = box_bottom - box_top
+
+                def _measure_text(text):
                     if annotator.pil:
                         text_width, text_height = annotator.font.getsize(text)
                         text_baseline = 0
@@ -1341,48 +1351,66 @@ class MdetResults(SimpleClass):
                         (text_width, text_height), text_baseline = cv2.getTextSize(
                             text, cv2.FONT_HERSHEY_SIMPLEX, annotator.sf, annotator.tf
                         )
-                    text_sizes.append((int(text_width), int(text_height), int(text_baseline)))
+                    return int(text_width), int(text_height), int(text_baseline)
 
-                max_text_width = max(size[0] for size in text_sizes)
+                def _fit_text(text, max_width):
+                    if _measure_text(text)[0] <= max_width:
+                        return text
+                    suffix = "..."
+                    candidate = text
+                    while candidate and _measure_text(candidate + suffix)[0] > max_width:
+                        candidate = candidate[:-1]
+                    return (candidate + suffix) if candidate else suffix
+
+                # Size the panel from the box, not the full image, so neither the
+                # background nor the text can be deliberately placed outside it.
+                initial_sizes = [_measure_text(text) for _, text in labels_to_draw]
+                max_text_width = max(size[0] for size in initial_sizes)
+                panel_width = min(box_width, max_text_width + 2 * pad)
+                available_text_width = max(panel_width - 2 * pad, 1)
+                labels_to_draw = [
+                    (attribute_index, _fit_text(text, available_text_width))
+                    for attribute_index, text in labels_to_draw
+                ]
+                text_sizes = [_measure_text(text) for _, text in labels_to_draw]
                 text_height = max(size[1] for size in text_sizes)
                 text_baseline = max(size[2] for size in text_sizes)
                 line_height = max(text_height + text_baseline + 2, int(annotator.lw * 4))
-                panel_width = min(image_w, max_text_width + 2 * pad)
-                panel_height = min(image_h, len(labels_to_draw) * line_height + 2 * pad)
-                bx1, by1, bx2, by2 = box_rect
+                max_lines = max(1, (box_height - 2 * pad) // line_height)
+                if len(labels_to_draw) > max_lines:
+                    labels_to_draw = labels_to_draw[:max_lines]
+                    if max_lines > 1:
+                        labels_to_draw[-1] = (labels_to_draw[-1][0], "...")
+                    text_sizes = [_measure_text(text) for _, text in labels_to_draw]
+                panel_height = min(box_height, len(labels_to_draw) * line_height + 2 * pad)
 
+                # Try the box's top-left corner first.  Other positions are only
+                # used inside the same box when an already drawn attribute panel
+                # would overlap it.
                 raw_candidates = [
-                    (bx1, by2 + gap),
-                    (bx1, by1 - panel_height - gap),
-                    (bx2 + gap, by1),
-                    (bx1 - panel_width - gap, by1),
+                    (box_left + pad, box_top + pad),
+                    (box_right - panel_width - pad, box_top + pad),
+                    (box_left + pad, box_bottom - panel_height - pad),
+                    (box_right - panel_width - pad, box_bottom - panel_height - pad),
                 ]
-                # Add deterministic fallback positions when neighboring boxes occupy all nearby space.
-                fallback_step = max(line_height, 1)
-                raw_candidates.extend(
-                    (bx1, y) for y in range(0, max(image_h - panel_height, 0) + 1, fallback_step)
-                )
-                raw_candidates.extend(
-                    (x, y)
-                    for x in (0, max(image_w - panel_width, 0))
-                    for y in range(0, max(image_h - panel_height, 0) + 1, fallback_step)
-                )
 
                 candidates = []
                 for order, (x, y) in enumerate(raw_candidates):
-                    x = int(max(0, min(x, image_w - panel_width)))
-                    y = int(max(0, min(y, image_h - panel_height)))
+                    x = int(max(box_left, min(x, box_right - panel_width)))
+                    y = int(max(box_top, min(y, box_bottom - panel_height)))
                     candidates.append(((x, y, x + panel_width, y + panel_height), order))
 
                 def _placement_score(item):
                     rect, order = item
-                    score = _intersection_area(rect, box_rect) * 100000
+                    score = 0.0
                     score += sum(_intersection_area(rect, occupied) * 100000 for occupied in attribute_rects)
                     score += sum(
                         _intersection_area(rect, other_box) * 10
                         for index, other_box in enumerate(attribute_boxes)
                         if index != box_index
                     )
+                    # Prefer the original top-left placement whenever it is free.
+                    score += (rect[0] - box_left + rect[1] - box_top) * 0.01
                     return score, order
 
                 panel_rect, _ = min(candidates, key=_placement_score)
