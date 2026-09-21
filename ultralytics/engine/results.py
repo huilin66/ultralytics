@@ -1339,7 +1339,6 @@ class MdetResults(SimpleClass):
                 # so that the complete attribute text remains readable.
                 box_left = int(max(0, min(np.floor(bx1), image_w - 1)))
                 box_top = int(max(0, min(np.floor(by1), image_h - 1)))
-                box_right = int(max(box_left + 1, min(np.ceil(bx2), image_w)))
                 box_bottom = int(max(box_top + 1, min(np.ceil(by2), image_h)))
 
                 def _measure_text(text):
@@ -1361,18 +1360,21 @@ class MdetResults(SimpleClass):
                 panel_height = min(image_h, len(labels_to_draw) * line_height + 2 * pad)
 
                 # Try the box's top-left corner first. Other positions are only
-                # used when an already drawn attribute panel would overlap it.
+                # used vertically when an already drawn attribute panel would
+                # overlap it; the left edge stays aligned with the detection box.
                 raw_candidates = [
                     (box_left + pad, box_top + pad),
                     (box_left + pad, box_bottom + gap),
                     (box_left + pad, box_top - panel_height - gap),
-                    (box_right + gap, box_top + pad),
-                    (box_left - panel_width - gap, box_top + pad),
+                    (box_left + pad, box_bottom - panel_height - pad),
                 ]
 
                 candidates = []
                 for order, (x, y) in enumerate(raw_candidates):
-                    x = int(max(0, min(x, image_w - panel_width)))
+                    # Do not clamp x to the right image edge: for a box near the
+                    # boundary, preserving the top-left anchor is more important
+                    # than moving the label to another object or image corner.
+                    x = int(max(0, x))
                     y = int(max(0, min(y, image_h - panel_height)))
                     candidates.append(((x, y, x + panel_width, y + panel_height), order))
 
@@ -1380,13 +1382,8 @@ class MdetResults(SimpleClass):
                     rect, order = item
                     score = 0.0
                     score += sum(_intersection_area(rect, occupied) * 100000 for occupied in attribute_rects)
-                    score += sum(
-                        _intersection_area(rect, other_box) * 10
-                        for index, other_box in enumerate(attribute_boxes)
-                        if index != box_index
-                    )
                     # Prefer the original top-left placement whenever it is free.
-                    score += (rect[0] - box_left + rect[1] - box_top) * 0.01
+                    score += max(0, rect[1] - box_top) * 0.01
                     return score, order
 
                 panel_rect, _ = min(candidates, key=_placement_score)
