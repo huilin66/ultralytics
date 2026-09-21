@@ -6,6 +6,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import torch
 
 from ultralytics import RTDETR, YOLO
+from ultralytics.utils import yaml_load
 
 BATCH_SIZE = 16
 STAGE1_EPOCHS = 100
@@ -16,7 +17,7 @@ IMGSZ = 640
 CONF = 0.5
 TASK = "mdetect"
 DEVICE = torch.device("cuda:0")
-DATA = "billboard_mdet5_10_c_0806m.yaml"
+DATA = "ultralytics/cfg/mayolo_r1/mayolo_v3.yaml"
 FREEZE_NUMS = {
     "yolov8": 22,
     "yolov9e": 42,
@@ -41,13 +42,24 @@ def _is_rtdetr(network):
     return network is RTDETR
 
 
+def _set_model_names_from_data(model, data_path=DATA):
+    """Override checkpoint class names with the authoritative dataset mapping."""
+    names = yaml_load(data_path)["names"]
+    model.model.names = names
+    predictor = getattr(model, "predictor", None)
+    if predictor is not None:
+        predictor.model.names = names
+    return model
+
+
 def _build_model(network, model_path, model_seed=None):
     """Build a model while keeping the YOLO and RT-DETR constructor signatures separate."""
-    return (
+    model = (
         network(model_path)
         if _is_rtdetr(network)
         else network(model_path, task=TASK, model_seed=model_seed)
     )
+    return _set_model_names_from_data(model)
 
 
 def _rtdetr_attribute_only_params(model):

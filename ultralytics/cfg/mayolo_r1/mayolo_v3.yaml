@@ -5,8 +5,8 @@ test: test.txt # 20288 of 40670 images, submit to https://competitions.codalab.o
 
 # Classes
 names:
-  0: wall_signboard
-  1: projecting_signboard
+  0: projecting_signboard
+  1: wall_signboard
 
 nal: 2
 
