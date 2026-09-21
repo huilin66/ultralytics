@@ -1288,9 +1288,118 @@ class MdetResults(SimpleClass):
             annotator.masks(pred_masks.data, colors=[colors(x, True) for x in idx], im_gpu=im_gpu)
 
         # Plot Detect results
-        attribute_boxes = []
+        reversed_pred_attributes = list(reversed(pred_attributes)) if pred_attributes is not None else []
+
+        def _draw_attribute_panel(attribute_result, box_rect, class_label):
+            """Draw attributes below the class label using yolo_data_manager-style layout."""
+            if not show_attributes or attribute_result is None:
+                return
+
+            labels_to_draw = []
+            for idx, (key, value) in enumerate(attribute_result.result.items()):
+                if filter_no and (not value or "no" in str(value)):
+                    continue
+                labels_to_draw.append((idx, f"{key}: {value}"))
+            if not labels_to_draw:
+                return
+
+            image_h, image_w = self.orig_shape[:2]
+            bx1, by1, _, _ = box_rect
+            box_left = int(max(0, min(np.floor(bx1), image_w - 1)))
+            box_top = int(max(0, min(np.floor(by1), image_h - 1)))
+            class_label = class_label or ""
+
+            # Match yolo_data_manager's class-label boundary behavior so the
+            # attribute panel starts immediately below the rendered class label.
+            if class_label:
+                if annotator.pil:
+                    class_width, class_height = annotator.font.getsize(class_label)
+                    class_left = max(0, min(box_left, image_w - class_width))
+                    class_bottom = box_top + 1 if box_top >= class_height else box_top + class_height + 1
+                    class_line_height = max(class_height, 1)
+                else:
+                    (class_width, class_height), class_baseline = cv2.getTextSize(
+                        class_label,
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        annotator.sf,
+                        annotator.tf,
+                    )
+                    class_height += 3
+                    class_left = max(0, min(box_left, image_w - class_width))
+                    class_bottom = box_top if box_top >= class_height else box_top + class_height
+                    class_line_height = max(class_height - 3 + class_baseline, 1)
+            else:
+                class_left = box_left
+                class_bottom = box_top
+                class_line_height = max(int(annotator.lw * 4), 1)
+
+            def _measure_text(text):
+                if annotator.pil:
+                    text_width, text_height = annotator.font.getsize(text)
+                    text_baseline = 0
+                else:
+                    (text_width, text_height), text_baseline = cv2.getTextSize(
+                        text,
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        annotator.sf,
+                        annotator.tf,
+                    )
+                return int(text_width), int(text_height), int(text_baseline)
+
+            text_sizes = [_measure_text(text) for _, text in labels_to_draw]
+            max_text_width = max(size[0] for size in text_sizes)
+            text_height = max(size[1] for size in text_sizes)
+            text_baseline = max(size[2] for size in text_sizes)
+            line_height = max(int(class_line_height * 0.85), text_height + text_baseline, 12)
+            pad = max(int(annotator.lw), 3)
+
+            # Keep the panel aligned to the class label, while clamping it to
+            # the image boundary. No cross-object collision avoidance is used,
+            # matching yolo_data_manager's renderer.
+            panel_x = int(max(0, min(class_left + 2, image_w - max_text_width - 4)))
+            if annotator.pil:
+                first_text_y = class_bottom + 1
+                panel_top = first_text_y - pad
+                panel_bottom = first_text_y + line_height * len(labels_to_draw) + pad
+            else:
+                first_text_y = class_bottom + line_height
+                panel_top = first_text_y - text_height - 2
+                panel_bottom = first_text_y + line_height * (len(labels_to_draw) - 1) + text_baseline + 2
+
+            if panel_bottom >= image_h:
+                shift = panel_bottom - image_h + 1
+                first_text_y -= shift
+                panel_top -= shift
+                panel_bottom -= shift
+            if panel_top < 0:
+                first_text_y -= panel_top
+                panel_bottom -= panel_top
+                panel_top = 0
+
+            panel_right = min(image_w - 1, panel_x + max_text_width + 2 * pad)
+            panel_bottom = min(image_h - 1, max(panel_bottom, panel_top))
+            panel_rect = (panel_x, int(panel_top), panel_right, int(panel_bottom))
+            if annotator.pil:
+                annotator.rectangle(panel_rect, fill=(255, 255, 255))
+            else:
+                annotator.rectangle_mask(box=panel_rect, color=(255, 255, 255), alpha=0.65)
+
+            for line_index, ((attribute_index, text), _) in enumerate(zip(labels_to_draw, text_sizes)):
+                if annotator.pil:
+                    text_y = int(first_text_y + line_height * line_index)
+                else:
+                    text_y = min(
+                        max(first_text_y + line_height * line_index, int(panel_top) + text_height),
+                        image_h - 1,
+                    )
+                annotator.text(
+                    [panel_x + 2, text_y],
+                    text,
+                    txt_color=colors(attribute_index, True),
+                )
+
         if pred_boxes is not None and show_boxes:
-            for d in reversed(pred_boxes):
+            for box_index, d in enumerate(reversed(pred_boxes)):
                 c, conf, id = int(d.cls), float(d.conf) if conf else None, None if d.id is None else int(d.id.item())
                 name = ("" if id is None else f"id:{id} ") + names[c]
                 label = (f"{name} {conf:.2f}" if conf else name) if labels else None
@@ -1300,111 +1409,15 @@ class MdetResults(SimpleClass):
                     box_points = box_points.detach().cpu().numpy()
                 else:
                     box_points = np.asarray(box_points)
-                attribute_boxes.append(
-                    (
-                        float(box_points[:, 0].min()),
-                        float(box_points[:, 1].min()),
-                        float(box_points[:, 0].max()),
-                        float(box_points[:, 1].max()),
-                    )
+                box_rect = (
+                    float(box_points[:, 0].min()),
+                    float(box_points[:, 1].min()),
+                    float(box_points[:, 0].max()),
+                    float(box_points[:, 1].max()),
                 )
                 annotator.box_label(box, label, color=colors(c, True), rotated=is_obb)
-
-        # Plot Attribute results
-        if pred_attributes is not None and show_attributes and attribute_boxes:
-            image_h, image_w = self.orig_shape[:2]
-            attribute_rects = []
-            gap = max(int(annotator.lw * 2), 4)
-            pad = max(int(annotator.lw), 3)
-
-            def _intersection_area(first, second):
-                """Return the intersection area of two xyxy rectangles."""
-                width = max(0, min(first[2], second[2]) - max(first[0], second[0]))
-                height = max(0, min(first[3], second[3]) - max(first[1], second[1]))
-                return width * height
-
-            for box_index, (a, box_rect) in enumerate(zip(reversed(pred_attributes), attribute_boxes)):
-                labels_to_draw = []
-                for idx, (key, value) in enumerate(a.result.items()):
-                    if filter_no and (not value or "no" in str(value)):
-                        continue
-                    labels_to_draw.append((idx, f"{key}-{value}"))
-                if not labels_to_draw:
-                    continue
-
-                bx1, by1, bx2, by2 = box_rect
-
-                # Anchor the attribute panel at the detection box's top-left corner.
-                # The panel may extend along the right/bottom side for small boxes
-                # so that the complete attribute text remains readable.
-                box_left = int(max(0, min(np.floor(bx1), image_w - 1)))
-                box_top = int(max(0, min(np.floor(by1), image_h - 1)))
-                box_bottom = int(max(box_top + 1, min(np.ceil(by2), image_h)))
-
-                def _measure_text(text):
-                    if annotator.pil:
-                        text_width, text_height = annotator.font.getsize(text)
-                        text_baseline = 0
-                    else:
-                        (text_width, text_height), text_baseline = cv2.getTextSize(
-                            text, cv2.FONT_HERSHEY_SIMPLEX, annotator.sf, annotator.tf
-                        )
-                    return int(text_width), int(text_height), int(text_baseline)
-
-                text_sizes = [_measure_text(text) for _, text in labels_to_draw]
-                max_text_width = max(size[0] for size in text_sizes)
-                text_height = max(size[1] for size in text_sizes)
-                text_baseline = max(size[2] for size in text_sizes)
-                line_height = max(text_height + text_baseline + 2, int(annotator.lw * 4))
-                panel_width = min(image_w, max_text_width + 2 * pad)
-                panel_height = min(image_h, len(labels_to_draw) * line_height + 2 * pad)
-
-                # Try the box's top-left corner first. Other positions are only
-                # used vertically when an already drawn attribute panel would
-                # overlap it; the left edge stays aligned with the detection box.
-                raw_candidates = [
-                    (box_left + pad, box_top + pad),
-                    (box_left + pad, box_bottom + gap),
-                    (box_left + pad, box_top - panel_height - gap),
-                    (box_left + pad, box_bottom - panel_height - pad),
-                ]
-
-                candidates = []
-                for order, (x, y) in enumerate(raw_candidates):
-                    # Do not clamp x to the right image edge: for a box near the
-                    # boundary, preserving the top-left anchor is more important
-                    # than moving the label to another object or image corner.
-                    x = int(max(0, x))
-                    y = int(max(0, min(y, image_h - panel_height)))
-                    candidates.append(((x, y, x + panel_width, y + panel_height), order))
-
-                def _placement_score(item):
-                    rect, order = item
-                    score = 0.0
-                    # Keep fallback placements inside the current detection box
-                    # whenever the full attribute panel can fit there.
-                    if rect[1] < box_top or rect[3] > box_bottom:
-                        score += 1_000_000_000
-                    score += sum(_intersection_area(rect, occupied) * 100000 for occupied in attribute_rects)
-                    # Prefer the original top-left placement whenever it is free.
-                    score += max(0, rect[1] - box_top) * 0.01
-                    return score, order
-
-                panel_rect, _ = min(candidates, key=_placement_score)
-                attribute_rects.append(panel_rect)
-                if annotator.pil:
-                    annotator.rectangle(panel_rect, fill=(255, 255, 255))
-                else:
-                    annotator.rectangle_mask(box=panel_rect, color=(255, 255, 255), alpha=0.75)
-
-                panel_x, panel_y = panel_rect[:2]
-                for line_index, ((attribute_index, text), size) in enumerate(zip(labels_to_draw, text_sizes)):
-                    text_y = (
-                        panel_y + pad + line_index * line_height
-                        if annotator.pil
-                        else panel_y + pad + size[1] + line_index * line_height
-                    )
-                    annotator.text([panel_x + pad, text_y], text, txt_color=colors(attribute_index, True))
+                if box_index < len(reversed_pred_attributes):
+                    _draw_attribute_panel(reversed_pred_attributes[box_index], box_rect, label)
 
 
         # Plot Classify results
