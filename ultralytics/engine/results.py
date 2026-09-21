@@ -1381,6 +1381,10 @@ class MdetResults(SimpleClass):
                 def _placement_score(item):
                     rect, order = item
                     score = 0.0
+                    # Keep fallback placements inside the current detection box
+                    # whenever the full attribute panel can fit there.
+                    if rect[1] < box_top or rect[3] > box_bottom:
+                        score += 1_000_000_000
                     score += sum(_intersection_area(rect, occupied) * 100000 for occupied in attribute_rects)
                     # Prefer the original top-left placement whenever it is free.
                     score += max(0, rect[1] - box_top) * 0.01
