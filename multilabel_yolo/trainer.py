@@ -6,7 +6,7 @@ from ultralytics.data import build_dataloader
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models.yolo.detect.train import DetectionTrainer
 from ultralytics.utils import LOGGER, RANK, colorstr
-from ultralytics.utils.torch_utils import de_parallel
+from ultralytics.utils.torch_utils import de_parallel, torch_distributed_zero_first
 
 from .dataset import MultiLabelYOLODataset
 from .model import MultiLabelDetectionModel
@@ -39,6 +39,25 @@ class MultiLabelDetectionTrainer(DetectionTrainer):
             classes=None,
             data=self.data,
             fraction=self.args.fraction if mode == "train" else 1.0,
+        )
+
+    def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
+        """Build a multi-label dataloader with the experiment seed propagated."""
+        assert mode in {"train", "val"}, f"Mode must be 'train' or 'val', not {mode}."
+        with torch_distributed_zero_first(rank):
+            dataset = self.build_dataset(dataset_path, mode, batch_size)
+        shuffle = mode == "train"
+        if getattr(dataset, "rect", False) and shuffle:
+            LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with DataLoader shuffle, setting shuffle=False")
+            shuffle = False
+        workers = self.args.workers if mode == "train" else self.args.workers * 2
+        return build_dataloader(
+            dataset,
+            batch_size,
+            workers,
+            shuffle,
+            rank,
+            seed=self.args.seed,
         )
 
     def get_model(self, cfg=None, weights=None, verbose=True):
