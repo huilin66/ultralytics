@@ -267,7 +267,7 @@ def main() -> None:
         # legend at the same vertical level.
         loc="lower left",
         bbox_to_anchor=(0.04, 0.14),
-        ncol=3,
+        ncol=1,
         frameon=False,
         fontsize=9,
         title_fontsize=9,
