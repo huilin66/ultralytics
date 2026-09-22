@@ -264,7 +264,9 @@ def main() -> None:
         handles=severity_handles,
         title="Severity",
         loc="lower center",
-        bbox_to_anchor=(0.5, 0.015),
+        # Keep the shared severity legend close to the per-column Variant
+        # legends instead of leaving a large empty gap below the figure.
+        bbox_to_anchor=(0.5, 0.075),
         ncol=3,
         frameon=False,
         fontsize=9,
