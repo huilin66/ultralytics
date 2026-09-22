@@ -263,12 +263,10 @@ def main() -> None:
     figure.legend(
         handles=severity_handles,
         title="Severity",
-        loc="lower center",
-        # Keep the shared severity legend close to the per-column Variant
-        # legends instead of leaving a large empty gap below the figure.
-        # Place it beside the first column's Variant legend at the same
-        # vertical level, rather than centered below the whole figure.
-        bbox_to_anchor=(0.34, 0.14),
+        # Keep it inside the first column, beside the first column's Variant
+        # legend at the same vertical level.
+        loc="lower left",
+        bbox_to_anchor=(0.04, 0.14),
         ncol=3,
         frameon=False,
         fontsize=9,
