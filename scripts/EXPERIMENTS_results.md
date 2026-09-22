@@ -1,4 +1,14 @@
-# GIA / GCA / GIA+GCA / HO 实验结果
+# MAYOLO 实验结果
+
+## 论文指标与本表字段对应关系
+
+本表中的字段与论文最终表格的对应关系如下：`Test mAP50` 对应论文中的检测主指标
+$mAP@0.5$（mAP50），`Test mAP50-95` 对应辅助检测指标 $mAP@0.5:0.95$；
+`F1_macro_test` 对应属性主指标 `Macro-F1_attr@IoU0.5`，`OA_test` 对应
+`Micro-F1_attr@IoU0.5`（在当前互斥 softmax 属性设置下二者数值相等），
+`P_macro_test` 和 `R_macro_test` 分别对应 `Precision_attr@IoU0.5` 和
+`Recall_attr@IoU0.5`。所有属性指标均只在类别正确且 IoU$\geq$0.5 的一一匹配框上计算。
+`F1_macro_global_test` 表示 pooled macro-F1，不是论文中的 Micro-F1，默认不作为最终主表指标。
 
 ## Material Passport
 
