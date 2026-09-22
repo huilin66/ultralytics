@@ -266,7 +266,7 @@ def main() -> None:
         loc="lower center",
         # Keep the shared severity legend close to the per-column Variant
         # legends instead of leaving a large empty gap below the figure.
-        bbox_to_anchor=(0.5, 0.075),
+        bbox_to_anchor=(0.5, 0.14),
         ncol=3,
         frameon=False,
         fontsize=9,
