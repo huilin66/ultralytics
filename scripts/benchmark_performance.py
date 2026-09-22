@@ -42,7 +42,7 @@ if str(REPO_ROOT) not in sys.path:
 import numpy as np
 import torch
 
-from ultralytics import YOLO
+from ultralytics import RTDETR, YOLO
 from ultralytics.utils.torch_utils import get_flops, select_device
 
 
@@ -211,8 +211,14 @@ def benchmark_one(weight: str, label: str, args: argparse.Namespace) -> dict[str
     """Benchmark one checkpoint and return one serializable result row."""
 
     device = select_device(args.device, verbose=False)
-    task_kwargs = {"task": args.task} if args.task else {}
-    yolo = YOLO(weight, **task_kwargs)
+    is_rtdetr = args.network == "rtdetr" or (
+        args.network == "auto" and "rtdetr" in weight.lower()
+    )
+    if is_rtdetr:
+        yolo = RTDETR(weight)
+    else:
+        task_kwargs = {"task": args.task} if args.task else {}
+        yolo = YOLO(weight, **task_kwargs)
     if args.head_mode == "one2many":
         _set_one2many(yolo)
     if args.fuse:
@@ -286,6 +292,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--weights", nargs="+", required=True, help="One or more checkpoint paths")
     parser.add_argument("--labels", nargs="*", help="Optional labels aligned with --weights")
+    parser.add_argument(
+        "--network",
+        choices=("auto", "yolo", "rtdetr"),
+        default="auto",
+        help="Model API used to load checkpoints; auto detects RT-DETR from the weight path",
+    )
     parser.add_argument("--task", default=None, help="Optional Ultralytics task override, e.g. detect or mdetect")
     parser.add_argument("--head-mode", choices=("native", "one2many"), default="native")
     parser.add_argument("--device", default="0", help="CUDA device, CPU, or device string")

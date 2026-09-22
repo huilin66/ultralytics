@@ -6,6 +6,8 @@
 #
 #   RUN_E0=1 bash run.sh                         # protocol / HSV / epochs
 #   RUN_E2=1 RUN_E2_EVAL=1 bash run.sh           # GIA/GCA/HO
+#   RUN_SECTION2_8=1 bash run.sh                  # E2 performance profile
+#   RUN_SECTION3_PERF=1 bash run.sh               # E3/E4 model performance profile
 #   RUN_E3=1 RUN_E3_STABILITY=1 RUN_E3_EVAL=1 bash run.sh
 #   RUN_ALL=1 bash run.sh                        # complete reproduction
 #
@@ -36,6 +38,12 @@ HSV_V="${HSV_V:-0.2}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 MAYOLO_SIZES="${MAYOLO_SIZES:-n s m l b}"
 W4_TAG="${W4//./p}"
+E3_PERF_SEED="${E3_PERF_SEED:-0}"
+E3_PERF_BATCH="${E3_PERF_BATCH:-1}"
+E3_PERF_WARMUP="${E3_PERF_WARMUP:-50}"
+E3_PERF_ITERATIONS="${E3_PERF_ITERATIONS:-200}"
+E3_PERF_PRECISION="${E3_PERF_PRECISION:-fp16}"
+E3_PERF_ROOT="${E3_PERF_ROOT:-runs/experiments/performance_profile}"
 
 # Pass the selected interpreter/device settings to the E4/E5/E6 wrapper.
 export PYTHON_BIN DEVICE BATCH WORKERS
@@ -60,6 +68,8 @@ RUN_E3_EVAL="${RUN_E3_EVAL:-0}"
 RUN_E4="${RUN_E4:-0}"
 RUN_E5="${RUN_E5:-0}"
 RUN_E6="${RUN_E6:-0}"
+RUN_SECTION2_8="${RUN_SECTION2_8:-0}"
+RUN_SECTION3_PERF="${RUN_SECTION3_PERF:-0}"
 RUN_ROBUSTNESS="${RUN_ROBUSTNESS:-0}"
 RUN_SECTION6="${RUN_SECTION6:-0}"
 
@@ -69,6 +79,8 @@ if [[ "$RUN_ALL" == "1" ]]; then
   RUN_E2=1; RUN_E2_EVAL=1
   RUN_E3=1; RUN_E3_STABILITY=1; RUN_E3_EVAL=1
   RUN_E4=1; RUN_E5=1; RUN_E6=1
+  RUN_SECTION2_8=1
+  RUN_SECTION3_PERF=1
   RUN_ROBUSTNESS=1; RUN_SECTION6=1
 fi
 
@@ -107,6 +119,8 @@ echo_usage() {
 Usage examples:
   RUN_E0=1 bash run.sh
   RUN_E2=1 RUN_E2_EVAL=1 bash run.sh
+  RUN_SECTION2_8=1 bash run.sh
+  RUN_SECTION3_PERF=1 bash run.sh
   RUN_E3=1 RUN_E3_STABILITY=1 RUN_E3_EVAL=1 bash run.sh
   RUN_E4=1 RUN_E5=1 RUN_E6=1 bash run.sh
   RUN_ROBUSTNESS=1 RUN_SECTION6=1 bash run.sh
@@ -325,11 +339,128 @@ run_e2_evaluation() {
     E2_7_Baseline_GIA_GCA_HO both "${gia[@]}" "${gia_gca[@]}"
 }
 
+run_section2_8() {
+  echo "[2.8] E2 seed-0 performance profile"
+
+  # The pure Baseline+GCA checkpoint comes from the original E2.2
+  # GNN-margin-residual experiment.  It must not be replaced by the E2.29
+  # directory, whose historical generated YAML was bound to the GIA+GCA
+  # architecture.
+  local baseline="${E2_27_ROOT}/${E2_BASELINE_STAGE1_PREFIX}0_stage2/weights/best.pt"
+  local gia="${E2_27_ROOT}/${E2_GIA_STAGE1_PREFIX}0_stage2/weights/best.pt"
+  local pure_gca_root="${E2_PURE_GCA_ROOT:-runs/experiments/backup/E2_2_GCA_GNN_margin_residual}"
+  local pure_gca_prefix="${E2_PURE_GCA_PREFIX:-E2_2_GCA_GNN_margin_residual}"
+  local pure_gca
+  pure_gca="$(stage2_checkpoint "$pure_gca_root" "$pure_gca_prefix" gin 0)"
+  local gia_gca_root="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
+  local gia_gca_prefix="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
+  local gia_gca
+  gia_gca="$(stage2_checkpoint "$gia_gca_root" "$gia_gca_prefix" gin 0)"
+  local output_root="${E2_PERFORMANCE_ROOT:-runs/experiments/performance_profile}"
+
+  require_file "$baseline"
+  require_file "$gia"
+  require_file "$pure_gca"
+  require_file "$gia_gca"
+
+  local -a native_labels=(
+    E2.0_Baseline_seed0
+    E2.1_GIA_v2_5_7_seed0
+    E2.2_Baseline+GCA_cross_GIN_seed0
+    E2.5_GIA+GCA_cross_GIN_seed0
+  )
+  local -a native_weights=("$baseline" "$gia" "$pure_gca" "$gia_gca")
+  py scripts/benchmark_performance.py \
+    --weights "${native_weights[@]}" \
+    --labels "${native_labels[@]}" \
+    --task mdetect --head-mode native --device "$DEVICE" --precision fp16 \
+    --batch 1 --imgsz "$IMGSZ" --warmup "${E2_PERF_WARMUP:-50}" \
+    --iterations "${E2_PERF_ITERATIONS:-200}" \
+    --output "$output_root/E2_seed0_native.csv"
+
+  local -a one2many_labels=(
+    E2.3_Baseline_one2many_seed0
+    E2.4_GIA_one2many_seed0
+    E2.6_Baseline+GCA+HO_cross_GIN_seed0
+    E2.7_GIA+GCA+HO_cross_GIN_seed0
+  )
+  py scripts/benchmark_performance.py \
+    --weights "${native_weights[@]}" \
+    --labels "${one2many_labels[@]}" \
+    --task mdetect --head-mode one2many --device "$DEVICE" --precision fp16 \
+    --batch 1 --imgsz "$IMGSZ" --warmup "${E2_PERF_WARMUP:-50}" \
+    --iterations "${E2_PERF_ITERATIONS:-200}" \
+    --output "$output_root/E2_seed0_one2many.csv"
+}
+
+run_section3_performance() {
+  echo "[3] E3/E4 seed-${E3_PERF_SEED} performance profile"
+  require_file "$DATA"
+  mkdir -p "$E3_PERF_ROOT"
+
+  # E3 native YOLO families.  The family/size list is shared with the E3
+  # training/evaluation launcher, so this benchmark cannot silently omit a
+  # size that is reported in Section 3.
+  local family size name label weight
+  local -a native_weights=() native_labels=()
+  for family in yolov8 yolov9 yolov10 yolov11 yolov12 yolov13 yolov26; do
+    for size in $(e3_sizes "$family"); do
+      name="${family}${size}"
+      label="YOLO${family#yolo}${size}"
+      weight="runs/experiments/E3_versions/E3_versions_${name}_w4_${W4_TAG}_seed_${E3_PERF_SEED}_stage2/weights/best.pt"
+      require_file "$weight"
+      native_weights+=("$weight")
+      native_labels+=("$label")
+    done
+  done
+  py scripts/benchmark_performance.py \
+    --weights "${native_weights[@]}" --labels "${native_labels[@]}" \
+    --network yolo --task mdetect --head-mode native --device "$DEVICE" \
+    --precision "$E3_PERF_PRECISION" --batch "$E3_PERF_BATCH" --imgsz "$IMGSZ" \
+    --warmup "$E3_PERF_WARMUP" --iterations "$E3_PERF_ITERATIONS" \
+    --output "$E3_PERF_ROOT/E3_seed${E3_PERF_SEED}_native.csv"
+
+  # MAYOLO uses the one-to-many inference head.  MAYOLOx is the final
+  # GIA+GCA+HO model from E2.28 and is included beside the E3 size sweep.
+  local -a mayolo_weights=() mayolo_labels=()
+  for size in ${E3_PERF_MAYOLO_SIZES:-n s m l b}; do
+    weight="runs/experiments/E3_versions/E3_MAYOLO_final_mayolo${size}_w4_${W4_TAG}_seed_${E3_PERF_SEED}_stage2/weights/best.pt"
+    require_file "$weight"
+    mayolo_weights+=("$weight")
+    mayolo_labels+=("MAYOLO${size}")
+  done
+  weight="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${E3_PERF_SEED}/weights/best.pt"
+  require_file "$weight"
+  mayolo_weights+=("$weight")
+  mayolo_labels+=("MAYOLOx")
+  py scripts/benchmark_performance.py \
+    --weights "${mayolo_weights[@]}" --labels "${mayolo_labels[@]}" \
+    --network yolo --task mdetect --head-mode one2many --device "$DEVICE" \
+    --precision "$E3_PERF_PRECISION" --batch "$E3_PERF_BATCH" --imgsz "$IMGSZ" \
+    --warmup "$E3_PERF_WARMUP" --iterations "$E3_PERF_ITERATIONS" \
+    --output "$E3_PERF_ROOT/E3_seed${E3_PERF_SEED}_mayolo.csv"
+
+  # RT-DETR checkpoints use the RTDETR API rather than YOLO(..., task=mdetect).
+  local rtdetr_root="runs/experiments/E4_rtdetr_LX"
+  local -a rtdetr_weights=(
+    "$rtdetr_root/E4_rtdetr_LX_rtdetr_l_w4_${W4_TAG}_seed_${E3_PERF_SEED}_stage2/weights/best.pt"
+    "$rtdetr_root/E4_rtdetr_LX_rtdetr_x_w4_${W4_TAG}_seed_${E3_PERF_SEED}_stage2/weights/best.pt"
+  )
+  local -a rtdetr_labels=("RT-DETR-L" "RT-DETR-X")
+  for weight in "${rtdetr_weights[@]}"; do require_file "$weight"; done
+  py scripts/benchmark_performance.py \
+    --weights "${rtdetr_weights[@]}" --labels "${rtdetr_labels[@]}" \
+    --network rtdetr --head-mode native --device "$DEVICE" \
+    --precision "$E3_PERF_PRECISION" --batch "$E3_PERF_BATCH" --imgsz "$IMGSZ" \
+    --warmup "$E3_PERF_WARMUP" --iterations "$E3_PERF_ITERATIONS" \
+    --output "$E3_PERF_ROOT/E4_seed${E3_PERF_SEED}_rtdetr.csv"
+}
+
 # ----------------------------- E3 ---------------------------------------
 
 e3_sizes() {
   case "$1" in
-    yolov8) echo "n s x" ;;
+    yolov8) echo "n s m l x" ;;
     yolov9) echo "t s m c e" ;;
     yolov10) echo "n s m b l x" ;;
     yolov11|yolov12) echo "n s m l x" ;;
@@ -642,6 +773,8 @@ elif [[ "$RUN_E1_EVAL" == "1" ]]; then
 fi
 if [[ "$RUN_E2" == "1" ]]; then run_e2_training; fi
 if [[ "$RUN_E2_EVAL" == "1" ]]; then run_e2_evaluation; fi
+if [[ "$RUN_SECTION2_8" == "1" ]]; then run_section2_8; fi
+if [[ "$RUN_SECTION3_PERF" == "1" ]]; then run_section3_performance; fi
 if [[ "$RUN_E3" == "1" ]]; then run_e3; fi
 if [[ "$RUN_E4" == "1" ]]; then run_e4; fi
 if [[ "$RUN_E5" == "1" ]]; then run_e5; fi
@@ -649,7 +782,7 @@ if [[ "$RUN_E6" == "1" ]]; then run_e6; fi
 if [[ "$RUN_ROBUSTNESS" == "1" ]]; then run_robustness; fi
 if [[ "$RUN_SECTION6" == "1" ]]; then run_section6; fi
 
-if [[ "$RUN_ALL" != "1" && "$RUN_E0" == "0" && "$RUN_E0_EVAL" == "0" && "$RUN_E1" == "0" && "$RUN_E1_EVAL" == "0" && "$RUN_E2" == "0" && "$RUN_E2_EVAL" == "0" && "$RUN_E3" == "0" && "$RUN_E4" == "0" && "$RUN_E5" == "0" && "$RUN_E6" == "0" && "$RUN_ROBUSTNESS" == "0" && "$RUN_SECTION6" == "0" ]]; then
+if [[ "$RUN_ALL" != "1" && "$RUN_E0" == "0" && "$RUN_E0_EVAL" == "0" && "$RUN_E1" == "0" && "$RUN_E1_EVAL" == "0" && "$RUN_E2" == "0" && "$RUN_E2_EVAL" == "0" && "$RUN_SECTION2_8" == "0" && "$RUN_SECTION3_PERF" == "0" && "$RUN_E3" == "0" && "$RUN_E4" == "0" && "$RUN_E5" == "0" && "$RUN_E6" == "0" && "$RUN_ROBUSTNESS" == "0" && "$RUN_SECTION6" == "0" ]]; then
   echo "No experiment selected; nothing was started."
   echo_usage
 fi
