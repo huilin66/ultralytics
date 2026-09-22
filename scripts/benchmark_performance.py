@@ -43,6 +43,7 @@ CSV_FIELDS = (
     "model",
     "weight",
     "task",
+    "head_mode",
     "device",
     "device_name",
     "precision",
@@ -102,6 +103,19 @@ def _parameter_count(model: torch.nn.Module) -> float:
     """Return total parameter count in millions."""
 
     return round(sum(parameter.numel() for parameter in model.parameters()) / 1e6, 6)
+
+
+def _set_one2many(model: YOLO) -> None:
+    """Switch an mdetect model to its one-to-many inference head."""
+
+    detector = getattr(model, "model", None)
+    layers = getattr(detector, "model", None)
+    if layers is None or not layers:
+        raise RuntimeError("Could not locate the mdetect model head")
+    switch = getattr(layers[-1], "use_one2many_head", None)
+    if switch is None:
+        raise RuntimeError("Checkpoint does not expose use_one2many_head()")
+    switch()
 
 
 def _time_forward(
@@ -192,6 +206,8 @@ def benchmark_one(weight: str, label: str, args: argparse.Namespace) -> dict[str
     device = select_device(args.device, verbose=False)
     task_kwargs = {"task": args.task} if args.task else {}
     yolo = YOLO(weight, **task_kwargs)
+    if args.head_mode == "one2many":
+        _set_one2many(yolo)
     if args.fuse:
         yolo.fuse()
     network = yolo.model.to(device).eval()
@@ -223,6 +239,7 @@ def benchmark_one(weight: str, label: str, args: argparse.Namespace) -> dict[str
         "model": label,
         "weight": weight,
         "task": getattr(yolo, "task", args.task or "auto"),
+        "head_mode": args.head_mode,
         "device": str(device),
         "device_name": _device_name(device),
         "precision": args.precision,
@@ -263,6 +280,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--weights", nargs="+", required=True, help="One or more checkpoint paths")
     parser.add_argument("--labels", nargs="*", help="Optional labels aligned with --weights")
     parser.add_argument("--task", default=None, help="Optional Ultralytics task override, e.g. detect or mdetect")
+    parser.add_argument("--head-mode", choices=("native", "one2many"), default="native")
     parser.add_argument("--device", default="0", help="CUDA device, CPU, or device string")
     parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp16")
     parser.add_argument("--batch", type=int, default=1)

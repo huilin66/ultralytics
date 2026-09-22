@@ -168,6 +168,187 @@ if [ "${RUN_E2_1_GIA_POSITION_STABILITY:-0}" = "1" ]; then
   done
 fi
 
+# Performance profiling for the E2/E3 paper tables.
+# This block is opt-in and does not train or evaluate on a dataset.  It
+# profiles one seed-0 checkpoint per architecture/configuration with fixed
+# synthetic inputs, so the reported latency/FPS is independent of accuracy
+# checkpoint selection.  HO variants are measured by switching the same
+# checkpoint between native and one-to-many inference heads.
+# Example:
+#   RUN_PERFORMANCE_PROFILE=1 PERF_DEVICE=0 bash run.sh
+if [ "${RUN_PERFORMANCE_PROFILE:-0}" = "1" ]; then
+  PERF_DEVICE=${PERF_DEVICE:-0}
+  PERF_PRECISION=${PERF_PRECISION:-fp16}
+  PERF_BATCH=${PERF_BATCH:-1}
+  PERF_IMGSZ=${PERF_IMGSZ:-640}
+  PERF_WARMUP=${PERF_WARMUP:-50}
+  PERF_ITERATIONS=${PERF_ITERATIONS:-200}
+  PERF_INCLUDE_GIA_POSITION=${PERF_INCLUDE_GIA_POSITION:-1}
+  PERF_OUTPUT_ROOT=${PERF_OUTPUT_ROOT:-runs/experiments/performance_profile}
+  PERF_E2_OUTPUT=${PERF_E2_OUTPUT:-$PERF_OUTPUT_ROOT/E2_seed0_native.csv}
+  PERF_E2_HO_OUTPUT=${PERF_E2_HO_OUTPUT:-$PERF_OUTPUT_ROOT/E2_seed0_one2many.csv}
+  PERF_E3_OUTPUT=${PERF_E3_OUTPUT:-$PERF_OUTPUT_ROOT/E3_seed0_native.csv}
+  PERF_E3_MAYOLO_OUTPUT=${PERF_E3_MAYOLO_OUTPUT:-$PERF_OUTPUT_ROOT/E3_MAYOLO_seed0_one2many.csv}
+
+  export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
+  export MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}
+  export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}
+  export NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS:-4}
+
+  PERF_FUSE_ARGS=()
+  if [ "${PERF_FUSE:-0}" = "1" ]; then
+    PERF_FUSE_ARGS+=(--fuse)
+  fi
+
+  PERF_E2_WEIGHTS=()
+  PERF_E2_LABELS=()
+  PERF_HO_WEIGHTS=()
+  PERF_HO_LABELS=()
+
+  add_perf_weight() {
+    local label="$1"
+    local weight="$2"
+    if [ ! -f "$weight" ]; then
+      echo "Missing performance checkpoint: $weight" >&2
+      exit 1
+    fi
+    PERF_E2_LABELS+=("$label")
+    PERF_E2_WEIGHTS+=("$weight")
+  }
+
+  add_ho_weight() {
+    local label="$1"
+    local weight="$2"
+    PERF_HO_LABELS+=("$label")
+    PERF_HO_WEIGHTS+=("$weight")
+  }
+
+  E2_27_ROOT=runs/experiments/E2_27_baseline_gia_seed5
+  E2_BASELINE_WEIGHT="$E2_27_ROOT/E2_27_baseline_gia_seed5_baseline_w4_0p5_seed_0_stage2/weights/best.pt"
+  E2_GIA_WEIGHT="$E2_27_ROOT/E2_27_baseline_gia_seed5_gia_v2_5_7_w4_0p5_seed_0_stage2/weights/best.pt"
+
+  add_perf_weight E2.0_Baseline_seed0 "$E2_BASELINE_WEIGHT"
+  add_perf_weight E2.1_GIA_v2_5_7_seed0 "$E2_GIA_WEIGHT"
+  add_ho_weight E2.3_Baseline_one2many_seed0 "$E2_BASELINE_WEIGHT"
+  add_ho_weight E2.4_GIA_one2many_seed0 "$E2_GIA_WEIGHT"
+
+  if [ "$PERF_INCLUDE_GIA_POSITION" = "1" ]; then
+    E2_1_POSITION_ROOT=runs/experiments/E2_1_GIA_v2_position
+    for E2_1_POSITION in 6 7 8 9 10 13 16 19 22 5_7; do
+      E2_1_POSITION_WEIGHT="$E2_1_POSITION_ROOT/E2_1_GIA_v2_position_gia_v2_${E2_1_POSITION}_stage1_100_w4_0p5_seed_0/weights/best.pt"
+      add_perf_weight "E2.1_GIA_v2_${E2_1_POSITION}_seed0" "$E2_1_POSITION_WEIGHT"
+    done
+  fi
+
+  for E2_MATRIX in conditional cross; do
+    E2_BASELINE_GCA_ROOT="runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_${E2_MATRIX}"
+    E2_GIA_GCA_ROOT="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_${E2_MATRIX}"
+    E2_BASELINE_GCA_PREFIX="E2_29_Baseline_GCA_margin_residual_5seed_${E2_MATRIX}"
+    E2_GIA_GCA_PREFIX="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_${E2_MATRIX}"
+
+    for E2_GNN in gca gcn gat graphsage gin; do
+      if [ "$E2_GNN" = "gca" ]; then
+        E2_GNN_LABEL=FGA
+      else
+        E2_GNN_LABEL=$(printf '%s' "$E2_GNN" | tr '[:lower:]' '[:upper:]')
+      fi
+
+      E2_BASELINE_GCA_WEIGHT="$E2_BASELINE_GCA_ROOT/${E2_BASELINE_GCA_PREFIX}_${E2_GNN}_margin_residual_stage1_100_stage2_100_w4_0p5_seed_0/weights/best.pt"
+      E2_GIA_GCA_WEIGHT="$E2_GIA_GCA_ROOT/${E2_GIA_GCA_PREFIX}_${E2_GNN}_margin_residual_stage1_100_stage2_100_w4_0p5_seed_0/weights/best.pt"
+
+      add_perf_weight "E2.2_Baseline+GCA_${E2_MATRIX}_${E2_GNN_LABEL}_seed0" "$E2_BASELINE_GCA_WEIGHT"
+      add_perf_weight "E2.5_GIA+GCA_${E2_MATRIX}_${E2_GNN_LABEL}_seed0" "$E2_GIA_GCA_WEIGHT"
+      add_ho_weight "E2.6_Baseline+GCA+HO_${E2_MATRIX}_${E2_GNN_LABEL}_seed0" "$E2_BASELINE_GCA_WEIGHT"
+      add_ho_weight "E2.7_GIA+GCA+HO_${E2_MATRIX}_${E2_GNN_LABEL}_seed0" "$E2_GIA_GCA_WEIGHT"
+    done
+  done
+
+  echo "[performance] E2 native checkpoints: ${#PERF_E2_WEIGHTS[@]}"
+  "$PYTHON_BIN" scripts/benchmark_performance.py \
+    --weights "${PERF_E2_WEIGHTS[@]}" \
+    --labels "${PERF_E2_LABELS[@]}" \
+    --task mdetect \
+    --head-mode native \
+    --device "$PERF_DEVICE" \
+    --precision "$PERF_PRECISION" \
+    --batch "$PERF_BATCH" \
+    --imgsz "$PERF_IMGSZ" \
+    --warmup "$PERF_WARMUP" \
+    --iterations "$PERF_ITERATIONS" \
+    "${PERF_FUSE_ARGS[@]}" \
+    --output "$PERF_E2_OUTPUT" || exit $?
+
+  echo "[performance] E2 one-to-many checkpoints: ${#PERF_HO_WEIGHTS[@]}"
+  "$PYTHON_BIN" scripts/benchmark_performance.py \
+    --weights "${PERF_HO_WEIGHTS[@]}" \
+    --labels "${PERF_HO_LABELS[@]}" \
+    --task mdetect \
+    --head-mode one2many \
+    --device "$PERF_DEVICE" \
+    --precision "$PERF_PRECISION" \
+    --batch "$PERF_BATCH" \
+    --imgsz "$PERF_IMGSZ" \
+    --warmup "$PERF_WARMUP" \
+    --iterations "$PERF_ITERATIONS" \
+    "${PERF_FUSE_ARGS[@]}" \
+    --output "$PERF_E2_HO_OUTPUT" || exit $?
+
+  PERF_E3_WEIGHTS=()
+  PERF_E3_LABELS=()
+  PERF_E3_MAYOLO_WEIGHTS=()
+  PERF_E3_MAYOLO_LABELS=()
+  while IFS= read -r PERF_E3_WEIGHT; do
+    [ -z "$PERF_E3_WEIGHT" ] && continue
+    PERF_E3_RUN_NAME=$(basename "$(dirname "$(dirname "$PERF_E3_WEIGHT")")")
+    if [[ "$PERF_E3_RUN_NAME" == E3_MAYOLO_final_* ]]; then
+      PERF_E3_MAYOLO_WEIGHTS+=("$PERF_E3_WEIGHT")
+      PERF_E3_MAYOLO_LABELS+=("E3_${PERF_E3_RUN_NAME}")
+    else
+      PERF_E3_WEIGHTS+=("$PERF_E3_WEIGHT")
+      PERF_E3_LABELS+=("E3_${PERF_E3_RUN_NAME}")
+    fi
+  done < <(find runs/experiments/E3_versions -type f \
+    -path '*_seed_0_stage2/weights/best.pt' \
+    ! -path '*/backup/*' | sort)
+
+  if [ "${#PERF_E3_WEIGHTS[@]}" -eq 0 ]; then
+    echo "No E3 seed-0 Stage2 checkpoints found" >&2
+    exit 1
+  fi
+
+  echo "[performance] E3 native checkpoints: ${#PERF_E3_WEIGHTS[@]}"
+  "$PYTHON_BIN" scripts/benchmark_performance.py \
+    --weights "${PERF_E3_WEIGHTS[@]}" \
+    --labels "${PERF_E3_LABELS[@]}" \
+    --task mdetect \
+    --head-mode native \
+    --device "$PERF_DEVICE" \
+    --precision "$PERF_PRECISION" \
+    --batch "$PERF_BATCH" \
+    --imgsz "$PERF_IMGSZ" \
+    --warmup "$PERF_WARMUP" \
+    --iterations "$PERF_ITERATIONS" \
+    "${PERF_FUSE_ARGS[@]}" \
+    --output "$PERF_E3_OUTPUT" || exit $?
+
+  if [ "${#PERF_E3_MAYOLO_WEIGHTS[@]}" -gt 0 ]; then
+    echo "[performance] E3 MAYOLO one-to-many checkpoints: ${#PERF_E3_MAYOLO_WEIGHTS[@]}"
+    "$PYTHON_BIN" scripts/benchmark_performance.py \
+      --weights "${PERF_E3_MAYOLO_WEIGHTS[@]}" \
+      --labels "${PERF_E3_MAYOLO_LABELS[@]}" \
+      --task mdetect \
+      --head-mode one2many \
+      --device "$PERF_DEVICE" \
+      --precision "$PERF_PRECISION" \
+      --batch "$PERF_BATCH" \
+      --imgsz "$PERF_IMGSZ" \
+      --warmup "$PERF_WARMUP" \
+      --iterations "$PERF_ITERATIONS" \
+      "${PERF_FUSE_ARGS[@]}" \
+      --output "$PERF_E3_MAYOLO_OUTPUT" || exit $?
+  fi
+fi
+
 # E5 true multi-label detector stability completion.
 # The seed=0 result is already recorded under E5_multilabel; this block trains
 # the same YOLOv10x detector for seed=1,2,3,4 with seed-specific run names.
