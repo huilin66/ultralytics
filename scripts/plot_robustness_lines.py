@@ -266,7 +266,7 @@ def main() -> None:
         # Keep it inside the first column, beside the first column's Variant
         # legend at the same vertical level.
         loc="lower left",
-        bbox_to_anchor=(0.04, 0.14),
+        bbox_to_anchor=(0.04, 0.17),
         ncol=1,
         frameon=False,
         fontsize=9,
