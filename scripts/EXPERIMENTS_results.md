@@ -1954,6 +1954,19 @@ summary.csv 相对路径：
 每个 attribute 的 support 是参与该 attribute 计算的匹配框数；
 F1_macro_global_test 在单个二级 attribute 内与该 attribute 的 macro-F1 数值相同。
 
+以下为新增的横向汇总表，保留原有逐 attribute 明细表以便复核。表中仅保留
+`OA_test`、`F1_macro_test` 和 `PR_AUC_macro_test` 三个指标；每个模型占三行，
+十个 attribute 横向排列。
+
+| 模型 | 指标 | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | OA_test | 0.989418 | 0.994709 | 0.936508 | 0.920635 | 0.962963 | 0.947090 | 0.952381 | 0.994709 | 0.994709 | 0.952381 |
+|  | F1_macro_test | 0.830645 | 0.498674 | 0.650000 | 0.538048 | 0.490566 | 0.708333 | 0.641517 | 0.498674 | 0.498674 | 0.687603 |
+|  | PR_AUC_macro_test | 0.951374 | 0.583305 | 0.658579 | 0.573010 | 0.565009 | 0.777241 | 0.633324 | 0.502437 | 0.522583 | 0.842277 |
+| MAYOLOx | OA_test | 0.989637 | 0.994819 | 0.958549 | 0.948187 | 0.979275 | 0.943005 | 0.958549 | 0.994819 | 0.994819 | 0.974093 |
+|  | F1_macro_test | 0.747382 | 0.498701 | 0.789071 | 0.708635 | 0.494764 | 0.745718 | 0.589362 | 0.498701 | 0.498701 | 0.800990 |
+|  | PR_AUC_macro_test | 0.741623 | 0.549945 | 0.750029 | 0.748553 | 0.570897 | 0.760294 | 0.633742 | 0.506423 | 0.510086 | 0.800914 |
+
 | 模型 | attribute | support | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | YOLOv10x | surface_missing | 189 | 0.989418 | 0.830645 | 0.830645 | 0.989418 | 0.830645 | 0.830645 | 0.951374 |
