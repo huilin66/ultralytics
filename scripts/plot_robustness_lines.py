@@ -230,18 +230,22 @@ def main() -> None:
                 axis.set_ylabel("")
             if metric_index == 1:
                 axis.set_xlabel("Model")
-            axis.legend(
-                handles=variant_handles,
-                title="Variant",
-                loc="upper center",
-                bbox_to_anchor=(0.5, -0.34),
-                ncol=2 if len(conditions) > 4 else 2,
-                fontsize=7.5,
-                title_fontsize=8,
-                frameon=False,
-                handlelength=1.8,
-                columnspacing=0.8,
-            )
+            # Keep one Variant legend per category column.  Putting legends
+            # on both metric rows makes the upper-row legend overlap the
+            # lower-row titles when the figure is compressed.
+            if metric_index == len(METRICS) - 1:
+                axis.legend(
+                    handles=variant_handles,
+                    title="Variant",
+                    loc="upper center",
+                    bbox_to_anchor=(0.5, -0.34),
+                    ncol=2 if len(conditions) > 4 else 2,
+                    fontsize=7.5,
+                    title_fontsize=8,
+                    frameon=False,
+                    handlelength=1.8,
+                    columnspacing=0.8,
+                )
 
     severity_handles = [
         Line2D(
