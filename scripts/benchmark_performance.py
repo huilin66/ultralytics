@@ -28,9 +28,16 @@ import argparse
 import csv
 import importlib
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Allow direct execution as ``python scripts/benchmark_performance.py`` to
+# resolve the repository's local ``ultralytics`` package.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import numpy as np
 import torch
