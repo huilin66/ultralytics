@@ -1,9 +1,9 @@
 """Evaluation helpers for mdet experiments that do not require retraining.
 
-Currently this script provides the HO comparison.  ``native`` keeps the
-checkpoint's normal head selection; ``one2many`` explicitly switches the
-mdet head to the one-to-many branch.  ``both`` reloads the checkpoint for each
-mode so that the two measurements are independent.
+Currently this script provides the HO comparison and batched Test evaluation.
+``native`` keeps the checkpoint's normal head selection; ``one2many``
+explicitly switches the mdet head to the one-to-many branch.  ``both`` reloads
+the checkpoint for each mode so that the two measurements are independent.
 """
 
 from __future__ import annotations
@@ -27,17 +27,27 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="experiment", required=True)
 
     ho = subparsers.add_parser("ho", help="E2.4: compare native HO inference with one-to-many inference")
-    ho.add_argument("--weights", required=True, help="trained mdet/HO checkpoint")
+    ho.add_argument(
+        "--weights",
+        action="append",
+        required=True,
+        help="trained mdet/HO checkpoint; repeat for a multi-checkpoint summary",
+    )
     ho.add_argument("--data", required=True, help="mdet dataset YAML")
     ho.add_argument("--mode", choices=("native", "one2many", "both"), default="both")
-    ho.add_argument("--split", choices=("val", "test"), default="val", help="dataset split to evaluate")
+    ho.add_argument("--split", choices=("test",), default="test", help="Test split to evaluate")
     ho.add_argument("--device", default="0")
     ho.add_argument("--imgsz", type=int, default=640)
     ho.add_argument("--batch", type=int, default=16)
     ho.add_argument("--workers", type=int, default=8)
-    ho.add_argument("--conf", type=float, default=None, help="optional validation confidence threshold")
+    ho.add_argument("--conf", type=float, default=None, help="optional Test confidence threshold")
     ho.add_argument("--project", default="runs/experiments")
     ho.add_argument("--name", default="E2_4_HO")
+    ho.add_argument(
+        "--summary",
+        default=None,
+        help="optional explicit CSV path; defaults to PROJECT/NAME_test_summary.csv",
+    )
     add_bool_argument(ho, "--plots", default=True)
     return parser
 
@@ -62,9 +72,14 @@ def _set_one2many(model) -> None:
     switch()
 
 
-def _evaluate_one(args: argparse.Namespace, mode: str) -> Dict[str, object]:
+def _evaluate_one(
+    args: argparse.Namespace,
+    weights: str,
+    mode: str,
+    run_name: str,
+) -> Dict[str, object]:
     """Evaluate a checkpoint in one selected head mode."""
-    model = _load_model(args.weights)
+    model = _load_model(weights)
     if mode == "one2many":
         _set_one2many(model)
     kwargs = {
@@ -75,16 +90,16 @@ def _evaluate_one(args: argparse.Namespace, mode: str) -> Dict[str, object]:
         "batch": args.batch,
         "workers": args.workers,
         "project": args.project,
-        "name": f"{args.name}_{mode}",
+        "name": f"{run_name}_{mode}",
         "plots": args.plots,
     }
     if args.conf is not None:
         kwargs["conf"] = args.conf
-    print(f"[eval] mode={mode}, weights={args.weights}")
+    print(f"[eval] mode={mode}, weights={weights}")
     metrics = model.val(**kwargs)
     values = metrics.results_dict
     return {
-        "weight": args.weights,
+        "weight": weights,
         "mode": mode,
         "mAP50_test": values["metrics/mAP50(B)"],
         "mAP50-95_test": values["metrics/mAP50-95(B)"],
@@ -102,8 +117,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.experiment != "ho":
         raise ValueError(f"Unsupported evaluation: {args.experiment}")
     modes = ("native", "one2many") if args.mode == "both" else (args.mode,)
-    rows = [_evaluate_one(args, mode) for mode in modes]
-    summary_path = Path(args.project) / f"{args.name}_test_summary.csv"
+    rows = []
+    for index, weights in enumerate(args.weights):
+        # Isolate Ultralytics' per-evaluation artifacts while keeping one
+        # canonical summary for the complete checkpoint set.
+        run_name = args.name if len(args.weights) == 1 else f"{args.name}_{index:03d}"
+        rows.extend(_evaluate_one(args, weights, mode, run_name) for mode in modes)
+    summary_path = Path(args.summary) if args.summary else Path(args.project) / f"{args.name}_test_summary.csv"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     with summary_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=list(rows[0]))
