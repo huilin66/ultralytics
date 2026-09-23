@@ -6,6 +6,7 @@
 #
 #   RUN_E0=1 bash run.sh                         # protocol / HSV / epochs
 #   RUN_E2=1 RUN_E2_EVAL=1 bash run.sh           # GIA/GCA/HO
+#   RUN_E2_GCA=1 bash run.sh                     # corrected pure GCA/FGA only
 #   RUN_SECTION2_8=1 bash run.sh                  # E2 performance profile
 #   RUN_SECTION3_PERF=1 bash run.sh               # E3/E4 model performance profile
 #   RUN_E3=1 RUN_E3_STABILITY=1 RUN_E3_EVAL=1 bash run.sh
@@ -62,6 +63,7 @@ RUN_E1="${RUN_E1:-0}"
 RUN_E1_EVAL="${RUN_E1_EVAL:-0}"
 RUN_E2="${RUN_E2:-0}"
 RUN_E2_EVAL="${RUN_E2_EVAL:-0}"
+RUN_E2_GCA="${RUN_E2_GCA:-0}"
 RUN_E3="${RUN_E3:-0}"
 RUN_E3_STABILITY="${RUN_E3_STABILITY:-0}"
 RUN_E3_EVAL="${RUN_E3_EVAL:-0}"
@@ -97,6 +99,15 @@ py() { "$PYTHON_BIN" "$@"; }
 die() { echo "[run.sh] $*" >&2; exit 1; }
 require_file() { [[ -f "$1" ]] || die "required file does not exist: $1"; }
 
+require_pure_gca_config() {
+  local config="$1"
+  require_file "$config"
+  [[ "$config" != *GIA* ]] || die "pure Baseline+GCA config must not contain GIA: $config"
+  if grep -qE 'SCDown, \[[^]]*, True, True, True\]' "$config"; then
+    die "pure Baseline+GCA config contains GIA-enabled SCDown layers: $config"
+  fi
+}
+
 require_checkpoint_ref() {
   local value="$1"
   # A bare official checkpoint name may be downloaded by Ultralytics. An
@@ -119,6 +130,7 @@ echo_usage() {
 Usage examples:
   RUN_E0=1 bash run.sh
   RUN_E2=1 RUN_E2_EVAL=1 bash run.sh
+  RUN_E2_GCA=1 bash run.sh
   RUN_SECTION2_8=1 bash run.sh
   RUN_SECTION3_PERF=1 bash run.sh
   RUN_E3=1 RUN_E3_STABILITY=1 RUN_E3_EVAL=1 bash run.sh
@@ -174,6 +186,14 @@ E2_BASELINE_STAGE1_PREFIX="${E2_BASELINE_STAGE1_PREFIX:-${E2_27_LABEL}_baseline_
 E2_GIA_STAGE1_PREFIX="${E2_GIA_STAGE1_PREFIX:-${E2_27_LABEL}_gia_v2_5_7_w4_${W4_TAG}_seed_}"
 E2_BASELINE_GCA_CONFIG="${E2_BASELINE_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml}"
 E2_GIA_GCA_CONFIG="${E2_GIA_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}"
+# E2.29 previously used a GIA+GCA YAML by mistake. Keep those old artifacts
+# untouched and write the corrected pure-Baseline+GCA runs elsewhere.
+E2_BASELINE_GCA_LABEL="${E2_BASELINE_GCA_LABEL:-E2_29_Baseline_GCA_pure_margin_residual_5seed}"
+E2_BASELINE_GCA_CROSS_LABEL="${E2_BASELINE_GCA_CROSS_LABEL:-${E2_BASELINE_GCA_LABEL}_cross}"
+E2_BASELINE_GCA_CONDITIONAL_LABEL="${E2_BASELINE_GCA_CONDITIONAL_LABEL:-${E2_BASELINE_GCA_LABEL}_conditional}"
+E2_BASELINE_GCA_CROSS_ROOT="${E2_BASELINE_GCA_CROSS_ROOT:-runs/experiments/${E2_BASELINE_GCA_CROSS_LABEL}}"
+E2_BASELINE_GCA_CONDITIONAL_ROOT="${E2_BASELINE_GCA_CONDITIONAL_ROOT:-runs/experiments/${E2_BASELINE_GCA_CONDITIONAL_LABEL}}"
+E2_BASELINE_GCA_HO_ROOT="${E2_BASELINE_GCA_HO_ROOT:-runs/experiments/E2_6_Baseline_GCA_pure_HO_test}"
 GIA_CONFIG="${GIA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml}"
 GCA_GNN_TYPES=(fga gcn gat graphsage gin)
 E2_POSITION_VARIANTS=(
@@ -229,7 +249,12 @@ run_gca_matrix() {
   local label="$1" project="$2" stage1_prefix="$3" config="$4" matrix_path="$5"
   local -a checkpoint_args=()
   local seed checkpoint
-  require_file "$config"; require_file "$matrix_path"
+  require_file "$matrix_path"
+  if [[ "$label" == *Baseline_GCA_pure* ]]; then
+    require_pure_gca_config "$config"
+  else
+    require_file "$config"
+  fi
   for seed in "${SEED_LIST[@]}"; do
     checkpoint="$(stage1_checkpoint "$stage1_prefix" "$seed")"
     require_file "$checkpoint"
@@ -249,11 +274,11 @@ run_e2_training() {
   require_file "$GIA_CONFIG"; require_file "$COM_PATH"; require_file "$COM_CONDITIONAL_PATH"
   run_e2_baseline_gia
   run_e2_position
-  run_gca_matrix E2_29_Baseline_GCA_margin_residual_5seed_cross \
-    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_cross \
+  run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
+    "$E2_BASELINE_GCA_CROSS_ROOT" \
     "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
-  run_gca_matrix E2_29_Baseline_GCA_margin_residual_5seed_conditional \
-    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_conditional \
+  run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
+    "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
     "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
   run_gca_matrix E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
     runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
@@ -261,6 +286,21 @@ run_e2_training() {
   run_gca_matrix E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
     runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
     "$E2_GIA_STAGE1_PREFIX" "$E2_GIA_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
+}
+
+run_e2_pure_gca() {
+  echo "[E2.2] corrected pure Baseline+GCA/FGA: 5 graph operators x 5 seeds x Cross/Conditional"
+  require_file "$DATA"
+  require_file "$COM_PATH"
+  require_file "$COM_CONDITIONAL_PATH"
+  require_pure_gca_config "$E2_BASELINE_GCA_CONFIG"
+
+  run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
+    "$E2_BASELINE_GCA_CROSS_ROOT" \
+    "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
+  run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
+    "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
+    "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
 }
 
 eval_mdet_set() {
@@ -310,15 +350,13 @@ run_e2_evaluation() {
   eval_mdet_set runs/experiments/E2_27_HO/summary.csv E2_27_HO both "${baseline[@]}" "${gia[@]}"
 
   collect_gca_weights baseline_gca \
-    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_conditional \
-    E2_29_Baseline_GCA_margin_residual_5seed_conditional
-  eval_mdet_set runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_conditional/summary.csv \
+    "$E2_BASELINE_GCA_CONDITIONAL_ROOT" "$E2_BASELINE_GCA_CONDITIONAL_LABEL"
+  eval_mdet_set "$E2_BASELINE_GCA_CONDITIONAL_ROOT/summary.csv" \
     E2_29_Baseline_GCA_conditional native "${baseline[@]}" "${baseline_gca[@]}"
 
   collect_gca_weights baseline_gca \
-    runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_cross \
-    E2_29_Baseline_GCA_margin_residual_5seed_cross
-  eval_mdet_set runs/experiments/E2_29_Baseline_GCA_margin_residual_5seed_cross/summary.csv \
+    "$E2_BASELINE_GCA_CROSS_ROOT" "$E2_BASELINE_GCA_CROSS_LABEL"
+  eval_mdet_set "$E2_BASELINE_GCA_CROSS_ROOT/summary.csv" \
     E2_29_Baseline_GCA_cross native "${baseline[@]}" "${baseline_gca[@]}"
 
   collect_gca_weights gia_gca \
@@ -333,8 +371,8 @@ run_e2_evaluation() {
   eval_mdet_set runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/summary.csv \
     E2_28_GIA_GCA_cross native "${gia[@]}" "${gia_gca[@]}"
 
-  eval_mdet_set runs/experiments/E2_6_Baseline_GCA_HO_test/summary.csv \
-    E2_6_Baseline_GCA_HO both "${baseline[@]}" "${baseline_gca[@]}"
+  eval_mdet_set "$E2_BASELINE_GCA_HO_ROOT/summary.csv" \
+    E2_6_Baseline_GCA_pure_HO both "${baseline[@]}" "${baseline_gca[@]}"
   eval_mdet_set runs/experiments/E2_7_Baseline_GIA_GCA_HO_test/summary.csv \
     E2_7_Baseline_GIA_GCA_HO both "${gia[@]}" "${gia_gca[@]}"
 }
@@ -342,14 +380,12 @@ run_e2_evaluation() {
 run_section2_8() {
   echo "[2.8] E2 seed-0 performance profile"
 
-  # The pure Baseline+GCA checkpoint comes from the original E2.2
-  # GNN-margin-residual experiment.  It must not be replaced by the E2.29
-  # directory, whose historical generated YAML was bound to the GIA+GCA
-  # architecture.
+  # The pure Baseline+GCA checkpoint comes from the corrected E2.29 run.
+  # The old E2.29 directory contained generated YAML bound to GIA+GCA.
   local baseline="${E2_27_ROOT}/${E2_BASELINE_STAGE1_PREFIX}0_stage2/weights/best.pt"
   local gia="${E2_27_ROOT}/${E2_GIA_STAGE1_PREFIX}0_stage2/weights/best.pt"
-  local pure_gca_root="${E2_PURE_GCA_ROOT:-runs/experiments/backup/E2_2_GCA_GNN_margin_residual}"
-  local pure_gca_prefix="${E2_PURE_GCA_PREFIX:-E2_2_GCA_GNN_margin_residual}"
+  local pure_gca_root="${E2_PURE_GCA_ROOT:-$E2_BASELINE_GCA_CROSS_ROOT}"
+  local pure_gca_prefix="${E2_PURE_GCA_PREFIX:-$E2_BASELINE_GCA_CROSS_LABEL}"
   local pure_gca
   pure_gca="$(stage2_checkpoint "$pure_gca_root" "$pure_gca_prefix" gin 0)"
   local gia_gca_root="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
@@ -773,6 +809,7 @@ elif [[ "$RUN_E1_EVAL" == "1" ]]; then
 fi
 if [[ "$RUN_E2" == "1" ]]; then run_e2_training; fi
 if [[ "$RUN_E2_EVAL" == "1" ]]; then run_e2_evaluation; fi
+if [[ "$RUN_E2_GCA" == "1" ]]; then run_e2_pure_gca; fi
 if [[ "$RUN_SECTION2_8" == "1" ]]; then run_section2_8; fi
 if [[ "$RUN_SECTION3_PERF" == "1" ]]; then run_section3_performance; fi
 if [[ "$RUN_E3" == "1" ]]; then run_e3; fi
@@ -782,7 +819,7 @@ if [[ "$RUN_E6" == "1" ]]; then run_e6; fi
 if [[ "$RUN_ROBUSTNESS" == "1" ]]; then run_robustness; fi
 if [[ "$RUN_SECTION6" == "1" ]]; then run_section6; fi
 
-if [[ "$RUN_ALL" != "1" && "$RUN_E0" == "0" && "$RUN_E0_EVAL" == "0" && "$RUN_E1" == "0" && "$RUN_E1_EVAL" == "0" && "$RUN_E2" == "0" && "$RUN_E2_EVAL" == "0" && "$RUN_SECTION2_8" == "0" && "$RUN_SECTION3_PERF" == "0" && "$RUN_E3" == "0" && "$RUN_E4" == "0" && "$RUN_E5" == "0" && "$RUN_E6" == "0" && "$RUN_ROBUSTNESS" == "0" && "$RUN_SECTION6" == "0" ]]; then
+if [[ "$RUN_ALL" != "1" && "$RUN_E0" == "0" && "$RUN_E0_EVAL" == "0" && "$RUN_E1" == "0" && "$RUN_E1_EVAL" == "0" && "$RUN_E2" == "0" && "$RUN_E2_EVAL" == "0" && "$RUN_E2_GCA" == "0" && "$RUN_SECTION2_8" == "0" && "$RUN_SECTION3_PERF" == "0" && "$RUN_E3" == "0" && "$RUN_E4" == "0" && "$RUN_E5" == "0" && "$RUN_E6" == "0" && "$RUN_ROBUSTNESS" == "0" && "$RUN_SECTION6" == "0" ]]; then
   echo "No experiment selected; nothing was started."
   echo_usage
 fi
