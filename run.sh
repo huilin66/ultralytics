@@ -64,6 +64,7 @@ RUN_E1_EVAL="${RUN_E1_EVAL:-0}"
 RUN_E2="${RUN_E2:-0}"
 RUN_E2_EVAL="${RUN_E2_EVAL:-0}"
 RUN_E2_GCA="${RUN_E2_GCA:-0}"
+E2_GCA_MATRIX="${E2_GCA_MATRIX:-both}"
 RUN_E3="${RUN_E3:-0}"
 RUN_E3_STABILITY="${RUN_E3_STABILITY:-0}"
 RUN_E3_EVAL="${RUN_E3_EVAL:-0}"
@@ -295,12 +296,29 @@ run_e2_pure_gca() {
   require_file "$COM_CONDITIONAL_PATH"
   require_pure_gca_config "$E2_BASELINE_GCA_CONFIG"
 
-  run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
-    "$E2_BASELINE_GCA_CROSS_ROOT" \
-    "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
-  run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
-    "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
-    "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
+  case "$E2_GCA_MATRIX" in
+    cross)
+      run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
+        "$E2_BASELINE_GCA_CROSS_ROOT" \
+        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
+      ;;
+    conditional)
+      run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
+        "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
+        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
+      ;;
+    both)
+      run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
+        "$E2_BASELINE_GCA_CROSS_ROOT" \
+        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
+      run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
+        "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
+        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
+      ;;
+    *)
+      die "E2_GCA_MATRIX must be cross, conditional, or both; got: $E2_GCA_MATRIX"
+      ;;
+  esac
 }
 
 eval_mdet_set() {
