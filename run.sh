@@ -6,7 +6,7 @@
 #
 #   RUN_E0=1 bash run.sh                         # protocol / HSV / epochs
 #   RUN_E2=1 RUN_E2_EVAL=1 bash run.sh           # GIA/GCA/HO
-#   RUN_E2_GCA=1 bash run.sh                     # corrected pure GCA/FGA only
+#   RUN_E2_GCA=1 bash run.sh                     # corrected pure GCA only
 #   RUN_SECTION2_8=1 bash run.sh                  # E2 performance profile
 #   RUN_SECTION3_PERF=1 bash run.sh               # E3/E4 model performance profile
 #   RUN_E3=1 RUN_E3_STABILITY=1 RUN_E3_EVAL=1 bash run.sh
@@ -24,7 +24,6 @@ DATA="${DATA:-ultralytics/cfg/mayolo_r1/mayolo_v3.yaml}"
 MD_MODEL="${MD_MODEL:-ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml}"
 PRETRAIN="${PRETRAIN:-yolov10x.pt}"
 COM_PATH="${COM_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}"
-COM_CONDITIONAL_PATH="${COM_CONDITIONAL_PATH:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv}"
 
 DEVICE="${DEVICE:-0}"
 BATCH="${BATCH:-16}"
@@ -64,7 +63,6 @@ RUN_E1_EVAL="${RUN_E1_EVAL:-0}"
 RUN_E2="${RUN_E2:-0}"
 RUN_E2_EVAL="${RUN_E2_EVAL:-0}"
 RUN_E2_GCA="${RUN_E2_GCA:-0}"
-E2_GCA_MATRIX="${E2_GCA_MATRIX:-both}"
 RUN_E3="${RUN_E3:-0}"
 RUN_E3_STABILITY="${RUN_E3_STABILITY:-0}"
 RUN_E3_EVAL="${RUN_E3_EVAL:-0}"
@@ -191,12 +189,10 @@ E2_GIA_GCA_CONFIG="${E2_GIA_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolo
 # untouched and write the corrected pure-Baseline+GCA runs elsewhere.
 E2_BASELINE_GCA_LABEL="${E2_BASELINE_GCA_LABEL:-E2_29_Baseline_GCA_pure_margin_residual_5seed}"
 E2_BASELINE_GCA_CROSS_LABEL="${E2_BASELINE_GCA_CROSS_LABEL:-${E2_BASELINE_GCA_LABEL}_cross}"
-E2_BASELINE_GCA_CONDITIONAL_LABEL="${E2_BASELINE_GCA_CONDITIONAL_LABEL:-${E2_BASELINE_GCA_LABEL}_conditional}"
 E2_BASELINE_GCA_CROSS_ROOT="${E2_BASELINE_GCA_CROSS_ROOT:-runs/experiments/${E2_BASELINE_GCA_CROSS_LABEL}}"
-E2_BASELINE_GCA_CONDITIONAL_ROOT="${E2_BASELINE_GCA_CONDITIONAL_ROOT:-runs/experiments/${E2_BASELINE_GCA_CONDITIONAL_LABEL}}"
 E2_BASELINE_GCA_HO_ROOT="${E2_BASELINE_GCA_HO_ROOT:-runs/experiments/E2_6_Baseline_GCA_pure_HO_test}"
 GIA_CONFIG="${GIA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml}"
-GCA_GNN_TYPES=(fga gcn gat graphsage gin)
+GCA_GNN_TYPES=(gcn gat graphsage gin)
 E2_POSITION_VARIANTS=(
   "gia_v2_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml"
   "gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml"
@@ -270,55 +266,27 @@ run_gca_matrix() {
 }
 
 run_e2_training() {
-  echo "[E2] baseline/GIA stability, GCA matrices and matched Stage2 studies"
+  echo "[E2] baseline/GIA stability and Cross-matrix GCA studies"
   require_file "$DATA"; require_file "$MD_MODEL"; require_checkpoint_ref "$PRETRAIN"
-  require_file "$GIA_CONFIG"; require_file "$COM_PATH"; require_file "$COM_CONDITIONAL_PATH"
+  require_file "$GIA_CONFIG"; require_file "$COM_PATH"
   run_e2_baseline_gia
   run_e2_position
   run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
     "$E2_BASELINE_GCA_CROSS_ROOT" \
     "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
-  run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
-    "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
-    "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
   run_gca_matrix E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
     runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
     "$E2_GIA_STAGE1_PREFIX" "$E2_GIA_GCA_CONFIG" "$COM_PATH"
-  run_gca_matrix E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
-    runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
-    "$E2_GIA_STAGE1_PREFIX" "$E2_GIA_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
 }
 
 run_e2_pure_gca() {
-  echo "[E2.2] corrected pure Baseline+GCA/FGA: 5 graph operators x 5 seeds x Cross/Conditional"
+  echo "[E2.2] corrected pure Baseline+GCA: 4 graph operators x 5 seeds x Cross"
   require_file "$DATA"
   require_file "$COM_PATH"
-  require_file "$COM_CONDITIONAL_PATH"
   require_pure_gca_config "$E2_BASELINE_GCA_CONFIG"
-
-  case "$E2_GCA_MATRIX" in
-    cross)
-      run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
-        "$E2_BASELINE_GCA_CROSS_ROOT" \
-        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
-      ;;
-    conditional)
-      run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
-        "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
-        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
-      ;;
-    both)
-      run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
-        "$E2_BASELINE_GCA_CROSS_ROOT" \
-        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
-      run_gca_matrix "$E2_BASELINE_GCA_CONDITIONAL_LABEL" \
-        "$E2_BASELINE_GCA_CONDITIONAL_ROOT" \
-        "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_CONDITIONAL_PATH"
-      ;;
-    *)
-      die "E2_GCA_MATRIX must be cross, conditional, or both; got: $E2_GCA_MATRIX"
-      ;;
-  esac
+  run_gca_matrix "$E2_BASELINE_GCA_CROSS_LABEL" \
+    "$E2_BASELINE_GCA_CROSS_ROOT" \
+    "$E2_BASELINE_STAGE1_PREFIX" "$E2_BASELINE_GCA_CONFIG" "$COM_PATH"
 }
 
 eval_mdet_set() {
@@ -368,20 +336,9 @@ run_e2_evaluation() {
   eval_mdet_set runs/experiments/E2_27_HO/summary.csv E2_27_HO both "${baseline[@]}" "${gia[@]}"
 
   collect_gca_weights baseline_gca \
-    "$E2_BASELINE_GCA_CONDITIONAL_ROOT" "$E2_BASELINE_GCA_CONDITIONAL_LABEL"
-  eval_mdet_set "$E2_BASELINE_GCA_CONDITIONAL_ROOT/summary.csv" \
-    E2_29_Baseline_GCA_conditional native "${baseline[@]}" "${baseline_gca[@]}"
-
-  collect_gca_weights baseline_gca \
     "$E2_BASELINE_GCA_CROSS_ROOT" "$E2_BASELINE_GCA_CROSS_LABEL"
   eval_mdet_set "$E2_BASELINE_GCA_CROSS_ROOT/summary.csv" \
     E2_29_Baseline_GCA_cross native "${baseline[@]}" "${baseline_gca[@]}"
-
-  collect_gca_weights gia_gca \
-    runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
-    E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional
-  eval_mdet_set runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional/summary.csv \
-    E2_28_GIA_GCA_conditional native "${gia[@]}" "${gia_gca[@]}"
 
   collect_gca_weights gia_gca \
     runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \

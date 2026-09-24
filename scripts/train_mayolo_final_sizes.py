@@ -38,7 +38,7 @@ _MATRIX_PLACEHOLDER = "/nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detec
 
 
 def _build_final_config(size: str, output_dir: Path) -> Path:
-    """Derive a GIA + FGA source YAML for one YOLOv10 scale."""
+    """Derive a GIA + Cross-GIN source YAML for one YOLOv10 scale."""
     source = PROJECT_ROOT / f"ultralytics/cfg/models/experiments/yolov10{size}-mdetect.yaml"
     if not source.is_file():
         raise FileNotFoundError(f"Missing YOLOv10 E3 source config: {source}")
@@ -69,12 +69,11 @@ def _build_final_config(size: str, output_dir: Path) -> Path:
         raise ValueError(f"Could not insert GIA-v2 at P5 into {source}")
     text = updated
 
-    # Keep the fixed-graph token in the source so the normal launcher can
-    # materialize the selected GIN operator with --gnn-type gin.  The matrix
-    # path is replaced by --com-path on the training machine.
+    # Keep the GIN token in the generated source. The matrix path is replaced
+    # by --com-path on the training machine.
     old_head = "[nc, na, nal, [False, None, None]]"
     new_head = (
-        "[nc, na, nal, [False, None, 'fga_margin_residual', False, "
+        "[nc, na, nal, [False, None, 'gin_margin_residual', False, "
         f"{_MATRIX_PLACEHOLDER}]]"
     )
     if text.count(old_head) != 1:

@@ -1,7 +1,7 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
-# Multi-class-aware Fixed Graph Aggregation (FGA): graph propagation on the
-# attribute risk margin followed by a learnable residual correction. If GIN is
-# selected later as the paper method, name that configuration GCA-GIN.
+# Graph Category Attention: graph propagation on the attribute risk margin
+# followed by a learnable residual correction. The reproducible configuration
+# uses the Cross matrix and materializes the selected graph operator.
 
 # Parameters
 nc: 2
@@ -37,4 +37,4 @@ head:
   - [-1, 1, SCDown, [512, 3, 2]]
   - [[-1, 10], 1, Concat, [1]] # cat head P5
   - [-1, 3, C2fCIB, [1024, True]] # 22 (P5/32-large)
-  - [[16, 19, 22], 1, v10MDetect, [nc, na, nal, [False, None, 'fga_margin_residual', False, /nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/co_occurrence_matrix_train.csv]]]
+  - [[16, 19, 22], 1, v10MDetect, [nc, na, nal, [False, None, 'gin_margin_residual', False, /nfsv4/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c/co_occurrence_matrix_train.csv]]]

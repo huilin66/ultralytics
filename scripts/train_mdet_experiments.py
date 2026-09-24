@@ -63,7 +63,7 @@ Examples (PowerShell):
         --variant gat=ultralytics/cfg/models/exp_ablation/yolov10x_GAT_learned.yaml `
         --variant graphsage=ultralytics/cfg/models/exp_ablation/yolov10x_GraphSAGE.yaml `
         --variant gin=ultralytics/cfg/models/exp_ablation/yolov10x_GIN.yaml `
-        --gnn-types fga gcn gat graphsage gin `
+        --gnn-types gcn gat graphsage gin `
         --com-path path/to/co_occurrence_matrix_train.csv
 
     python scripts/train_mdet_experiments.py gca-stage2-seeds `
@@ -75,7 +75,7 @@ Examples (PowerShell):
         --stage1-checkpoint-map 3=runs/.../seed_3_stage1/weights/best.pt `
         --stage1-checkpoint-map 4=runs/.../seed_4_stage1/weights/best.pt `
         --variant margin_residual=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml `
-        --gnn-types fga gcn gat graphsage gin `
+        --gnn-types gcn gat graphsage gin `
         --seeds 0 1 2 3 4 `
         --com-path path/to/co_occurrence_matrix_train.csv
 
@@ -171,20 +171,18 @@ def _materialize_config(
     gnn_type: Optional[str] = None,
     feature_gain: Optional[float] = None,
     prior_type: Optional[str] = None,
-    prior_conditional: bool = False,
 ) -> str:
     """Return a runnable config with optional graph substitutions.
 
     The ablation YAMLs in ``exp_ablation`` contain an absolute Linux path
     to the co-occurrence matrix.  Replacing it in a generated copy keeps the
     experiment reproducible and avoids changing the checked-in configuration.
-    For the 5x5 GCA study, the checked-in YAML keeps the ``com_fga_*`` token
+    For the GCA study, the checked-in YAML keeps a Cross-matrix graph token
     and this function materializes the requested GNN-specific token in the
-    per-project generated copy.  Feature-graph YAMLs may receive an optional
+    per-project generated copy. Feature-graph YAMLs may receive an optional
     trailing residual gain in the same generated copy, so the source YAML
-    remains a stable baseline with the default gain of 1.0.  The co-occurrence
-    prior study similarly materializes one of the non-GNN ``com_prior_*``
-    heads and can select the transposed conditional-matrix interpretation.
+    remains a stable baseline with the default gain of 1.0. The co-occurrence
+    prior study materializes one of the non-GNN prior heads.
     """
     source = _resolve_config(config)
     text = source.read_text(encoding="utf-8")
@@ -192,26 +190,15 @@ def _materialize_config(
     changed = False
 
     if gnn_type is not None:
-        # ``gca`` remains accepted only as a legacy programmatic alias; new
-        # runs use the canonical ``fga`` name for the former fixed graph
-        # aggregation operator.
-        if gnn_type == "gca":
-            gnn_type = "fga"
-        valid_gnn_types = {"fga", "gcn", "gat", "graphsage", "gin"}
+        valid_gnn_types = {"gcn", "gat", "graphsage", "gin"}
         if gnn_type not in valid_gnn_types:
             raise ValueError(f"Unsupported --gnn-types value: {gnn_type!r}")
 
-        # The standard FGA variants are defined once in YAML. Replace only
-        # the operator token, preserving the selected structural variant:
-        # com_fga_context_residual -> com_gcn_context_residual, etc.
-        # The margin-residual base YAML historically uses
-        # ``com_gat_margin_residual`` for the former GCA implementation. It is
-        # materialized separately because the other margin-residual
-        # operators do not carry the ``com_`` prefix.  The MHA variants follow
-        # the same convention with ``*_mha_margin_residual`` tokens.  The
-        # feature-logit variant adds ``feature_logit_`` before that suffix.
+        # Replace only the graph operator token, preserving the selected
+        # structural variant. The MHA and feature-logit variants follow the
+        # same naming convention.
         feature_logit_mha_pattern = re.compile(
-            r"(?P<quote>['\"]?)(?:com_gat|fga)_feature_logit_mha_margin_residual(?P=quote)"
+            r"(?P<quote>['\"]?)(?:com_gat|gin)_feature_logit_mha_margin_residual(?P=quote)"
         )
 
         def replace_feature_logit_mha(match: re.Match) -> str:
@@ -223,7 +210,7 @@ def _materialize_config(
         )
 
         mha_margin_pattern = re.compile(
-            r"(?P<quote>['\"]?)(?:com_gat|fga)_mha_margin_residual(?P=quote)"
+            r"(?P<quote>['\"]?)(?:com_gat|gin)_mha_margin_residual(?P=quote)"
         )
 
         def replace_mha_margin(match: re.Match) -> str:
@@ -233,7 +220,7 @@ def _materialize_config(
         updated, mha_margin_count = mha_margin_pattern.subn(replace_mha_margin, updated)
 
         margin_pattern = re.compile(
-            r"(?P<quote>['\"]?)(?:com_gat|fga)_margin_residual(?P=quote)"
+            r"(?P<quote>['\"]?)(?:com_gat|gin)_margin_residual(?P=quote)"
         )
         def replace_margin(match: re.Match) -> str:
             token = f"{gnn_type}_margin_residual"
@@ -242,7 +229,7 @@ def _materialize_config(
         updated, margin_count = margin_pattern.subn(replace_margin, updated)
 
         gnn_pattern = re.compile(
-            r"(?P<quote>['\"]?)com_(?:gca|fga)_"
+            r"(?P<quote>['\"]?)com_(?:gca|gin)_"
             r"(?P<variant>context|adaptive|twohop|conv_adapter)_residual"
             r"(?P=quote)"
         )
@@ -255,10 +242,10 @@ def _materialize_config(
         )
         if feature_logit_mha_count + mha_margin_count + margin_count + standard_count == 0:
             raise ValueError(
-                f"{source} does not contain one of the materializable "
-                "FGA residual tokens. Expected a standard com_fga_*_residual "
-                "token, fga_margin_residual, fga_mha_margin_residual, "
-                "or fga_feature_logit_mha_margin_residual."
+                f"{source} does not contain a supported graph residual token. "
+                "Expected a standard com_gin_*_residual token, "
+                "gin_margin_residual, gin_mha_margin_residual, or "
+                "gin_feature_logit_mha_margin_residual."
             )
         changed = True
 
@@ -273,8 +260,8 @@ def _materialize_config(
         # replace the optional sixth value without touching unrelated YAMLs.
         number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
         feature_pattern = re.compile(
-            r"(?P<prefix>['\"]feature_(?:gca|gcn|gat|graphsage|gin|local)_"
-            r"(?:cross|conditional)['\"]\s*,\s*(?:False|false)\s*,\s*[^,\]\n]+)"
+            r"(?P<prefix>['\"]feature_(?:gcn|gat|graphsage|gin|local)_"
+            r"cross['\"]\s*,\s*(?:False|false)\s*,\s*[^,\]\n]+)"
             rf"(?:\s*,\s*{number})?(?P<close>\s*\])"
         )
         replacement = rf"\g<prefix>, {feature_gain:g}\g<close>"
@@ -329,11 +316,9 @@ def _materialize_config(
             r'''label_gcn_threshold|adaptive_label_gcn|dynamic_label_gcn|'''
             r'''label_attention|mlgcn_threshold|mlgcn_direct|'''
             r'''mlgcn_learnable|mlgcn_moe|graph_mean_field|'''
-            r'''mltransformer|mlsage|mlgat|mlgcn)'''
-            r'''(?:_conditional)?(?P=quote)'''
+            r'''mltransformer|mlsage|mlgat|mlgcn)(?P=quote)'''
         )
-        suffix = "_conditional" if prior_conditional else ""
-        replacement = rf"\g<quote>com_prior_{prior_type}{suffix}\g<quote>"
+        replacement = rf"\g<quote>com_prior_{prior_type}\g<quote>"
         updated, count = prior_pattern.subn(replacement, updated)
         if count == 0:
             raise ValueError(
@@ -671,7 +656,6 @@ def _train_direct_stage(
     network_name: str = "yolo",
     gnn_type: Optional[str] = None,
     prior_type: Optional[str] = None,
-    prior_conditional: bool = False,
 ) -> Optional[str]:
     """Run one independent stage-only experiment and record its provenance."""
     if "seg" in Path(config).stem.lower() or "segment" in Path(config).stem.lower():
@@ -689,7 +673,6 @@ def _train_direct_stage(
         gnn_type=gnn_type,
         feature_gain=args.feature_gain,
         prior_type=prior_type,
-        prior_conditional=prior_conditional,
     )
     record: Dict[str, object] = {
         "protocol": "stage2_only" if retrain else "stage1_only",
@@ -697,7 +680,6 @@ def _train_direct_stage(
         "variant": variant_name,
         "gnn_type": gnn_type,
         "prior_type": prior_type,
-        "prior_conditional": prior_conditional if prior_type is not None else None,
         "config": resolved_config,
         "pretrain": pretrain,
         "stage1_checkpoint": pretrain if retrain else None,
@@ -915,7 +897,7 @@ def _run_gca_stage2_seeds(args: argparse.Namespace) -> None:
         )
 
     variants = _parse_key_value(args.variant, "--variant")
-    gnn_types = args.gnn_types or ["fga", "gcn", "gat", "graphsage", "gin"]
+    gnn_types = args.gnn_types or ["gcn", "gat", "graphsage", "gin"]
     for gnn_type in gnn_types:
         for seed in args.seeds:
             checkpoint = checkpoints[str(seed)]
@@ -1059,30 +1041,27 @@ def _run_prior_stage2(args: argparse.Namespace) -> None:
     """Run head-only co-occurrence prior structures from one fixed checkpoint."""
     _validate_epoch_values([args.stage1_epochs], "--stage1-epochs")
     _validate_epoch_values([args.stage2_epochs], "--stage2-epochs")
-    for matrix_mode in args.matrix_modes:
-        conditional = matrix_mode == "conditional"
-        for prior_type in args.prior_types:
-            variant_name = f"{matrix_mode}_{prior_type}"
-            run_name = (
-                f"{_slug(args.label)}_{_slug(variant_name)}_stage1_{args.stage1_epochs}"
-                f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
-            )
-            _train_direct_stage(
-                args,
-                label=args.label,
-                variant_name=variant_name,
-                config=args.model,
-                pretrain=args.stage1_checkpoint,
-                w4=args.w4,
-                seed=args.seed,
-                epochs=args.stage2_epochs,
-                retrain=True,
-                stage1_epochs=args.stage1_epochs,
-                run_name=run_name,
-                network_name="yolo",
-                prior_type=prior_type,
-                prior_conditional=conditional,
-            )
+    for prior_type in args.prior_types:
+        variant_name = prior_type
+        run_name = (
+            f"{_slug(args.label)}_{_slug(variant_name)}_stage1_{args.stage1_epochs}"
+            f"_stage2_{args.stage2_epochs}_w4_{_slug(args.w4)}_seed_{args.seed}"
+        )
+        _train_direct_stage(
+            args,
+            label=args.label,
+            variant_name=variant_name,
+            config=args.model,
+            pretrain=args.stage1_checkpoint,
+            w4=args.w4,
+            seed=args.seed,
+            epochs=args.stage2_epochs,
+            retrain=True,
+            stage1_epochs=args.stage1_epochs,
+            run_name=run_name,
+            network_name="yolo",
+            prior_type=prior_type,
+        )
 
 
 def _run_variants(args: argparse.Namespace) -> None:
@@ -1266,7 +1245,7 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_stage2.add_argument(
         "--gnn-types",
         nargs="+",
-        choices=("fga", "gcn", "gat", "graphsage", "gin"),
+        choices=("gcn", "gat", "graphsage", "gin"),
         default=None,
         metavar="GNN",
         help=(
@@ -1283,7 +1262,7 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_stage2_seeds.add_argument(
         "--label",
         default="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed",
-        help="experiment label; include the matrix name when running cross/conditional separately",
+        help="experiment label for the Cross-matrix study",
     )
     gca_stage2_seeds.add_argument(
         "--stage1-checkpoint-map",
@@ -1321,8 +1300,8 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_stage2_seeds.add_argument(
         "--gnn-types",
         nargs="+",
-        choices=("fga", "gcn", "gat", "graphsage", "gin"),
-        default=["fga", "gcn", "gat", "graphsage", "gin"],
+        choices=("gcn", "gat", "graphsage", "gin"),
+        default=["gcn", "gat", "graphsage", "gin"],
         metavar="GNN",
         help="margin-residual graph operators to materialize for every seed",
     )
@@ -1350,7 +1329,7 @@ def _build_parser() -> argparse.ArgumentParser:
     gca_warmup.add_argument(
         "--gnn-types",
         nargs="+",
-        choices=("fga", "gcn", "gat", "graphsage", "gin"),
+        choices=("gcn", "gat", "graphsage", "gin"),
         default=None,
         metavar="GNN",
         help="materialize the selected GNN operators in the margin-residual YAML",
@@ -1421,14 +1400,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=["bias", "channel", "spatial", "moe", "texture"],
         help="prior heads to materialize; default runs the original five",
     )
-    prior_stage2.add_argument(
-        "--matrix-modes",
-        nargs="+",
-        choices=("cross", "conditional"),
-        default=["cross"],
-        help="matrix interpretation; conditional transposes the stored CSV",
-    )
-
     for name, help_text, default_network in (
         ("variants", "Run named ablation/model variants", "yolo"),
         ("gia-position", "E2.1: GIA position ablation", "yolo"),
@@ -1443,10 +1414,10 @@ def _build_parser() -> argparse.ArgumentParser:
         if name == "gca-structure":
             variant_parser.add_argument(
                 "--gnn-type",
-                choices=("fga", "gcn", "gat", "graphsage", "gin"),
+                choices=("gcn", "gat", "graphsage", "gin"),
                 default=None,
                 help=(
-                    "materialize one GNN operator in com_fga_* structural YAMLs; "
+                    "materialize one GNN operator in the Cross-matrix structural YAMLs; "
                     "useful when running a full stage1+stage2 GCA variant"
                 ),
             )

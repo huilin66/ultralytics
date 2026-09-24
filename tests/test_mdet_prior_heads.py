@@ -95,7 +95,6 @@ def test_prior_heads_keep_multiscale_mdetect_output_shape():
         "com_prior_mltransformer",
         "com_prior_graph_mean_field",
         "com_prior_mlgcn_moe",
-        "com_prior_channel_conditional",
     ):
         head = MDetect(nc=2, na=10, nal=2, params=[False, None, token, False, None], ch=[32, 64, 128])
         outputs = head([feature.clone() for feature in features])
@@ -166,7 +165,7 @@ def test_label_graph_heads_are_finite_and_trainable():
         ), head.__class__.__name__
 
 
-def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
+def test_prior_stage2_materializes_head_and_matrix(tmp_path):
     config = tmp_path / "prior.yaml"
     matrix = tmp_path / "co_occurrence_matrix_train.csv"
     config.write_text(
@@ -181,10 +180,9 @@ def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
         str(matrix),
         str(tmp_path / "generated"),
         prior_type="label_gcn",
-        prior_conditional=True,
     )
     generated = Path(resolved).read_text(encoding="utf-8")
-    assert "com_prior_label_gcn_conditional" in generated
+    assert "com_prior_label_gcn" in generated
     assert matrix.resolve().as_posix() in generated
 
     resolved_mlgcn = _materialize_config(
@@ -192,7 +190,6 @@ def test_prior_stage2_materializes_head_and_matrix_mode(tmp_path):
         str(matrix),
         str(tmp_path / "generated_mlgcn"),
         prior_type="mlgcn_threshold",
-        prior_conditional=False,
     )
     generated_mlgcn = Path(resolved_mlgcn).read_text(encoding="utf-8")
     assert "com_prior_mlgcn_threshold" in generated_mlgcn

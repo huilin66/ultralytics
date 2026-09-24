@@ -6,7 +6,7 @@
 # Examples:
 #   bash run_experiment.sh help
 #   bash run_experiment.sh e2.0
-#   DEVICE=1 bash run_experiment.sh e2.2 --matrix conditional
+#   DEVICE=1 bash run_experiment.sh e2.2
 #   bash run_experiment.sh e2.8 --dry-run
 
 set -euo pipefail
@@ -19,7 +19,6 @@ DATA="${DATA:-ultralytics/cfg/mayolo_r1/mayolo_v3.yaml}"
 MD_MODEL="${MD_MODEL:-ultralytics/cfg/models/experiments/yolov10x-mdetect.yaml}"
 PRETRAIN="${PRETRAIN:-yolov10x.pt}"
 COM_CROSS="${COM_CROSS:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train.csv}"
-COM_CONDITIONAL="${COM_CONDITIONAL:-/localnvme/data/billboard/mayolo_v3/co_occurrence_matrix_train_conditional.csv}"
 DEVICE="${DEVICE:-0}"
 BATCH="${BATCH:-16}"
 WORKERS="${WORKERS:-8}"
@@ -32,7 +31,6 @@ HSV_S="${HSV_S:-0.2}"
 HSV_V="${HSV_V:-0.2}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 DRY_RUN="${DRY_RUN:-0}"
-MATRIX="${MATRIX:-cross}"
 
 CODE="${1:-help}"
 shift || true
@@ -41,7 +39,6 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1 ;;
     --device) DEVICE="$2"; shift ;;
     --seeds) SEEDS="$2"; shift ;;
-    --matrix) MATRIX="$2"; shift ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -58,7 +55,7 @@ PURE_GCA_CONFIG="${PURE_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x
 GIA_GCA_CONFIG="${GIA_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}"
 GIA_CONFIG="${GIA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml}"
 
-GNN_TYPES=(fga gcn gat graphsage gin)
+GNN_TYPES=(gcn gat graphsage gin)
 GIA_POSITION_VARIANTS=(
   "gia_v2_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml"
   "gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml"
@@ -87,10 +84,10 @@ Codes:
   e1         E1 w4 validation scan.
   e2.0       Baseline/GIA five-seed Stage1+Stage2 training.
   e2.1       GIA-v2 position Stage1 sweep.
-  e2.2       Pure Baseline+GCA/FGA, 5 operators x 5 seeds.
+  e2.2       Pure Baseline+GCA, 4 graph operators x 5 seeds.
   e2.3       Baseline HO Test evaluation.
   e2.4       GIA HO Test evaluation.
-  e2.5       GIA+GCA Stage2, 5 operators x 5 seeds.
+  e2.5       GIA+GCA Stage2, 4 graph operators x 5 seeds.
   e2.6       Baseline+GCA HO Test evaluation.
   e2.7       GIA+GCA HO Test evaluation (MAYOLO).
   e2.8       E2 performance profile for the eight ablation models.
@@ -109,11 +106,9 @@ Options:
   --dry-run              Print commands without executing them.
   --device CUDA_DEVICE   Override DEVICE (default: 0).
   --seeds "0 1 2"        Override the seed list.
-  --matrix cross|conditional|both
-                         Select E2.2/E2.5 matrix (default: cross).
 
-Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS,
-COM_CONDITIONAL, BATCH, WORKERS, IMGSZ, STAGE1_EPOCHS and STAGE2_EPOCHS.
+Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
+WORKERS, IMGSZ, STAGE1_EPOCHS and STAGE2_EPOCHS.
 EOF
 }
 
@@ -152,7 +147,7 @@ preflight() {
   echo "[preflight] repository=$ROOT"
   echo "[preflight] python=$PYTHON_BIN device=$DEVICE batch=$BATCH workers=$WORKERS"
   echo "[preflight] seeds=$SEEDS stage=${STAGE1_EPOCHS}+${STAGE2_EPOCHS} w4=$W4"
-  need "$DATA"; need "$MD_MODEL"; need "$COM_CROSS"; need "$COM_CONDITIONAL"
+  need "$DATA"; need "$MD_MODEL"; need "$COM_CROSS"
   echo "[preflight] inputs are present"
 }
 
@@ -202,7 +197,7 @@ e21() {
 }
 
 gca_train() {
-  local label="$1" root="$2" config="$3" matrix_path="$5" prefix="$6"
+  local label="$1" root="$2" config="$3" matrix_path="$4" prefix="$5"
   need "$DATA"; need "$config"; need "$matrix_path"
   local -a cmd=(
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2-seeds
@@ -223,45 +218,17 @@ gca_train() {
 }
 
 e22() {
-  echo "[E2.2] pure Baseline+GCA/FGA: Cross and/or Conditional"
-  case "$MATRIX" in
-    cross|both)
-      gca_train E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
-        runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
-        "$PURE_GCA_CONFIG" "$MATRIX" "$COM_CROSS" "$BASE_STAGE1_PREFIX"
-      ;;
-  esac
-  case "$MATRIX" in
-    conditional|both)
-      gca_train E2_29_Baseline_GCA_pure_margin_residual_5seed_conditional \
-        runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_conditional \
-        "$PURE_GCA_CONFIG" "$MATRIX" "$COM_CONDITIONAL" "$BASE_STAGE1_PREFIX"
-      ;;
-  esac
-  [[ "$MATRIX" == cross || "$MATRIX" == conditional || "$MATRIX" == both ]] || {
-    echo "MATRIX must be cross, conditional or both" >&2; exit 2;
-  }
+  echo "[E2.2] pure Baseline+GCA: Cross matrix and four graph operators"
+  gca_train E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
+    runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
+    "$PURE_GCA_CONFIG" "$COM_CROSS" "$BASE_STAGE1_PREFIX"
 }
 
 e25() {
-  echo "[E2.5] GIA+GCA Stage2: Cross and/or Conditional"
-  case "$MATRIX" in
-    cross|both)
-      gca_train E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
-        runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
-        "$GIA_GCA_CONFIG" "$MATRIX" "$COM_CROSS" "$GIA_STAGE1_PREFIX"
-      ;;
-  esac
-  case "$MATRIX" in
-    conditional|both)
-      gca_train E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
-        runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_conditional \
-        "$GIA_GCA_CONFIG" "$MATRIX" "$COM_CONDITIONAL" "$GIA_STAGE1_PREFIX"
-      ;;
-  esac
-  [[ "$MATRIX" == cross || "$MATRIX" == conditional || "$MATRIX" == both ]] || {
-    echo "MATRIX must be cross, conditional or both" >&2; exit 2;
-  }
+  echo "[E2.5] GIA+GCA Stage2: Cross matrix and four graph operators"
+  gca_train E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
+    runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
+    "$GIA_GCA_CONFIG" "$COM_CROSS" "$GIA_STAGE1_PREFIX"
 }
 
 eval_ho() {
@@ -314,28 +281,20 @@ e24() {
 
 e26() {
   echo "[E2.6] Baseline+GCA HO Test evaluation"
-  local matrix root label
-  for matrix in cross conditional; do
-    [[ "$MATRIX" == both || "$MATRIX" == "$matrix" ]] || continue
-    root="runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_$matrix"
-    label="E2_29_Baseline_GCA_pure_margin_residual_5seed_$matrix"
-    collect_gca "$root" "$label"
-    eval_ho "$root/ho_summary.csv" "E2_6_Baseline_GCA_$matrix_HO" one2many \
-      "${COLLECTED[@]}"
-  done
+  local root="runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross"
+  local label="E2_29_Baseline_GCA_pure_margin_residual_5seed_cross"
+  collect_gca "$root" "$label"
+  eval_ho "$root/ho_summary.csv" "E2_6_Baseline_GCA_cross_HO" one2many \
+    "${COLLECTED[@]}"
 }
 
 e27() {
   echo "[E2.7] GIA+GCA HO Test evaluation (MAYOLO)"
-  local matrix root label
-  for matrix in cross conditional; do
-    [[ "$MATRIX" == both || "$MATRIX" == "$matrix" ]] || continue
-    root="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_$matrix"
-    label="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_$matrix"
-    collect_gca "$root" "$label"
-    eval_ho "$root/ho_summary.csv" "E2_7_MAYOLO_$matrix_HO" one2many \
-      "${COLLECTED[@]}"
-  done
+  local root="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
+  local label="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
+  collect_gca "$root" "$label"
+  eval_ho "$root/ho_summary.csv" "E2_7_MAYOLO_cross_HO" one2many \
+    "${COLLECTED[@]}"
 }
 
 e28() {
