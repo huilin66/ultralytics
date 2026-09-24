@@ -90,9 +90,9 @@ Codes:
   e2.5       GIA+GCA Stage2, 4 graph operators x 5 seeds.
   e2.6       Baseline+GCA HO Test evaluation.
   e2.7       GIA+GCA HO Test evaluation (MAYOLO).
-  e2.8       E2 performance profile for the eight ablation models.
+  e2.8       E2 performance profile for eight ablation models x five seeds.
   e3.train   Native YOLO/YOLO26 and MAYOLO size training.
-  e3.eval    E3/E4 Test summaries and performance profile.
+  e3.eval    E3/E4 five-seed performance profile.
   e4         RT-DETR-L/X five-seed training.
   e5         200-epoch multi-label detector training and Test inference.
   e5.eval    Test inference only for existing E5 checkpoints.
@@ -108,7 +108,8 @@ Options:
   --seeds "0 1 2"        Override the seed list.
 
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
-WORKERS, IMGSZ, STAGE1_EPOCHS and STAGE2_EPOCHS.
+WORKERS, IMGSZ, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
+E2_PERF_SEEDS, E3_PERF_ROOT and E3_PERF_SEEDS.
 EOF
 }
 
@@ -298,10 +299,12 @@ e27() {
 }
 
 e28() {
-  echo "[E2.8] ablation/performance profile for the eight models"
+  echo "[E2.8] ablation/performance profile for eight models x five seeds"
   local root="${E2_PERFORMANCE_ROOT:-runs/experiments/performance_profile/E2_8_5seed_repro}"
+  local perf_seeds="${E2_PERF_SEEDS:-0 1 2 3 4}"
+  read -r -a PERF_SEED_LIST <<< "$perf_seeds"
   local seed baseline gia gca gia_gca
-  for seed in "${SEED_LIST[@]}"; do
+  for seed in "${PERF_SEED_LIST[@]}"; do
     baseline="$(stage2_plain_weight "$BASE_STAGE1_PREFIX" "$seed")"
     gia="$(stage2_plain_weight "$GIA_STAGE1_PREFIX" "$seed")"
     gca="$(stage2_weight runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
@@ -395,76 +398,70 @@ e3_train() {
 }
 
 e3_perf() {
-  echo "[E3/E4] seed-0 performance profile"
-  local seed="${E3_PERF_SEED:-0}" root="${E3_PERF_ROOT:-runs/experiments/performance_profile/E3_E4_seed0}"
-  local family size name weight
+  echo "[E3/E4] five-seed performance profile"
+  local perf_seeds="${E3_PERF_SEEDS:-0 1 2 3 4}"
+  read -r -a PERF_SEED_LIST <<< "$perf_seeds"
+  local root="${E3_PERF_ROOT:-runs/experiments/performance_profile/E3_E4_5seed}"
+  local seed family size name weight
   local -a native_weights=() native_labels=()
-  for family in yolov8 yolov9 yolov10 yolov11 yolov12 yolov13 yolov26; do
-    for size in $(e3_sizes "$family"); do
-      name="${family}${size}"
-      weight="runs/experiments/E3_versions/E3_versions_${name}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-      need "$weight"
-      native_weights+=("$weight"); native_labels+=("YOLO${family#yolo}${size}")
-    done
-  done
-  run "$PYTHON_BIN" scripts/benchmark_performance.py \
-    --weights "${native_weights[@]}" --labels "${native_labels[@]}" \
-    --network yolo --task mdetect --head-mode native --device "$DEVICE" \
-    --precision "${PERF_PRECISION:-fp16}" --batch "${PERF_BATCH:-1}" --imgsz "$IMGSZ" \
-    --warmup "${PERF_WARMUP:-50}" --iterations "${PERF_ITERATIONS:-200}" \
-    --output "$root/E3_seed${seed}_native.csv"
-
   local -a mayolo_weights=() mayolo_labels=()
-  for size in ${MAYOLO_SIZES:-n s m l b}; do
-    weight="runs/experiments/E3_versions/E3_MAYOLO_final_mayolo${size}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-    need "$weight"
-    mayolo_weights+=("$weight"); mayolo_labels+=("MAYOLO$size")
-  done
-  weight="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt"
-  need "$weight"
-  mayolo_weights+=("$weight"); mayolo_labels+=("MAYOLOx")
-  run "$PYTHON_BIN" scripts/benchmark_performance.py \
-    --weights "${mayolo_weights[@]}" --labels "${mayolo_labels[@]}" \
-    --network yolo --task mdetect --head-mode one2many --device "$DEVICE" \
-    --precision "${PERF_PRECISION:-fp16}" --batch "${PERF_BATCH:-1}" --imgsz "$IMGSZ" \
-    --warmup "${PERF_WARMUP:-50}" --iterations "${PERF_ITERATIONS:-200}" \
-    --output "$root/E3_seed${seed}_mayolo.csv"
-
+  local -a rtdetr_weights=()
   local rtdetr_root="runs/experiments/E4_rtdetr_LX"
-  local -a rtdetr_weights=(
-    "$rtdetr_root/E4_rtdetr_LX_rtdetr_l_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-    "$rtdetr_root/E4_rtdetr_LX_rtdetr_x_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-  )
-  for weight in "${rtdetr_weights[@]}"; do need "$weight"; done
-  run "$PYTHON_BIN" scripts/benchmark_performance.py \
-    --weights "${rtdetr_weights[@]}" --labels RT-DETR-L RT-DETR-X \
-    --network rtdetr --head-mode native --device "$DEVICE" \
-    --precision "${PERF_PRECISION:-fp16}" --batch "${PERF_BATCH:-1}" --imgsz "$IMGSZ" \
-    --warmup "${PERF_WARMUP:-50}" --iterations "${PERF_ITERATIONS:-200}" \
-    --output "$root/E4_seed${seed}_rtdetr.csv"
+
+  for seed in "${PERF_SEED_LIST[@]}"; do
+    echo "[E3/E4] performance seed=${seed}"
+    native_weights=()
+    native_labels=()
+    mayolo_weights=()
+    mayolo_labels=()
+    rtdetr_weights=()
+
+    for family in yolov8 yolov9 yolov10 yolov11 yolov12 yolov13 yolov26; do
+      for size in $(e3_sizes "$family"); do
+        name="${family}${size}"
+        weight="runs/experiments/E3_versions/E3_versions_${name}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
+        need "$weight"
+        native_weights+=("$weight"); native_labels+=("YOLO${family#yolo}${size}")
+      done
+    done
+    run "$PYTHON_BIN" scripts/benchmark_performance.py \
+      --weights "${native_weights[@]}" --labels "${native_labels[@]}" \
+      --network yolo --task mdetect --head-mode native --device "$DEVICE" \
+      --precision "${PERF_PRECISION:-fp16}" --batch "${PERF_BATCH:-1}" --imgsz "$IMGSZ" \
+      --warmup "${PERF_WARMUP:-50}" --iterations "${PERF_ITERATIONS:-200}" \
+      --output "$root/E3_seed${seed}_native.csv"
+
+    for size in ${MAYOLO_SIZES:-n s m l b}; do
+      weight="runs/experiments/E3_versions/E3_MAYOLO_final_mayolo${size}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
+      need "$weight"
+      mayolo_weights+=("$weight"); mayolo_labels+=("MAYOLO$size")
+    done
+    weight="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt"
+    need "$weight"
+    mayolo_weights+=("$weight"); mayolo_labels+=("MAYOLOx")
+    run "$PYTHON_BIN" scripts/benchmark_performance.py \
+      --weights "${mayolo_weights[@]}" --labels "${mayolo_labels[@]}" \
+      --network yolo --task mdetect --head-mode one2many --device "$DEVICE" \
+      --precision "${PERF_PRECISION:-fp16}" --batch "${PERF_BATCH:-1}" --imgsz "$IMGSZ" \
+      --warmup "${PERF_WARMUP:-50}" --iterations "${PERF_ITERATIONS:-200}" \
+      --output "$root/E3_seed${seed}_mayolo.csv"
+
+    rtdetr_weights=(
+      "$rtdetr_root/E4_rtdetr_LX_rtdetr_l_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
+      "$rtdetr_root/E4_rtdetr_LX_rtdetr_x_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
+    )
+    for weight in "${rtdetr_weights[@]}"; do need "$weight"; done
+    run "$PYTHON_BIN" scripts/benchmark_performance.py \
+      --weights "${rtdetr_weights[@]}" --labels RT-DETR-L RT-DETR-X \
+      --network rtdetr --head-mode native --device "$DEVICE" \
+      --precision "${PERF_PRECISION:-fp16}" --batch "${PERF_BATCH:-1}" --imgsz "$IMGSZ" \
+      --warmup "${PERF_WARMUP:-50}" --iterations "${PERF_ITERATIONS:-200}" \
+      --output "$root/E4_seed${seed}_rtdetr.csv"
+  done
 }
 
 e3_eval() {
-  echo "[E3/E4] seed-0 Test summaries and performance profile"
-  local seed="${E3_PERF_SEED:-0}" family size name weight
-  local -a native_weights=() mayolo_weights=()
-  for family in yolov8 yolov9 yolov10 yolov11 yolov12 yolov13 yolov26; do
-    for size in $(e3_sizes "$family"); do
-      name="${family}${size}"
-      weight="runs/experiments/E3_versions/E3_versions_${name}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-      native_weights+=("$weight")
-    done
-  done
-  eval_ho runs/experiments/E3_versions/summary_native_seed0.csv E3_versions_native_seed0 native \
-    "${native_weights[@]}"
-  for size in ${MAYOLO_SIZES:-n s m l b}; do
-    weight="runs/experiments/E3_versions/E3_MAYOLO_final_mayolo${size}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-    mayolo_weights+=("$weight")
-  done
-  weight="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt"
-  mayolo_weights+=("$weight")
-  eval_ho runs/experiments/E3_versions/summary_mayolo_seed0.csv E3_versions_mayolo_seed0 one2many \
-    "${mayolo_weights[@]}"
+  echo "[E3/E4] five-seed performance profile"
   e3_perf
 }
 
