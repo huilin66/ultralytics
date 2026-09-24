@@ -26,9 +26,6 @@ IMGSZ="${IMGSZ:-640}"
 W4="${W4:-0.5}"
 STAGE1_EPOCHS="${STAGE1_EPOCHS:-100}"
 STAGE2_EPOCHS="${STAGE2_EPOCHS:-100}"
-HSV_H="${HSV_H:-0}"
-HSV_S="${HSV_S:-0.2}"
-HSV_V="${HSV_V:-0.2}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 DRY_RUN="${DRY_RUN:-0}"
 
@@ -160,7 +157,6 @@ e1() {
     --w4-values 0.25 0.5 0.75 1.0 1.25 1.5 \
     --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
     --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE" \
-    --hsv-h "$HSV_H" --hsv-s "$HSV_S" --hsv-v "$HSV_V" \
     --project runs/experiments/E1_w4 --label E1_w4 --skip-existing
 }
 
@@ -172,7 +168,6 @@ e20() {
     py scripts/train_mdet_experiments.py variants \
       --data "$DATA" --project "$E2_ROOT" --imgsz "$IMGSZ" --batch "$BATCH" \
       --workers "$WORKERS" --device "$DEVICE" --seed "$seed" --w4 "$W4" \
-      --hsv-h "$HSV_H" --hsv-s "$HSV_S" --hsv-v "$HSV_V" \
       --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
       --label "$E2_LABEL" --variant "baseline=$MD_MODEL" \
       --variant "gia_v2_5_7=$GIA_CONFIG" --pretrain "$PRETRAIN" --skip-existing
@@ -188,7 +183,7 @@ e21() {
       "$PYTHON_BIN" scripts/train_mdet_experiments.py gia-position
       --data "$DATA" --project runs/experiments/E2_1_GIA_v2_position
       --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE"
-      --seed "$seed" --w4 "$W4" --hsv-h "$HSV_H" --hsv-s "$HSV_S" --hsv-v "$HSV_V"
+      --seed "$seed" --w4 "$W4"
       --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS"
       --label E2_1_GIA_v2_position --pretrain "$PRETRAIN" --stage1-only --skip-existing
     )
@@ -204,7 +199,7 @@ gca_train() {
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2-seeds
     --label "$label" --data "$DATA" --project "$root"
     --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE"
-    --w4 "$W4" --hsv-h "$HSV_H" --hsv-s "$HSV_S" --hsv-v "$HSV_V"
+    --w4 "$W4"
     --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS"
     --variant "margin_residual=$config" --gnn-types "${GNN_TYPES[@]}"
     --seeds "${SEED_LIST[@]}" --com-path "$matrix_path" --skip-existing
@@ -367,7 +362,7 @@ e3_train_native() {
         py scripts/train_mdet_experiments.py versions \
           --data "$DATA" --project runs/experiments/E3_versions \
           --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE" \
-          --seed "$seed" --w4 "$W4" --hsv-h "$HSV_H" --hsv-s "$HSV_S" --hsv-v "$HSV_V" \
+          --seed "$seed" --w4 "$W4" \
           --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
           --label E3_versions --variant "$name=$config" --pretrain "$pretrain" \
           --skip-existing
@@ -385,7 +380,6 @@ e3_train_mayolo() {
       --project runs/experiments/E3_versions --label E3_MAYOLO_final \
       --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
       --batch "$BATCH" --imgsz "$IMGSZ" --workers "$WORKERS" --w4 "$W4" --seed "$seed" \
-      --hsv-h "$HSV_H" --hsv-s "$HSV_S" --hsv-v "$HSV_V" \
       --com-path "$COM_CROSS" --skip-existing
   done
 }

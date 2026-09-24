@@ -701,228 +701,107 @@ Offline variant manifest relative path:
 - 当前结果只能支持有限的 robustness/sensitivity 结论，不能支持 epistemic
   uncertainty 已被缓解或已完成真实城市环境泛化验证。
 
-## 6. 二级属性/level test 对比：YOLOv10x vs MAYOLOx
+## 6. Fine-grained Test Comparison: YOLOv10x vs MAYOLOx
 
-本节只报告 test 结果。当前每个属性输出两个 level，因此正文统一表述为
-two-level attribute/level recognition；除非存在独立且有明确标注标准的风险标签，
-不把它扩展表述为已经验证的三级风险识别。表中数值保留 6 位小数。
+本节对应论文 4.4.10，统一使用 Baseline seed=0 与 MAYOLOx seed=0 的 Test
+推理结果。属性指标只在类别正确且 IoU≥0.5 的检测框—真实框匹配对上计算；
+Micro-F1 在二级互斥属性设置下与 OA 数值相同。
 
-### 6.1 Test 总览
+### 6.1 Class-wise detection and attribute Test metrics
 
-两套模型使用相同的 test 推理和框匹配设置。匹配样本数是进入属性指标计算的
-IoU=0.5、类别正确的检测框数量。
-
-| 模型 | 推理模式 | 匹配样本数 | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | native | 1890 | 0.629825 | 0.431061 | 0.964550 | 0.604273 | 0.645543 | 0.964550 | 0.609672 | 0.608510 | 0.660914 |
-| MAYOLOx | one2many | 1930 | 0.686741 | 0.482401 | 0.973575 | 0.637203 | 0.724806 | 0.973575 | 0.689353 | 0.619723 | 0.657251 |
-
-summary.csv 相对路径：
-
-    runs/experiments/E3_risk_level_test/smoke_v4/summary.csv
-
-#### 按目标类别的检测与属性 Test 指标
-
-主表中的 Test mAP50 和 Test mAP50-95 是两个目标类别的宏平均；下表同时保留每个目标类别
-的检测 AP 与属性指标。属性指标仅统计 IoU=0.5、类别正确的匹配框。
-
-| 模型 | 推理模式 | 类别 | Test AP50 | Test AP50-95 | 匹配样本数 | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | native | projecting_signboard | 0.702634 | 0.478215 | 1040 | 0.950000 | 0.572734 | 0.615636 | 0.950000 | 0.581967 | 0.570737 | 0.681510 |
-| YOLOv10x | native | wall_signboard | 0.557015 | 0.383907 | 850 | 0.982353 | 0.571775 | 0.717739 | 0.982353 | 0.588865 | 0.567344 | 0.871831 |
-| MAYOLOx | one2many | projecting_signboard | 0.758642 | 0.521002 | 1050 | 0.963810 | 0.604879 | 0.711238 | 0.963810 | 0.652802 | 0.600255 | 0.656144 |
-| MAYOLOx | one2many | wall_signboard | 0.614840 | 0.443799 | 880 | 0.985227 | 0.562825 | 0.755509 | 0.985227 | 0.572217 | 0.556202 | 0.841545 |
-
-逐类别检测 AP 明细相对路径：
-
-    runs/experiments/E3_risk_level_test/smoke_v4/per_class_test.csv
-
-按目标类别、逐 attribute 的明细相对路径：
-
-    runs/experiments/E3_risk_level_test/smoke_v4/per_class_attribute_test.csv
-    runs/experiments/E3_risk_level_test/smoke_v4/per_class_attribute_detail_test.csv
-
-新计算结果与 Ultralytics 已集成的属性结果逐项对比，最大绝对差异约为
-5×10⁻⁹，说明框匹配、属性预测和指标聚合口径一致。
-
-### 6.2 逐 attribute 的 test 指标
-
-每个 attribute 的 support 是参与该 attribute 计算的匹配框数；
-F1_macro_global_test 在单个二级 attribute 内与该 attribute 的 macro-F1 数值相同。
-
-以下为新增的横向汇总表，保留原有逐 attribute 明细表以便复核。表中仅保留
-`OA_test`、`F1_macro_test` 和 `PR_AUC_macro_test` 三个指标；每个模型占三行，
-十个 attribute 横向排列。
-
-| 模型 | 指标 | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | OA_test | 0.989418 | 0.994709 | 0.936508 | 0.920635 | 0.962963 | 0.947090 | 0.952381 | 0.994709 | 0.994709 | 0.952381 |
-|  | F1_macro_test | 0.830645 | 0.498674 | 0.650000 | 0.538048 | 0.490566 | 0.708333 | 0.641517 | 0.498674 | 0.498674 | 0.687603 |
-|  | PR_AUC_macro_test | 0.951374 | 0.583305 | 0.658579 | 0.573010 | 0.565009 | 0.777241 | 0.633324 | 0.502437 | 0.522583 | 0.842277 |
-| MAYOLOx | OA_test | 0.989637 | 0.994819 | 0.958549 | 0.948187 | 0.979275 | 0.943005 | 0.958549 | 0.994819 | 0.994819 | 0.974093 |
-|  | F1_macro_test | 0.747382 | 0.498701 | 0.789071 | 0.708635 | 0.494764 | 0.745718 | 0.589362 | 0.498701 | 0.498701 | 0.800990 |
-|  | PR_AUC_macro_test | 0.741623 | 0.549945 | 0.750029 | 0.748553 | 0.570897 | 0.760294 | 0.633742 | 0.506423 | 0.510086 | 0.800914 |
-
-| 模型 | attribute | support | OA_test | F1_macro_test | F1_macro_global_test | F1_micro_test | P_macro_test | R_macro_test | PR_AUC_macro_test |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | surface_missing | 189 | 0.989418 | 0.830645 | 0.830645 | 0.989418 | 0.830645 | 0.830645 | 0.951374 |
-| YOLOv10x | surface_incomplete | 189 | 0.994709 | 0.498674 | 0.498674 | 0.994709 | 0.497354 | 0.500000 | 0.583305 |
-| YOLOv10x | surface_corroded | 189 | 0.936508 | 0.650000 | 0.650000 | 0.936508 | 0.692308 | 0.625128 | 0.658579 |
-| YOLOv10x | frame_corroded | 189 | 0.920635 | 0.538048 | 0.538048 | 0.920635 | 0.556011 | 0.531410 | 0.573010 |
-| YOLOv10x | surface_peeling | 189 | 0.962963 | 0.490566 | 0.490566 | 0.962963 | 0.489247 | 0.491892 | 0.565009 |
-| YOLOv10x | surface_fade | 189 | 0.947090 | 0.708333 | 0.708333 | 0.947090 | 0.708333 | 0.708333 | 0.777241 |
-| YOLOv10x | surface_deformed | 189 | 0.952381 | 0.641517 | 0.641517 | 0.952381 | 0.683696 | 0.616713 | 0.633324 |
-| YOLOv10x | frame_deformed | 189 | 0.994709 | 0.498674 | 0.498674 | 0.994709 | 0.497354 | 0.500000 | 0.502437 |
-| YOLOv10x | disconnected | 189 | 0.994709 | 0.498674 | 0.498674 | 0.994709 | 0.497354 | 0.500000 | 0.522583 |
-| YOLOv10x | added_billboard | 189 | 0.952381 | 0.687603 | 0.687603 | 0.952381 | 0.644413 | 0.780978 | 0.842277 |
-| MAYOLOx | surface_missing | 193 | 0.989637 | 0.747382 | 0.747382 | 0.989637 | 0.994792 | 0.666667 | 0.741623 |
-| MAYOLOx | surface_incomplete | 193 | 0.994819 | 0.498701 | 0.498701 | 0.994819 | 0.497409 | 0.500000 | 0.549945 |
-| MAYOLOx | surface_corroded | 193 | 0.958549 | 0.789071 | 0.789071 | 0.958549 | 0.858784 | 0.744475 | 0.750029 |
-| MAYOLOx | frame_corroded | 193 | 0.948187 | 0.708635 | 0.708635 | 0.948187 | 0.811943 | 0.661142 | 0.748553 |
-| MAYOLOx | surface_peeling | 193 | 0.979275 | 0.494764 | 0.494764 | 0.979275 | 0.489637 | 0.500000 | 0.570897 |
-| MAYOLOx | surface_fade | 193 | 0.943005 | 0.745718 | 0.745718 | 0.943005 | 0.705906 | 0.811594 | 0.760294 |
-| MAYOLOx | surface_deformed | 193 | 0.958549 | 0.589362 | 0.589362 | 0.958549 | 0.650877 | 0.566052 | 0.633742 |
-| MAYOLOx | frame_deformed | 193 | 0.994819 | 0.498701 | 0.498701 | 0.994819 | 0.497409 | 0.500000 | 0.506423 |
-| MAYOLOx | disconnected | 193 | 0.994819 | 0.498701 | 0.498701 | 0.994819 | 0.497409 | 0.500000 | 0.510086 |
-| MAYOLOx | added_billboard | 193 | 0.974093 | 0.800990 | 0.800990 | 0.974093 | 0.889362 | 0.747297 | 0.800914 |
-
-per_attribute_test.csv 相对路径：
-
-    runs/experiments/E3_risk_level_test/smoke_v1/per_attribute_test.csv
-
-### 6.3 各 attribute、各 level 的 test 指标
-
-每个模型、attribute 和 level 0/1 均报告 support、TP/FP/FN/TN、
-Precision、Recall、F1、Balanced Accuracy 和 PR-AUC。TP/FP/FN/TN 同时构成
-该 level 的 2×2 confusion matrix。PR-AUC 使用 softmax 输出概率，对每个 level
-按 one-vs-rest 计算；末尾的 all 行是跨 attribute 的 level 汇总。
-
-以下为新增的横向 level 汇总表。为控制表格宽度，表中保留 support、Precision、
-Recall、F1、Balanced Accuracy 和 PR-AUC；TP/FP/FN/TN 仍保留在下方的完整明细表中。
-该横向表不包含 `all` 行，因为 `all` 仅表示跨 attribute 的汇总，不对应具体
-attribute。
-
-| 模型 | level | 指标 | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | 0 | support | 186 | 188 | 178 | 178 | 185 | 180 | 181 | 188 | 188 | 184 |
-|  |  | Precision_test | 0.994624 | 0.994709 | 0.956044 | 0.945355 | 0.978495 | 0.972222 | 0.967391 | 0.994709 | 0.994709 | 0.988827 |
-|  |  | Recall_test | 0.994624 | 1.000000 | 0.977528 | 0.971910 | 0.983784 | 0.972222 | 0.983425 | 1.000000 | 1.000000 | 0.961957 |
-|  |  | F1_test | 0.994624 | 0.997347 | 0.966667 | 0.958449 | 0.981132 | 0.972222 | 0.975342 | 0.997347 | 0.997347 | 0.975207 |
-|  |  | Balanced_Accuracy_test | 0.830645 | 0.500000 | 0.625128 | 0.531410 | 0.491892 | 0.708333 | 0.616713 | 0.500000 | 0.500000 | 0.780978 |
-|  |  | PR_AUC_test | 0.999971 | 0.999943 | 0.994763 | 0.987123 | 0.998046 | 0.996511 | 0.969555 | 0.997628 | 0.999711 | 0.998431 |
-|  | 1 | support | 3 | 1 | 11 | 11 | 4 | 9 | 8 | 1 | 1 | 5 |
-|  |  | Precision_test | 0.666667 | 0.000000 | 0.428571 | 0.166667 | 0.000000 | 0.444444 | 0.400000 | 0.000000 | 0.000000 | 0.300000 |
-|  |  | Recall_test | 0.666667 | 0.000000 | 0.272727 | 0.090909 | 0.000000 | 0.444444 | 0.250000 | 0.000000 | 0.000000 | 0.600000 |
-|  |  | F1_test | 0.666667 | 0.000000 | 0.333333 | 0.117647 | 0.000000 | 0.444444 | 0.307692 | 0.000000 | 0.000000 | 0.400000 |
-|  |  | Balanced_Accuracy_test | 0.830645 | 0.500000 | 0.625128 | 0.531410 | 0.491892 | 0.708333 | 0.616713 | 0.500000 | 0.500000 | 0.780978 |
-|  |  | PR_AUC_test | 0.902778 | 0.166667 | 0.322395 | 0.158898 | 0.131972 | 0.557971 | 0.297092 | 0.007246 | 0.045455 | 0.686122 |
-| MAYOLOx | 0 | support | 190 | 192 | 181 | 181 | 189 | 184 | 186 | 192 | 192 | 185 |
-|  |  | Precision_test | 0.989583 | 0.994819 | 0.967568 | 0.957219 | 0.979275 | 0.983240 | 0.968421 | 0.994819 | 0.994819 | 0.978723 |
-|  |  | Recall_test | 1.000000 | 1.000000 | 0.988950 | 0.988950 | 1.000000 | 0.956522 | 0.989247 | 1.000000 | 1.000000 | 0.994595 |
-|  |  | F1_test | 0.994764 | 0.997403 | 0.978142 | 0.972826 | 0.989529 | 0.969697 | 0.978723 | 0.997403 | 0.997403 | 0.986595 |
-|  |  | Balanced_Accuracy_test | 0.666667 | 0.500000 | 0.744475 | 0.661142 | 0.500000 | 0.811594 | 0.566052 | 0.500000 | 0.500000 | 0.747297 |
-|  |  | PR_AUC_test | 0.997920 | 0.999891 | 0.991035 | 0.992284 | 0.998423 | 0.991972 | 0.990157 | 0.998958 | 0.999339 | 0.995157 |
-|  | 1 | support | 3 | 1 | 12 | 12 | 4 | 9 | 7 | 1 | 1 | 8 |
-|  |  | Precision_test | 1.000000 | 0.000000 | 0.750000 | 0.666667 | 0.000000 | 0.428571 | 0.333333 | 0.000000 | 0.000000 | 0.800000 |
-|  |  | Recall_test | 0.333333 | 0.000000 | 0.500000 | 0.333333 | 0.000000 | 0.666667 | 0.142857 | 0.000000 | 0.000000 | 0.500000 |
-|  |  | F1_test | 0.500000 | 0.000000 | 0.600000 | 0.444444 | 0.000000 | 0.521739 | 0.200000 | 0.000000 | 0.000000 | 0.615385 |
-|  |  | Balanced_Accuracy_test | 0.666667 | 0.500000 | 0.744475 | 0.661142 | 0.500000 | 0.811594 | 0.566052 | 0.500000 | 0.500000 | 0.747297 |
-|  |  | PR_AUC_test | 0.485326 | 0.100000 | 0.509023 | 0.504822 | 0.143372 | 0.528616 | 0.277326 | 0.013889 | 0.020833 | 0.606671 |
-
-| 模型 | attribute | level | support | TP | FP | FN | TN | Precision_test | Recall_test | F1_test | Balanced_Accuracy_test | PR_AUC_test |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | surface_missing | 0 | 186 | 185 | 1 | 1 | 2 | 0.994624 | 0.994624 | 0.994624 | 0.830645 | 0.999971 |
-| YOLOv10x | surface_missing | 1 | 3 | 2 | 1 | 1 | 185 | 0.666667 | 0.666667 | 0.666667 | 0.830645 | 0.902778 |
-| YOLOv10x | surface_incomplete | 0 | 188 | 188 | 1 | 0 | 0 | 0.994709 | 1.000000 | 0.997347 | 0.500000 | 0.999943 |
-| YOLOv10x | surface_incomplete | 1 | 1 | 0 | 0 | 1 | 188 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.166667 |
-| YOLOv10x | surface_corroded | 0 | 178 | 174 | 8 | 4 | 3 | 0.956044 | 0.977528 | 0.966667 | 0.625128 | 0.994763 |
-| YOLOv10x | surface_corroded | 1 | 11 | 3 | 4 | 8 | 174 | 0.428571 | 0.272727 | 0.333333 | 0.625128 | 0.322395 |
-| YOLOv10x | frame_corroded | 0 | 178 | 173 | 10 | 5 | 1 | 0.945355 | 0.971910 | 0.958449 | 0.531410 | 0.987123 |
-| YOLOv10x | frame_corroded | 1 | 11 | 1 | 5 | 10 | 173 | 0.166667 | 0.090909 | 0.117647 | 0.531410 | 0.158898 |
-| YOLOv10x | surface_peeling | 0 | 185 | 182 | 4 | 3 | 0 | 0.978495 | 0.983784 | 0.981132 | 0.491892 | 0.998046 |
-| YOLOv10x | surface_peeling | 1 | 4 | 0 | 3 | 4 | 182 | 0.000000 | 0.000000 | 0.000000 | 0.491892 | 0.131972 |
-| YOLOv10x | surface_fade | 0 | 180 | 175 | 5 | 5 | 4 | 0.972222 | 0.972222 | 0.972222 | 0.708333 | 0.996511 |
-| YOLOv10x | surface_fade | 1 | 9 | 4 | 5 | 5 | 175 | 0.444444 | 0.444444 | 0.444444 | 0.708333 | 0.557971 |
-| YOLOv10x | surface_deformed | 0 | 181 | 178 | 6 | 3 | 2 | 0.967391 | 0.983425 | 0.975342 | 0.616713 | 0.969555 |
-| YOLOv10x | surface_deformed | 1 | 8 | 2 | 3 | 6 | 178 | 0.400000 | 0.250000 | 0.307692 | 0.616713 | 0.297092 |
-| YOLOv10x | frame_deformed | 0 | 188 | 188 | 1 | 0 | 0 | 0.994709 | 1.000000 | 0.997347 | 0.500000 | 0.997628 |
-| YOLOv10x | frame_deformed | 1 | 1 | 0 | 0 | 1 | 188 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.007246 |
-| YOLOv10x | disconnected | 0 | 188 | 188 | 1 | 0 | 0 | 0.994709 | 1.000000 | 0.997347 | 0.500000 | 0.999711 |
-| YOLOv10x | disconnected | 1 | 1 | 0 | 0 | 1 | 188 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.045455 |
-| YOLOv10x | added_billboard | 0 | 184 | 177 | 2 | 7 | 3 | 0.988827 | 0.961957 | 0.975207 | 0.780978 | 0.998431 |
-| YOLOv10x | added_billboard | 1 | 5 | 3 | 7 | 2 | 177 | 0.300000 | 0.600000 | 0.400000 | 0.780978 | 0.686122 |
-| YOLOv10x | all | level 0 macro | 1836 | — | — | — | — | 0.978708 | 0.984545 | 0.981568 | 0.608510 | 0.994168 |
-| YOLOv10x | all | level 1 macro | 54 | — | — | — | — | 0.240635 | 0.232475 | 0.226978 | 0.608510 | 0.327659 |
-| MAYOLOx | surface_missing | 0 | 190 | 190 | 2 | 0 | 1 | 0.989583 | 1.000000 | 0.994764 | 0.666667 | 0.997920 |
-| MAYOLOx | surface_missing | 1 | 3 | 1 | 0 | 2 | 190 | 1.000000 | 0.333333 | 0.500000 | 0.666667 | 0.485326 |
-| MAYOLOx | surface_incomplete | 0 | 192 | 192 | 1 | 0 | 0 | 0.994819 | 1.000000 | 0.997403 | 0.500000 | 0.999891 |
-| MAYOLOx | surface_incomplete | 1 | 1 | 0 | 0 | 1 | 192 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.100000 |
-| MAYOLOx | surface_corroded | 0 | 181 | 179 | 6 | 2 | 6 | 0.967568 | 0.988950 | 0.978142 | 0.744475 | 0.991035 |
-| MAYOLOx | surface_corroded | 1 | 12 | 6 | 2 | 6 | 179 | 0.750000 | 0.500000 | 0.600000 | 0.744475 | 0.509023 |
-| MAYOLOx | frame_corroded | 0 | 181 | 179 | 8 | 2 | 4 | 0.957219 | 0.988950 | 0.972826 | 0.661142 | 0.992284 |
-| MAYOLOx | frame_corroded | 1 | 12 | 4 | 2 | 8 | 179 | 0.666667 | 0.333333 | 0.444444 | 0.661142 | 0.504822 |
-| MAYOLOx | surface_peeling | 0 | 189 | 189 | 4 | 0 | 0 | 0.979275 | 1.000000 | 0.989529 | 0.500000 | 0.998423 |
-| MAYOLOx | surface_peeling | 1 | 4 | 0 | 0 | 4 | 189 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.143372 |
-| MAYOLOx | surface_fade | 0 | 184 | 176 | 3 | 8 | 6 | 0.983240 | 0.956522 | 0.969697 | 0.811594 | 0.991972 |
-| MAYOLOx | surface_fade | 1 | 9 | 6 | 8 | 3 | 176 | 0.428571 | 0.666667 | 0.521739 | 0.811594 | 0.528616 |
-| MAYOLOx | surface_deformed | 0 | 186 | 184 | 6 | 2 | 1 | 0.968421 | 0.989247 | 0.978723 | 0.566052 | 0.990157 |
-| MAYOLOx | surface_deformed | 1 | 7 | 1 | 2 | 6 | 184 | 0.333333 | 0.142857 | 0.200000 | 0.566052 | 0.277326 |
-| MAYOLOx | frame_deformed | 0 | 192 | 192 | 1 | 0 | 0 | 0.994819 | 1.000000 | 0.997403 | 0.500000 | 0.998958 |
-| MAYOLOx | frame_deformed | 1 | 1 | 0 | 0 | 1 | 192 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.013889 |
-| MAYOLOx | disconnected | 0 | 192 | 192 | 1 | 0 | 0 | 0.994819 | 1.000000 | 0.997403 | 0.500000 | 0.999339 |
-| MAYOLOx | disconnected | 1 | 1 | 0 | 0 | 1 | 192 | 0.000000 | 0.000000 | 0.000000 | 0.500000 | 0.020833 |
-| MAYOLOx | added_billboard | 0 | 185 | 184 | 4 | 1 | 4 | 0.978723 | 0.994595 | 0.986595 | 0.747297 | 0.995157 |
-| MAYOLOx | added_billboard | 1 | 8 | 4 | 1 | 4 | 184 | 0.800000 | 0.500000 | 0.615385 | 0.747297 | 0.606671 |
-| MAYOLOx | all | level 0 macro | 1872 | — | — | — | — | 0.980849 | 0.991826 | 0.986248 | 0.619723 | 0.995514 |
-| MAYOLOx | all | level 1 macro | 58 | — | — | — | — | 0.397857 | 0.247619 | 0.288157 | 0.619723 | 0.318988 |
+| Model | Category | Matched instances | AP50 | AP50-95 | Macro-F1 | Micro-F1 | Precision | Recall |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | projecting_signboard | 1090 | 0.728310 | 0.490442 | 0.624813 | 0.963303 | 0.665961 | 0.613926 |
+| YOLOv10x | wall_signboard | 840 | 0.604576 | 0.416524 | 0.570262 | 0.982143 | 0.593165 | 0.561167 |
+| MAYOLOx | projecting_signboard | 1050 | 0.759608 | 0.522517 | 0.604879 | 0.963810 | 0.652802 | 0.600255 |
+| MAYOLOx | wall_signboard | 880 | 0.614965 | 0.443828 | 0.562825 | 0.985227 | 0.572217 | 0.556202 |
 
 结果文件相对路径：
 
-    runs/experiments/E3_risk_level_test/smoke_v1/per_level_test.csv
-    runs/experiments/E3_risk_level_test/smoke_v1/confusion_test.csv
+    runs/experiments/E4_4_10_finegrained_seed0/levels/summary.csv
+    runs/experiments/E4_4_10_finegrained_seed0/levels/per_class_test.csv
+    runs/experiments/E4_4_10_finegrained_seed0/levels/per_class_attribute_test.csv
+    runs/experiments/E4_4_10_finegrained_seed0/levels/per_class_attribute_detail_test.csv
 
-### 6.4 指标口径与边界
-
-- P_macro_test、R_macro_test 和 F1_macro_test 明确标注为 macro 指标；
-  F1_macro_global_test 保留为 pooled macro-F1，不再称为 Micro-F1。
-- 标准 F1_micro_test 由全局 pooled TP/FP/FN 单独计算，不能用已平均的
-  Precision/Recall 代替。
-- PR_AUC_test 使用连续的 softmax level 概率而不是 hard label；level 0 和 level 1
-  分别按 one-vs-rest 计算，再报告 level macro PR-AUC。
-- 目标检测的 mAP50、mAP50-95、per-class AP、框匹配规则、IoU/score 阈值、
-  漏检和重复预测处理在统一指标协议中说明；本节补充属性与 level 结果。
-- 若实际数据只有二级属性标签，则不扩展为没有真实监督依据的三级风险等级、
-  ordinal error 或校准风险等级结论；level 定义、编码、标注流程、标注者、
-  仲裁、IAA 和联合分布需在数据集章节单独说明。
-
-### 6.5 Attribute Calibration 与 Ordinal Error（Test）
-
-以下指标均基于类别正确且 IoU\(\geq 0.5\) 的检测框与真实框匹配对，
-用于补充分析属性概率的可靠性。数值越低表示概率校准误差或等级预测误差越小。
+### 6.2 Calibration and Ordinal MAE
 
 | Model | ECE | Brier Score | NLL | Ordinal MAE |
 |---|---:|---:|---:|---:|
-| YOLOv10x | 0.027165 | 0.054845 | 0.119843 | 0.035450 |
+| YOLOv10x | 0.023581 | 0.047812 | 0.105002 | 0.028497 |
 | MAYOLOx | 0.022308 | 0.047678 | 0.109175 | 0.026425 |
 
-指标定义如下：
+Calibration 与 Ordinal MAE 均基于相同的匹配框。由于每个属性只有两个等级，
+Ordinal MAE 等价于二分类属性错误率；Calibration 指标使用完整 softmax 概率。
 
-- **ECE (Expected Calibration Error)**：预测置信度与实际正确率之间的加权差异，
-  ECE 越接近 0 表示概率越可靠；
-- **Brier Score**：完整 softmax 概率向量与真实 one-hot 标签之间的均方误差；
-- **NLL (Negative Log-Likelihood)**：真实属性等级预测概率的负对数似然，
-  对错误且过度自信的预测惩罚更大；
-- **Ordinal MAE**：预测等级索引与真实等级索引之间的平均绝对误差。
+结果文件相对路径：
 
-当前 DSD 中每个属性只有两个等级（No risk=0、High risk=1），因此 Ordinal MAE
-等价于二分类属性错误率，与属性准确率提供重复信息，不作为主要属性指标。
-Calibration 指标则直接使用 softmax 概率，可用于比较模型输出概率的可靠性。
+    runs/experiments/E4_4_10_finegrained_seed0/calibration/summary.csv
+    runs/experiments/E4_4_10_finegrained_seed0/calibration/per_attribute.csv
 
-Calibration summary 相对路径：
+### 6.3 Per-attribute Test metrics
 
-    runs/experiments/E3_attribute_quality/mayolox_vs_yolov10x_seed0/summary.csv
-    runs/experiments/E3_attribute_quality/mayolox_vs_yolov10x_seed0/per_attribute.csv
+| Model | Metric | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | Micro-F1 | 0.979275 | 0.984456 | 0.953368 | 0.937824 | 0.984456 | 0.968912 | 0.958549 | 0.994819 | 0.994819 | 0.958549 |
+|  | Macro-F1 | 0.661404 | 0.496084 | 0.791951 | 0.650362 | 0.696063 | 0.804392 | 0.655971 | 0.498701 | 0.498701 | 0.703533 |
+|  | PR-AUC | 0.688807 | 0.535632 | 0.781837 | 0.697363 | 0.657244 | 0.821615 | 0.629154 | 0.506025 | 0.514481 | 0.773495 |
+| MAYOLOx | Micro-F1 | 0.989637 | 0.994819 | 0.958549 | 0.948187 | 0.979275 | 0.943005 | 0.958549 | 0.994819 | 0.994819 | 0.974093 |
+|  | Macro-F1 | 0.747382 | 0.498701 | 0.789071 | 0.708635 | 0.494764 | 0.745718 | 0.589362 | 0.498701 | 0.498701 | 0.800990 |
+|  | PR-AUC | 0.741623 | 0.549945 | 0.750029 | 0.748553 | 0.570897 | 0.760294 | 0.633742 | 0.506423 | 0.510086 | 0.800914 |
 
-属性混淆矩阵图及矩阵数值相对路径：
+结果文件相对路径：
 
-    runs/experiments/E3_attribute_quality/mayolox_vs_yolov10x_seed0/confusion_all/
+    runs/experiments/E4_4_10_finegrained_seed0/levels/per_attribute_test.csv
+
+### 6.4 Per-attribute and per-level Test metrics
+
+| Model | Level | Metric | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | No risk | Support | 190 | 192 | 181 | 181 | 189 | 184 | 185 | 192 | 192 | 185 |
+|  |  | Precision | 0.989474 | 0.994764 | 0.972527 | 0.951872 | 0.984375 | 0.978495 | 0.968254 | 0.994819 | 0.994819 | 0.973262 |
+|  |  | Recall | 0.989474 | 0.989583 | 0.977901 | 0.983425 | 1.000000 | 0.972222 | 0.989189 | 1.000000 | 1.000000 | 0.983784 |
+|  |  | F1 | 0.989474 | 0.992167 | 0.975207 | 0.967391 | 0.992126 | 0.972222 | 0.978610 | 0.997403 | 0.997403 | 0.978495 |
+|  |  | Balanced Accuracy | 0.661404 | 0.494792 | 0.780617 | 0.616713 | 0.625000 | 0.772343 | 0.619595 | 0.500000 | 0.500000 | 0.679392 |
+|  |  | PR-AUC | 0.999836 | 0.999836 | 0.997801 | 0.992512 | 0.997127 | 0.992929 | 0.983700 | 0.998891 | 0.999549 | 0.998093 |
+| YOLOv10x | High risk | Support | 3 | 1 | 12 | 12 | 4 | 9 | 8 | 1 | 1 | 8 |
+|  |  | Precision | 0.333333 | 0.000000 | 0.636364 | 0.500000 | 1.000000 | 0.714286 | 0.500000 | 0.000000 | 0.000000 | 0.500000 |
+|  |  | Recall | 0.333333 | 0.000000 | 0.583333 | 0.250000 | 0.250000 | 0.555556 | 0.250000 | 0.000000 | 0.000000 | 0.375000 |
+|  |  | F1 | 0.333333 | 0.000000 | 0.608696 | 0.333333 | 0.400000 | 0.625000 | 0.333333 | 0.000000 | 0.000000 | 0.428571 |
+|  |  | Balanced Accuracy | 0.661404 | 0.494792 | 0.780617 | 0.616713 | 0.625000 | 0.772343 | 0.619595 | 0.500000 | 0.500000 | 0.679392 |
+|  |  | PR-AUC | 0.377778 | 0.071429 | 0.565873 | 0.402214 | 0.317362 | 0.650301 | 0.274608 | 0.013158 | 0.029412 | 0.548897 |
+| MAYOLOx | No risk | Support | 190 | 192 | 181 | 181 | 189 | 184 | 186 | 192 | 192 | 185 |
+|  |  | Precision | 0.989583 | 0.994819 | 0.967568 | 0.957219 | 0.979275 | 0.983240 | 0.968421 | 0.994819 | 0.994819 | 0.978723 |
+|  |  | Recall | 1.000000 | 1.000000 | 0.988950 | 0.988950 | 1.000000 | 0.956522 | 0.989247 | 1.000000 | 1.000000 | 0.994595 |
+|  |  | F1 | 0.994764 | 0.997403 | 0.978142 | 0.972826 | 0.989529 | 0.969697 | 0.978723 | 0.997403 | 0.997403 | 0.986595 |
+|  |  | Balanced Accuracy | 0.666667 | 0.500000 | 0.744475 | 0.661142 | 0.500000 | 0.811594 | 0.566052 | 0.500000 | 0.500000 | 0.747297 |
+|  |  | PR-AUC | 0.997920 | 0.999891 | 0.991035 | 0.992284 | 0.998423 | 0.991972 | 0.990157 | 0.998958 | 0.999339 | 0.995157 |
+| MAYOLOx | High risk | Support | 3 | 1 | 12 | 12 | 4 | 9 | 7 | 1 | 1 | 8 |
+|  |  | Precision | 1.000000 | 0.000000 | 0.750000 | 0.666667 | 0.000000 | 0.428571 | 0.333333 | 0.000000 | 0.000000 | 0.800000 |
+|  |  | Recall | 0.333333 | 0.000000 | 0.500000 | 0.333333 | 0.000000 | 0.666667 | 0.142857 | 0.000000 | 0.000000 | 0.500000 |
+|  |  | F1 | 0.500000 | 0.000000 | 0.600000 | 0.444444 | 0.000000 | 0.521739 | 0.200000 | 0.000000 | 0.000000 | 0.615385 |
+|  |  | Balanced Accuracy | 0.666667 | 0.500000 | 0.744475 | 0.661142 | 0.500000 | 0.811594 | 0.566052 | 0.500000 | 0.500000 | 0.747297 |
+|  |  | PR-AUC | 0.485326 | 0.100000 | 0.509023 | 0.504822 | 0.143372 | 0.528616 | 0.277326 | 0.013889 | 0.020833 | 0.606671 |
+
+完整逐 level 与 TP/FP/FN/TN 明细：
+
+    runs/experiments/E4_4_10_finegrained_seed0/levels/per_level_test.csv
+    runs/experiments/E4_4_10_finegrained_seed0/levels/confusion_test.csv
+
+### 6.5 Attribute confusion matrices
+
+混淆矩阵仅统计类别正确且 IoU≥0.5 的匹配框，行表示真实 level，列表示预测 level。
+
+结果目录：
+
+    runs/experiments/E4_4_10_finegrained_seed0/confusion/
+
+矩阵数值：
+
+    runs/experiments/E4_4_10_finegrained_seed0/confusion/confusion_matrix_values.csv
+
+图像包括：
+
+    YOLOv10x_confusion_counts.png
+    YOLOv10x_confusion_row_normalized.png
+    MAYOLOx_confusion_counts.png
+    MAYOLOx_confusion_row_normalized.png
