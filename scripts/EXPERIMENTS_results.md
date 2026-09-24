@@ -105,16 +105,6 @@ summary.csv 相对路径：
 
 当前 GIA 结构和后续新增 GCA 实验的初始化基准为 gia_v2_5_7 的 Stage1 权重。
 
-#### E2.27 GIA-v2.5.7 五个 Seed 的 Stage2 稳定性（后半部分）
-
-| summary | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 均值±样本标准差 | 0.639639 ± 0.042111 | 0.445975 ± 0.035613 | 0.970508 ± 0.002624 | 0.610694 ± 0.036103 | 0.681067 ± 0.046827 | 0.642520 ± 0.032459 | 0.601064 ± 0.038543 |
-
-summary.csv 相对路径：
-
-    runs/experiments/E2_27_baseline_gia_seed5/summary.csv
-
 ### 2.2 GCA 增加实验与稳定性（Baseline+GCA；固定聚合算子记为 FGA）
 
 E2.29 基于 E2.27 Baseline 五个 seed 的 Stage1 checkpoint，分别使用 Conditional 和 Cross 类别矩阵测试 FGA、GCN、GAT、GraphSAGE 和 GIN。每种矩阵包含 5 种结构、每种结构 5 个 seed，共 25 个 Stage2 实验。远程目录中的旧结构名 `gca` 在本节统一记为 FGA。
@@ -161,14 +151,8 @@ summary.csv 相对路径：
 
 ### 2.3 HO 增加实验
 
-E2.27 Stage2 checkpoint 的 HO 对照：`native` 保留 checkpoint 的默认 head，
-`one2many` 显式切换为 one-to-many head。以下为 Baseline 的 Test 结果。
-
-#### Native
-
-| summary | head | Test mAP50 | Test mAP50-95 | OA_test | F1_macro_test | F1_macro_global_test | P_macro_test | R_macro_test |
-|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| 均值±样本标准差 | native | 0.624275 ± 0.031030 | 0.423095 ± 0.033163 | 0.970557 ± 0.004077 | 0.618945 ± 0.043719 | 0.679753 ± 0.059463 | 0.650915 ± 0.064265 | 0.608286 ± 0.036815 |
+E2.27 Stage2 checkpoint 的 Native 基准已在 2.0 Baseline 五个 Seed 的 Stage2
+稳定性中记录。本节仅展示切换为 one-to-many head 后的 HO 结果。
 
 #### One-to-many
 
