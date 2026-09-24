@@ -160,7 +160,10 @@ def compute_attribute_level_metrics(
     Returns:
         A dictionary containing ``overall``, ``per_attribute``, ``per_level``,
         and ``confusion`` rows.  The rows use the ``*_test`` names consumed by
-        the experiment summary tables.
+        the experiment summary tables.  The overall result explicitly
+        distinguishes ``matched_instances`` (matched objects) from
+        ``matched_attribute_decisions`` (matched objects multiplied by the
+        number of attributes).
     """
     targets = np.asarray(targets)
     probabilities = np.asarray(probabilities, dtype=np.float64)
@@ -182,6 +185,7 @@ def compute_attribute_level_metrics(
     if target_levels.size and (target_levels.min() < 0 or target_levels.max() >= levels):
         raise ValueError(f"target level is outside [0, {levels - 1}]")
     targets = target_levels
+    matched_instances = int(targets.shape[0])
     attribute_count = targets.shape[1]
     names = _attribute_names(attribute_names, attribute_count)
     predicted = probabilities.argmax(axis=2)
@@ -275,7 +279,11 @@ def compute_attribute_level_metrics(
         "Ordinal_MAE_normalized_macro_test": _mean_or_zero(
             [row["Ordinal_MAE_normalized_test"] for row in per_attribute]
         ),
-        "matched_support": pooled_total,
+        # One row in ``targets`` represents one correctly matched object.
+        "matched_instances": matched_instances,
+        # The pooled attribute confusion matrix contains one decision for
+        # every attribute of every matched object.
+        "matched_attribute_decisions": pooled_total,
     }
 
     # Level macro rows average the same level over attributes, preserving the

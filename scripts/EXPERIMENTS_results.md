@@ -709,12 +709,14 @@ Micro-F1 在二级互斥属性设置下与 OA 数值相同。
 
 ### 6.1 Class-wise detection and attribute Test metrics
 
+`Matched instances` counts correctly classified detection--ground-truth pairs, with one count per matched object. Each matched object contributes ten attribute decisions; therefore, the generated summary also reports `matched_attribute_decisions`, which is ten times the matched-object count and must not be interpreted as the number of matched objects.
+
 | Model | Category | Matched instances | AP50 | AP50-95 | Macro-F1 | Micro-F1 | Precision | Recall |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | projecting_signboard | 1090 | 0.728310 | 0.490442 | 0.624813 | 0.963303 | 0.665961 | 0.613926 |
-| YOLOv10x | wall_signboard | 840 | 0.604576 | 0.416524 | 0.570262 | 0.982143 | 0.593165 | 0.561167 |
-| MAYOLOx | projecting_signboard | 1050 | 0.759608 | 0.522517 | 0.604879 | 0.963810 | 0.652802 | 0.600255 |
-| MAYOLOx | wall_signboard | 880 | 0.614965 | 0.443828 | 0.562825 | 0.985227 | 0.572217 | 0.556202 |
+| YOLOv10x | projecting_signboard | 109 | 0.728310 | 0.490442 | 0.624813 | 0.963303 | 0.665961 | 0.613926 |
+| YOLOv10x | wall_signboard | 84 | 0.604576 | 0.416524 | 0.570262 | 0.982143 | 0.593165 | 0.561167 |
+| MAYOLOx | projecting_signboard | 105 | 0.759608 | 0.522517 | 0.604879 | 0.963810 | 0.652802 | 0.600255 |
+| MAYOLOx | wall_signboard | 88 | 0.614965 | 0.443828 | 0.562825 | 0.985227 | 0.572217 | 0.556202 |
 
 结果文件相对路径：
 
@@ -786,6 +788,8 @@ Ordinal MAE 等价于二分类属性错误率；Calibration 指标使用完整 s
 
     runs/experiments/E4_4_10_finegrained_seed0/levels/per_level_test.csv
     runs/experiments/E4_4_10_finegrained_seed0/levels/confusion_test.csv
+
+`Support` in the per-level table is reported separately for each attribute and level. It must not be summed across the ten attributes when interpreting the number of matched object instances.
 
 ### 6.5 Attribute confusion matrices
 
