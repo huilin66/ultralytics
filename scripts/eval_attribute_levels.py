@@ -220,6 +220,13 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
         "matched_support": int(overall["matched_support"]),
         "F1_micro_test": _as_float(overall["F1_micro_test"]),
         "PR_AUC_macro_test": _as_float(overall["PR_AUC_macro_test"]),
+        "ECE_macro_test": _as_float(overall["ECE_macro_test"]),
+        "Brier_macro_test": _as_float(overall["Brier_macro_test"]),
+        "NLL_macro_test": _as_float(overall["NLL_macro_test"]),
+        "Ordinal_MAE_macro_test": _as_float(overall["Ordinal_MAE_macro_test"]),
+        "Ordinal_MAE_normalized_macro_test": _as_float(
+            overall["Ordinal_MAE_normalized_macro_test"]
+        ),
     }
     for metric_name, integrated_key in INTEGRATED_KEYS.items():
         integrated = _as_float(values[integrated_key])
@@ -260,6 +267,7 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
     confusion_rows = []
     confusion = np.asarray(detailed["confusion"])
     for attribute_index, matrix in enumerate(confusion):
+        attribute_name = detailed["per_attribute"][attribute_index]["attribute"]
         for true_level in range(matrix.shape[0]):
             for predicted_level in range(matrix.shape[1]):
                 confusion_rows.append(
@@ -268,6 +276,7 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
                         "mode": mode,
                         "weight": weights,
                         "attribute_index": attribute_index,
+                        "attribute": attribute_name,
                         "true_level": true_level,
                         "predicted_level": predicted_level,
                         "count": int(matrix[true_level, predicted_level]),

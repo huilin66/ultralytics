@@ -1369,7 +1369,18 @@ class MDetMetrics(SimpleClass):
         curves_results: TODO
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), attribute_names=(), nc=0, na=0, nal=2) -> None:
+    def __init__(
+        self,
+        save_dir=Path("."),
+        plot=False,
+        on_plot=None,
+        names=(),
+        attribute_names=(),
+        nc=0,
+        na=0,
+        nal=2,
+        calibration_bins=15,
+    ) -> None:
         """Initialize a DetMetrics instance with a save directory, plot flag, callback function, and class names."""
         self.save_dir = save_dir
         self.plot = plot
@@ -1383,6 +1394,7 @@ class MDetMetrics(SimpleClass):
         self.nc = nc
         self.na = na
         self.nal = nal
+        self.calibration_bins = int(calibration_bins)
         self.reset_attribute_metrics()
 
     def reset_attribute_metrics(self):
@@ -1447,6 +1459,7 @@ class MDetMetrics(SimpleClass):
                 level_targets,
                 level_probs,
                 attribute_names=self.attribute_names,
+                calibration_bins=self.calibration_bins,
             )
             if level_classes is not None:
                 level_classes = np.asarray(level_classes, dtype=np.int64).reshape(-1)
@@ -1460,6 +1473,7 @@ class MDetMetrics(SimpleClass):
                         level_targets[level_classes == class_index],
                         level_probs[level_classes == class_index],
                         attribute_names=self.attribute_names,
+                        calibration_bins=self.calibration_bins,
                     )
                     for class_index in np.unique(level_classes)
                 }

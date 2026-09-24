@@ -94,6 +94,7 @@ class MDetectionValidator(BaseValidator):
         self.metrics.nc = self.nc
         self.metrics.na = self.na
         self.metrics.nal = self.nal
+        self.metrics.calibration_bins = int(getattr(self.args, "calibration_bins", 15))
         self.metrics.reset_attribute_metrics()
         # Detailed level/PR-AUC artifacts are collected only for an explicit
         # test pass so normal training-time evaluations keep their memory and

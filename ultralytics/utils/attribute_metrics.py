@@ -69,6 +69,70 @@ def _binary_pr_auc(targets: np.ndarray, scores: np.ndarray) -> float:
     return float(trapezoid(precision, recall))
 
 
+def _probability_quality_metrics(targets: np.ndarray, probabilities: np.ndarray, bins: int = 15) -> dict[str, float]:
+    """Compute top-label calibration and ordinal metrics for one attribute.
+
+    The inputs are restricted to the same matched detection--ground-truth
+    pairs used by the attribute metrics.  ``probabilities`` must contain one
+    softmax distribution per sample.  ECE is the standard top-label ECE;
+    Brier and NLL use the complete multiclass probability vector.
+
+    ``Ordinal_MAE`` treats the level indices as ordered.  This is meaningful
+    only when the attribute levels have a real order.  For two levels it is
+    exactly the binary misclassification rate, which is why the caller may
+    choose not to report it separately.
+    """
+    targets = np.asarray(targets, dtype=np.int64).reshape(-1)
+    probabilities = np.asarray(probabilities, dtype=np.float64)
+    if probabilities.ndim != 2 or probabilities.shape[0] != targets.size:
+        raise ValueError(
+            "targets/probabilities shape mismatch for probability quality metrics: "
+            f"targets={targets.shape}, probabilities={probabilities.shape}"
+        )
+    if not probabilities.shape[1] or not np.isfinite(probabilities).all():
+        raise ValueError("probabilities must be finite and contain at least one level")
+    if targets.size and (targets.min() < 0 or targets.max() >= probabilities.shape[1]):
+        raise ValueError("target level is outside the probability vector")
+    if not targets.size:
+        return {
+            "ECE_test": 0.0,
+            "Brier_test": 0.0,
+            "NLL_test": 0.0,
+            "Ordinal_MAE_test": 0.0,
+            "Ordinal_MAE_normalized_test": 0.0,
+        }
+
+    predicted = probabilities.argmax(axis=1)
+    confidence = probabilities[np.arange(targets.size), predicted]
+    correctness = (predicted == targets).astype(np.float64)
+
+    # Top-label expected calibration error.  The final bin includes a
+    # confidence of exactly one.
+    bins = max(int(bins), 1)
+    bin_ids = np.minimum((confidence * bins).astype(np.int64), bins - 1)
+    ece = 0.0
+    for bin_index in range(bins):
+        selected = bin_ids == bin_index
+        if selected.any():
+            ece += float(selected.mean()) * abs(float(confidence[selected].mean()) - float(correctness[selected].mean()))
+
+    one_hot = np.zeros_like(probabilities)
+    one_hot[np.arange(targets.size), targets] = 1.0
+    brier = float(np.mean(np.sum((probabilities - one_hot) ** 2, axis=1)))
+    true_probability = np.clip(probabilities[np.arange(targets.size), targets], _EPS, 1.0)
+    nll = float(np.mean(-np.log(true_probability)))
+    ordinal_mae = float(np.mean(np.abs(predicted.astype(np.float64) - targets.astype(np.float64))))
+    level_count = probabilities.shape[1]
+    ordinal_mae_normalized = ordinal_mae / float(level_count - 1) if level_count > 1 else 0.0
+    return {
+        "ECE_test": float(ece),
+        "Brier_test": brier,
+        "NLL_test": nll,
+        "Ordinal_MAE_test": ordinal_mae,
+        "Ordinal_MAE_normalized_test": float(ordinal_mae_normalized),
+    }
+
+
 def _attribute_names(attribute_names: Mapping[str, Any] | Sequence[str] | None, count: int) -> list[str]:
     """Normalize the project's attribute-name containers to a list."""
     if isinstance(attribute_names, Mapping):
@@ -84,6 +148,7 @@ def compute_attribute_level_metrics(
     targets: np.ndarray,
     probabilities: np.ndarray,
     attribute_names: Mapping[str, Any] | Sequence[str] | None = None,
+    calibration_bins: int = 15,
 ) -> dict[str, Any]:
     """Compute overall, per-attribute, and per-level test metrics.
 
@@ -130,6 +195,9 @@ def compute_attribute_level_metrics(
         matrix = confusion[attribute]
         total = int(matrix.sum())
         attribute_level_rows = []
+        quality = _probability_quality_metrics(
+            targets[:, attribute], probabilities[:, attribute, :], bins=calibration_bins
+        )
         for level in range(levels):
             tp = int(matrix[level, level])
             fp = int(matrix[:, level].sum() - tp)
@@ -170,6 +238,7 @@ def compute_attribute_level_metrics(
                 "P_macro_test": attr_precision,
                 "R_macro_test": attr_recall,
                 "PR_AUC_macro_test": attr_pr_auc,
+                **quality,
             }
         )
 
@@ -199,6 +268,13 @@ def compute_attribute_level_metrics(
         "P_macro_test": _mean_or_zero([row["P_macro_test"] for row in per_attribute]),
         "R_macro_test": _mean_or_zero([row["R_macro_test"] for row in per_attribute]),
         "PR_AUC_macro_test": overall_pr_auc,
+        "ECE_macro_test": _mean_or_zero([row["ECE_test"] for row in per_attribute]),
+        "Brier_macro_test": _mean_or_zero([row["Brier_test"] for row in per_attribute]),
+        "NLL_macro_test": _mean_or_zero([row["NLL_test"] for row in per_attribute]),
+        "Ordinal_MAE_macro_test": _mean_or_zero([row["Ordinal_MAE_test"] for row in per_attribute]),
+        "Ordinal_MAE_normalized_macro_test": _mean_or_zero(
+            [row["Ordinal_MAE_normalized_test"] for row in per_attribute]
+        ),
         "matched_support": pooled_total,
     }
 

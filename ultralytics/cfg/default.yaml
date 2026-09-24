@@ -46,6 +46,7 @@ contrastive_loss: False
 contrastive_loss_weight: 0.1
 # Attribute
 eval_att_by_class: True
+calibration_bins: 15 # (int) equal-width bins used for test-set top-label ECE
 freeze_att_head: None
 freeze_att_nums: None
 # Segmentation
