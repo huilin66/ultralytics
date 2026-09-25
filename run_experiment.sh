@@ -24,6 +24,8 @@ BATCH="${BATCH:-16}"
 WORKERS="${WORKERS:-8}"
 IMGSZ="${IMGSZ:-640}"
 W4="${W4:-0.5}"
+W4_SWEEP_VALUES="${W4_SWEEP_VALUES:-0 0.25 0.5 0.75 1.0}"
+W4_SWEEP_ROOT="${W4_SWEEP_ROOT:-runs/experiments/E1_w4_5seed}"
 STAGE1_EPOCHS="${STAGE1_EPOCHS:-100}"
 STAGE2_EPOCHS="${STAGE2_EPOCHS:-100}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
@@ -79,6 +81,7 @@ Usage: bash run_experiment.sh CODE [options]
 Codes:
   preflight  Check repository inputs and paths.
   e1         E1 w4 validation scan.
+  e1.w4-5seed  E1 w4 sweep with five seeds (0, 0.25, 0.5, 0.75, 1.0).
   e2.0       Baseline/GIA five-seed Stage1+Stage2 training.
   e2.1       GIA-v2 position Stage1 sweep.
   e2.2       Pure Baseline+GCA, 4 graph operators x 5 seeds.
@@ -105,7 +108,7 @@ Options:
   --seeds "0 1 2"        Override the seed list.
 
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
-WORKERS, IMGSZ, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
+WORKERS, IMGSZ, W4_SWEEP_VALUES, W4_SWEEP_ROOT, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
 E2_PERF_SEEDS, E3_PERF_ROOT and E3_PERF_SEEDS.
 EOF
 }
@@ -158,6 +161,23 @@ e1() {
     --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
     --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE" \
     --project runs/experiments/E1_w4 --label E1_w4 --skip-existing
+}
+
+e1_w4_5seed() {
+  echo "[E1] w4 five-seed sweep: values=${W4_SWEEP_VALUES}, seeds=${SEEDS}"
+  need "$DATA"; need "$MD_MODEL"; need "$PRETRAIN"
+  local -a w4_values=()
+  read -r -a w4_values <<< "$W4_SWEEP_VALUES"
+  if [[ "${#w4_values[@]}" -eq 0 ]]; then
+    echo "W4_SWEEP_VALUES must contain at least one value" >&2
+    exit 2
+  fi
+  py scripts/train_mdet_experiments.py w4-seeds \
+    --data "$DATA" --model "$MD_MODEL" --pretrain "$PRETRAIN" \
+    --w4-values "${w4_values[@]}" --seeds "${SEED_LIST[@]}" \
+    --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
+    --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE" \
+    --project "$W4_SWEEP_ROOT" --label E1_w4_5seed --skip-existing
 }
 
 e20() {
@@ -647,6 +667,7 @@ case "$CODE" in
   help|-h|--help) usage ;;
   preflight) preflight ;;
   e1) e1 ;;
+  e1.w4-5seed) e1_w4_5seed ;;
   e2.0) e20 ;;
   e2.1) e21 ;;
   e2.2) e22 ;;

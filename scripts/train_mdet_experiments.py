@@ -8,6 +8,8 @@ The launcher supports the normal two-stage protocol and two schedule studies:
 * ``gca-stage2`` compares GCA/GNN variants from one fixed stage-1 checkpoint;
 * ``gca-stage2-seeds`` repeats the same GCA/GNN comparison from explicitly
   matched stage-1 checkpoints for several random seeds;
+* ``w4-seeds`` evaluates a list of attribute-loss coefficients with matched
+  seeds under the complete two-stage protocol;
 * ``gca-warmup`` runs a baseline warm-up followed by GCA/GNN-only training;
 * ``prior-stage2`` compares fixed co-occurrence-prior attention heads from one
   fixed stage-1 checkpoint;
@@ -757,6 +759,37 @@ def _run_w4(args: argparse.Namespace) -> None:
         )
 
 
+def _run_w4_seeds(args: argparse.Namespace) -> None:
+    """Run the w4 sweep for every requested seed.
+
+    Each coefficient is trained from the same detector pretraining
+    checkpoint, and each seed runs the complete Stage1+Stage2 protocol.  The
+    seed is part of the run name and manifest record, so results from the
+    existing single-seed E1 sweep cannot be mistaken for this repeated study.
+    """
+    if not args.seeds or len(set(args.seeds)) != len(args.seeds):
+        raise ValueError("--seeds must contain at least one unique integer")
+    if not args.w4_values or len(set(args.w4_values)) != len(args.w4_values):
+        raise ValueError("--w4-values must contain at least one unique value")
+    if any(value < 0 for value in args.w4_values):
+        raise ValueError("--w4-values must contain only non-negative values")
+
+    # Keep seed as the outer loop so a caller can split the seed list across
+    # GPUs without interleaving coefficients from different seeds.
+    for seed in args.seeds:
+        for value in args.w4_values:
+            _train_one(
+                args,
+                label=args.label,
+                variant_name="base",
+                config=args.model,
+                pretrain=args.pretrain,
+                w4=float(value),
+                seed=int(seed),
+                network_name="yolo",
+            )
+
+
 def _run_stage1_sweep(args: argparse.Namespace) -> None:
     """Run independent stage-1-only jobs for each requested epoch budget."""
     values = _validate_epoch_values(args.stage1_values, "--stage1-values")
@@ -1158,6 +1191,29 @@ def _build_parser() -> argparse.ArgumentParser:
     w4.add_argument("--pretrain", required=True, help="pretrained detector checkpoint")
     w4.add_argument("--w4-values", nargs="+", type=float, default=[0.25, 0.5, 1.0])
 
+    w4_seeds = subparsers.add_parser(
+        "w4-seeds",
+        help="E1: w4 sensitivity with matched repeated seeds",
+    )
+    _add_train_arguments(w4_seeds)
+    w4_seeds.add_argument("--label", default="E1_w4_5seed")
+    w4_seeds.add_argument("--model", required=True, help="one mdet model YAML")
+    w4_seeds.add_argument("--pretrain", required=True, help="pretrained detector checkpoint")
+    w4_seeds.add_argument(
+        "--w4-values",
+        nargs="+",
+        type=float,
+        default=[0.0, 0.25, 0.5, 0.75, 1.0],
+        help="attribute-loss coefficients to evaluate",
+    )
+    w4_seeds.add_argument(
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=[0, 1, 2, 3, 4],
+        help="random seeds; each seed runs every requested w4 value",
+    )
+
     stage1 = subparsers.add_parser(
         "stage1-sweep", help="E0.1: independent stage-1-only epoch sensitivity"
     )
@@ -1446,6 +1502,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     args = _build_parser().parse_args(argv)
     if args.experiment == "w4":
         _run_w4(args)
+    elif args.experiment == "w4-seeds":
+        _run_w4_seeds(args)
     elif args.experiment == "stage1-sweep":
         _run_stage1_sweep(args)
     elif args.experiment == "hsv-ablation":
