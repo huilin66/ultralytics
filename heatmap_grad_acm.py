@@ -14,6 +14,111 @@ from pytorch_grad_cam import GradCAMPlusPlus, GradCAM, XGradCAM, EigenCAM, HiRes
 from pytorch_grad_cam.utils.image import show_cam_on_image, scale_cam_image
 from pytorch_grad_cam.activations_and_gradients import ActivationsAndGradients
 
+
+# Stable palette copied from the project's visualization convention.  The
+# source palette is defined in OpenCV's BGR order; CAM images in this script
+# are RGB arrays, so the palette is reversed once here instead of importing
+# the external visualization package.
+_CV2_COLORS_BGR = (
+    (255, 42, 4),
+    (235, 219, 11),
+    (243, 243, 243),
+    (183, 223, 0),
+    (104, 31, 17),
+    (221, 111, 255),
+    (79, 68, 255),
+    (0, 237, 204),
+    (68, 243, 0),
+    (255, 0, 189),
+    (255, 180, 0),
+    (186, 0, 221),
+    (255, 255, 0),
+    (0, 192, 38),
+    (179, 255, 1),
+    (255, 36, 125),
+    (104, 0, 123),
+    (108, 27, 255),
+    (47, 109, 252),
+    (11, 255, 162),
+)
+_HEATMAP_COLORS_RGB = tuple(tuple(reversed(color)) for color in _CV2_COLORS_BGR)
+_DARK_LABEL_TEXT_RGB = (17, 31, 104)
+
+
+def _heatmap_line_width(image):
+    """Use the same image-size-dependent line width as the project renderer."""
+    return max(round(sum(image.shape) / 2 * 0.003), 2)
+
+
+def _heatmap_text_color(color):
+    """Select readable label text for the RGB version of the stable palette."""
+    dark_colors_rgb = {
+        tuple(reversed(color))
+        for color in (
+            (235, 219, 11),
+            (243, 243, 243),
+            (183, 223, 0),
+            (221, 111, 255),
+            (0, 237, 204),
+            (68, 243, 0),
+            (255, 255, 0),
+            (179, 255, 1),
+            (11, 255, 162),
+        )
+    }
+    return _DARK_LABEL_TEXT_RGB if tuple(color) in dark_colors_rgb else (255, 255, 255)
+
+
+def _draw_heatmap_label(image, x, y, text, color, line_width):
+    """Draw a filled, boundary-aware top-left label on an RGB CAM image."""
+    if not text:
+        return
+
+    height, width = image.shape[:2]
+    font_thickness = max(line_width - 1, 1)
+    font_scale = line_width / 3
+    (text_width, text_height), baseline = cv2.getTextSize(
+        str(text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
+    )
+    pad = 2
+    rect_width = text_width + pad * 2
+    rect_height = text_height + baseline + pad * 2
+    anchor_x = max(0, min(int(round(x)), max(width - 1, 0)))
+    anchor_y = max(0, min(int(round(y)), max(height - 1, 0)))
+
+    # Prefer the label above the box, and move it inside/below the box when
+    # the box touches the upper image boundary.
+    outside = anchor_y >= rect_height
+    if outside and anchor_y - rect_height < 0:
+        outside = False
+    elif not outside and anchor_y + rect_height >= height:
+        outside = True
+
+    left = max(0, min(anchor_x, max(width - rect_width, 0)))
+    if outside:
+        top = max(0, anchor_y - rect_height)
+        bottom = min(height - 1, anchor_y)
+        text_baseline = max(top + text_height + pad, bottom - baseline - pad)
+    else:
+        top = min(max(anchor_y, 0), max(height - rect_height, 0))
+        bottom = min(height - 1, top + rect_height)
+        text_baseline = min(bottom - baseline - pad, top + text_height + pad)
+    right = min(width - 1, left + rect_width)
+
+    color = tuple(int(value) for value in color)
+    cv2.rectangle(image, (left, top), (right, bottom), color, -1, cv2.LINE_AA)
+    cv2.putText(
+        image,
+        str(text),
+        (left + pad, int(text_baseline)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale,
+        _heatmap_text_color(color),
+        thickness=font_thickness,
+        lineType=cv2.LINE_AA,
+    )
+
+
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = im.shape[:2]  # current shape [height, width]
@@ -137,7 +242,10 @@ class yolov8_heatmap:
         method = eval(method)(model, target_layers, use_cuda=device.type == 'cuda')
         method.activations_and_grads = ActivationsAndGradients(model, target_layers, None)
         
-        colors = np.random.uniform(0, 255, size=(len(model_names), 3)).astype(np.uint8)
+        colors = np.asarray(
+            [_HEATMAP_COLORS_RGB[index % len(_HEATMAP_COLORS_RGB)] for index in range(len(model_names))],
+            dtype=np.uint8,
+        )
         self.__dict__.update(locals())
     
     def post_process(self, result):
@@ -145,9 +253,32 @@ class yolov8_heatmap:
         return result
 
     def draw_detections(self, box, color, name, img):
-        xmin, ymin, xmax, ymax = list(map(int, list(box)))
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), tuple(int(x) for x in color), 2)
-        cv2.putText(img, str(name), (xmin, ymin - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, tuple(int(x) for x in color), 2, lineType=cv2.LINE_AA)
+        values = np.asarray(box, dtype=np.float32).reshape(-1)[:4]
+        if values.size != 4 or not np.isfinite(values).all():
+            return img
+
+        height, width = img.shape[:2]
+        xmin, ymin, xmax, ymax = values.tolist()
+        xmin, xmax = sorted((xmin, xmax))
+        ymin, ymax = sorted((ymin, ymax))
+        xmin = int(np.clip(round(xmin), 0, max(width - 1, 0)))
+        ymin = int(np.clip(round(ymin), 0, max(height - 1, 0)))
+        xmax = int(np.clip(round(xmax), 0, max(width - 1, 0)))
+        ymax = int(np.clip(round(ymax), 0, max(height - 1, 0)))
+        if xmax <= xmin or ymax <= ymin:
+            return img
+
+        line_width = _heatmap_line_width(img)
+        draw_color = tuple(int(value) for value in color)
+        cv2.rectangle(
+            img,
+            (xmin, ymin),
+            (xmax, ymax),
+            draw_color,
+            thickness=line_width,
+            lineType=cv2.LINE_AA,
+        )
+        _draw_heatmap_label(img, xmin, ymin, name, draw_color, line_width)
         return img
 
     def renormalize_cam_in_bounding_boxes(self, boxes, image_float_np, grayscale_cam):
