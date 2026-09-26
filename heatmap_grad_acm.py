@@ -9,8 +9,9 @@ import matplotlib.pyplot as plt
 from tqdm import trange
 from PIL import Image
 from ultralytics.nn.tasks import attempt_load_weights
+from ultralytics.engine.results import MdetResults
 from ultralytics.utils.torch_utils import intersect_dicts
-from ultralytics.utils.ops import xywh2xyxy, non_max_suppression
+from ultralytics.utils.ops import xywh2xyxy, non_max_suppression_with_attributes
 from pytorch_grad_cam import GradCAMPlusPlus, GradCAM, XGradCAM, EigenCAM, HiResCAM, LayerCAM, RandomCAM, EigenGradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image, scale_cam_image
 from pytorch_grad_cam.activations_and_gradients import ActivationsAndGradients
@@ -217,7 +218,11 @@ class yolov8_target(torch.nn.Module):
     def forward(self, data):
         post_result, pre_post_boxes = data
         result = []
-        for i in trange(int(post_result.size(0) * self.ratio)):
+        # After attribute-aware NMS, an image may contain only a few boxes.
+        # Keep at least one target whenever a valid detection exists; otherwise
+        # gradient-based CAM methods receive an integer zero and cannot backprop.
+        target_count = min(post_result.size(0), max(1, int(post_result.size(0) * self.ratio)))
+        for i in trange(target_count):
             if float(post_result[i].max()) < self.conf:
                 break
             if self.ouput_type == 'class' or self.ouput_type == 'all':
@@ -234,6 +239,14 @@ class yolov8_heatmap:
         model_names = ckpt['model'].names
         model = attempt_load_weights(weight, device)
         model.info()
+        # YOLOv10-style end-to-end inference detaches the one-to-one branch
+        # before post-processing.  That is correct for ordinary inference but
+        # leaves no gradient for GradCAM-family methods.  CAM generation uses
+        # the differentiable one-to-many branch; the detection/attribute NMS
+        # below remains the same as the project inference path.
+        model_head = getattr(model, "model", model)[-1]
+        if getattr(model_head, "end2end", False) and hasattr(model_head, "use_one2many_head"):
+            model_head.use_one2many_head()
         for p in model.parameters():
             p.requires_grad_(True)
         model.eval()
@@ -255,8 +268,16 @@ class yolov8_heatmap:
         self.__dict__.update(locals())
     
     def post_process(self, result):
-        result = non_max_suppression(result, conf_thres=self.conf_threshold, iou_thres=0.65)[0]
-        return result
+        model_core = getattr(self.model, 'model', self.model)
+        model_container = getattr(model_core, 'model', model_core)
+        head = model_container[-1]
+        return non_max_suppression_with_attributes(
+            result,
+            conf_thres=self.conf_threshold,
+            iou_thres=0.65,
+            nc=int(head.nc),
+            na=int(head.attribute_channels),
+        )[0]
 
     def draw_detections(self, box, color, name, img):
         values = np.asarray(box, dtype=np.float32).reshape(-1)[:4]
@@ -321,6 +342,7 @@ class yolov8_heatmap:
         try:
             grayscale_cam = self.method(tensor, [self.target])
         except AttributeError as e:
+            print(f"[CAM warning] {self.method.__class__.__name__} failed for {img_path}: {e}")
             return
         
         grayscale_cam = grayscale_cam[0, :]
@@ -331,9 +353,36 @@ class yolov8_heatmap:
         if self.renormalize:
             cam_image = self.renormalize_cam_in_bounding_boxes(pred[:, :4].cpu().detach().numpy().astype(np.int32), img, grayscale_cam)
         if self.show_box:
-            for data in pred:
-                data = data.cpu().detach().numpy()
-                cam_image = self.draw_detections(data[:4], self.colors[int(data[4:].argmax())], f'{self.model_names[int(data[4:].argmax())]} {float(data[4:].max()):.2f}', cam_image)
+            model_core = getattr(self.model, 'model', self.model)
+            model_container = getattr(model_core, 'model', model_core)
+            head = model_container[-1]
+            attribute_names = getattr(model_core, 'attribute_names', getattr(self.model, 'attribute_names', {}))
+            base_bgr = cv2.cvtColor(np.clip(img * 255.0, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+            cam_bgr = cv2.cvtColor(cam_image, cv2.COLOR_RGB2BGR)
+            results = MdetResults(
+                base_bgr,
+                path=img_path,
+                names=self.model_names,
+                boxes=pred[:, :6],
+                attributes=pred[:, 6:6 + int(head.attribute_channels)],
+                attribute_names=attribute_names,
+                nc=int(head.nc),
+                na=int(head.na),
+                nal=int(head.nal),
+                risk_enlarge=1,
+                multiclass_attributes=bool(head.multiclass_attributes),
+                attribute_channels=int(head.attribute_channels),
+            )
+            cam_image = results.plot(
+                img=cam_bgr,
+                conf=True,
+                labels=True,
+                boxes=True,
+                attributes=True,
+                masks=False,
+                probs=False,
+            )
+            cam_image = cv2.cvtColor(cam_image, cv2.COLOR_BGR2RGB)
         
         cam_image = Image.fromarray(cam_image)
         cam_image.save(save_path)

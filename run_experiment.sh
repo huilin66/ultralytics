@@ -33,12 +33,11 @@ DRY_RUN="${DRY_RUN:-0}"
 EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-}"
 EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-}"
 EIGENCAM_IMAGES="${EIGENCAM_IMAGES:-}"
-EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_eigencam}"
-EIGENCAM_LAYERS="${EIGENCAM_LAYERS:-10 12 14 16 18}"
-EIGENCAM_CONF="${EIGENCAM_CONF:-0.2}"
-EIGENCAM_RATIO="${EIGENCAM_RATIO:-0.02}"
-EIGENCAM_SHOW_BOX="${EIGENCAM_SHOW_BOX:-1}"
-EIGENCAM_RENORMALIZE="${EIGENCAM_RENORMALIZE:-1}"
+EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_gradcam_acm_all8}"
+EIGENCAM_LAYER="${EIGENCAM_LAYER:-22}"
+EIGENCAM_CONF="${EIGENCAM_CONF:-0.5}"
+EIGENCAM_IOU="${EIGENCAM_IOU:-0.7}"
+EIGENCAM_METHODS="${EIGENCAM_METHODS:-GradCAM GradCAMPlusPlus XGradCAM EigenCAM HiResCAM LayerCAM RandomCAM EigenGradCAM}"
 
 CODE="${1:-help}"
 shift || true
@@ -51,6 +50,9 @@ while [[ $# -gt 0 ]]; do
     --yolov10-weight) EIGENCAM_YOLOV10_WEIGHT="$2"; shift ;;
     --images|--image-path) EIGENCAM_IMAGES="$2"; shift ;;
     --output) EIGENCAM_OUTPUT="$2"; shift ;;
+    --layer) EIGENCAM_LAYER="$2"; shift ;;
+    --iou) EIGENCAM_IOU="$2"; shift ;;
+    --all-methods) EIGENCAM_METHODS="GradCAM GradCAMPlusPlus XGradCAM EigenCAM HiResCAM LayerCAM RandomCAM EigenGradCAM" ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -113,7 +115,7 @@ Codes:
   e6.eval    Test inference only for existing E6 checkpoints.
   e5.1       Offline robustness-variant generation and evaluation.
   e6.1       Per-attribute/level metrics, calibration and confusion matrices.
-  eigencam    Generate EigenCAM for MAYOLOx and YOLOv10x and side-by-side images.
+  eigencam    Generate CAM visualizations for MAYOLOx and YOLOv10x and side-by-side images.
   all        Run automated sections in dependency order.
 
 Options:
@@ -123,12 +125,15 @@ Options:
   --mayolo-weight PATH   MAYOLO checkpoint for eigencam.
   --yolov10-weight PATH  YOLOv10 checkpoint for eigencam.
   --images PATH           Input image or image directory for eigencam.
-  --output PATH           EigenCAM output directory.
+  --output PATH           CAM output directory.
+  --layer INDEX           CAM target layer (default: 22).
+  --iou VALUE             NMS IoU threshold (default: 0.7).
+  --all-methods           Generate all eight supported CAM methods.
 
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
 WORKERS, IMGSZ, W4_SWEEP_VALUES, W4_SWEEP_ROOT, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
-E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, EIGENCAM_LAYERS, EIGENCAM_CONF,
-EIGENCAM_RATIO, EIGENCAM_SHOW_BOX and EIGENCAM_RENORMALIZE.
+E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, EIGENCAM_LAYER, EIGENCAM_CONF,
+EIGENCAM_IOU and EIGENCAM_METHODS.
 EOF
 }
 
@@ -662,7 +667,7 @@ e61() {
 }
 
 eigencam() {
-  echo "[EigenCAM] MAYOLOx vs YOLOv10x"
+  echo "[CAM historical-2026-09-22] MAYOLOx vs YOLOv10x"
   need scripts/generate_eigencam.py
   need "$EIGENCAM_MAYOLO_WEIGHT"
   need "$EIGENCAM_YOLOV10_WEIGHT"
@@ -671,10 +676,15 @@ eigencam() {
     exit 1
   fi
 
-  local -a layers=()
-  read -r -a layers <<< "$EIGENCAM_LAYERS"
-  if [[ "${#layers[@]}" -eq 0 ]]; then
-    echo "EIGENCAM_LAYERS must contain at least one layer index" >&2
+  if [[ -z "$EIGENCAM_LAYER" ]]; then
+    echo "EIGENCAM_LAYER must contain one layer index" >&2
+    exit 2
+  fi
+
+  local -a methods=()
+  read -r -a methods <<< "$EIGENCAM_METHODS"
+  if [[ "${#methods[@]}" -eq 0 ]]; then
+    echo "EIGENCAM_METHODS must contain at least one CAM method" >&2
     exit 2
   fi
 
@@ -685,12 +695,11 @@ eigencam() {
     --images "$EIGENCAM_IMAGES"
     --output "$EIGENCAM_OUTPUT"
     --device "$DEVICE"
-    --layers "${layers[@]}"
+    --layer "$EIGENCAM_LAYER"
     --conf "$EIGENCAM_CONF"
-    --ratio "$EIGENCAM_RATIO"
+    --iou "$EIGENCAM_IOU"
+    --methods "${methods[@]}"
   )
-  [[ "$EIGENCAM_SHOW_BOX" == "1" ]] && cmd+=(--show-box)
-  [[ "$EIGENCAM_RENORMALIZE" == "1" ]] && cmd+=(--renormalize)
   run "${cmd[@]}"
 }
 
