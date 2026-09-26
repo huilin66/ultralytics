@@ -29,6 +29,14 @@ from heatmap_grad_acm import yolov8_heatmap
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 
 
+def normalize_device(device: str) -> str:
+    """Accept both Ultralytics-style ``0`` and PyTorch-style ``cuda:0``."""
+    value = str(device).strip()
+    if value.isdigit():
+        return f"cuda:{value}"
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mayolo-weight", required=True, type=Path)
@@ -73,9 +81,10 @@ def generate_model_outputs(
 ) -> dict[str, Path]:
     model_output = output / label
     model_output.mkdir(parents=True, exist_ok=True)
+    device = normalize_device(args.device)
     heatmap = yolov8_heatmap(
         weight=str(weight),
-        device=args.device,
+        device=device,
         method="EigenCAM",
         layer=args.layers,
         backward_type="class",
@@ -128,6 +137,7 @@ def make_side_by_side(
 
 def main() -> None:
     args = parse_args()
+    args.device = normalize_device(args.device)
     for path, name in (
         (args.mayolo_weight, "MAYOLO weight"),
         (args.yolov10_weight, "YOLOv10 weight"),
