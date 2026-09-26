@@ -275,7 +275,14 @@ def ydm_draw_attributes(
     attributes: list[tuple[str, object]],
     label_info: dict[str, int | float | bool] | None,
 ) -> None:
-    """Draw the yolo_data_manager attribute panel without cross-box changes."""
+    """Draw the yolo_data_manager attribute panel without cross-box changes.
+
+    The project visualization hides the negative ``No risk`` level by
+    default, so only positive/high-risk attributes are included in the panel.
+    """
+    attributes = [
+        (name, value) for name, value in attributes if not ydm_is_negative_attribute(value)
+    ]
     if not attributes or label_info is None:
         return
     height, width = image.shape[:2]
