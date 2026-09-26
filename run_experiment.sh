@@ -8,6 +8,7 @@
 #   bash run_experiment.sh e2.0
 #   DEVICE=1 bash run_experiment.sh e2.2
 #   bash run_experiment.sh e2.8 --dry-run
+#   bash run_experiment.sh eigencam --device 0
 
 set -euo pipefail
 
@@ -30,15 +31,15 @@ STAGE1_EPOCHS="${STAGE1_EPOCHS:-100}"
 STAGE2_EPOCHS="${STAGE2_EPOCHS:-100}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 DRY_RUN="${DRY_RUN:-0}"
-EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-}"
-EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-}"
-EIGENCAM_IMAGES="${EIGENCAM_IMAGES:-}"
+EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_100_stage2_100_w4_0p5_seed_0/weights/best.pt}"
+EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-runs/experiments/E3_versions/E3_versions_yolov10x_w4_0p5_seed_0_stage2/weights/best.pt}"
+EIGENCAM_IMAGES="${EIGENCAM_IMAGES:-/localnvme/data/billboard/mayolo_v3/heatmap_demo}"
 EIGENCAM_IMAGE_NAMES="${EIGENCAM_IMAGE_NAMES:-}"
-EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_gradcam_acm_all8}"
+EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_eigencam}"
 EIGENCAM_LAYER="${EIGENCAM_LAYER:-22}"
 EIGENCAM_CONF="${EIGENCAM_CONF:-0.5}"
 EIGENCAM_IOU="${EIGENCAM_IOU:-0.7}"
-EIGENCAM_METHODS="${EIGENCAM_METHODS:-GradCAM GradCAMPlusPlus XGradCAM EigenCAM HiResCAM LayerCAM RandomCAM EigenGradCAM}"
+EIGENCAM_METHODS="${EIGENCAM_METHODS:-EigenCAM}"
 
 CODE="${1:-help}"
 shift || true
@@ -106,6 +107,9 @@ usage() {
   cat <<'EOF'
 Usage: bash run_experiment.sh CODE [options]
 
+Default EigenCAM command (uses the configured MAYOLOx/YOLOv10x checkpoints):
+  bash run_experiment.sh eigencam --device 0
+
 Codes:
   preflight  Check repository inputs and paths.
   e1         E1 w4 validation scan.
@@ -128,7 +132,7 @@ Codes:
   e6.eval    Test inference only for existing E6 checkpoints.
   e5.1       Offline robustness-variant generation and evaluation.
   e6.1       Per-attribute/level metrics, calibration and confusion matrices.
-  eigencam    Generate CAM visualizations for MAYOLOx and YOLOv10x and side-by-side images.
+  eigencam    Generate EigenCAM visualizations for MAYOLOx and YOLOv10x and side-by-side images.
   all        Run automated sections in dependency order.
 
 Options:
