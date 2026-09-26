@@ -388,6 +388,7 @@ def draw_detections(
     rgb: np.ndarray,
     detections: torch.Tensor,
     model,
+    annotation_line_width: int = 4,
 ) -> np.ndarray:
     """Draw CAM detections with yolo_data_manager's OpenCV renderer."""
     if detections.numel() == 0:
@@ -422,7 +423,13 @@ def draw_detections(
         multiclass,
     )
     names = get_names(model)
-    line_width = ydm_line_width(output)
+    # The CAM demo images are stored at 640x480, whereas the reference
+    # yolo_data_manager prediction panels are rendered at approximately
+    # 1448x1086.  Using the canvas-derived width (2 px) therefore makes the
+    # same renderer look visibly thinner.  Keep the reference panel scale so
+    # the class confidence digits (especially ``0``) and attribute text have
+    # the same weight as the yolo_data_manager examples.
+    line_width = max(int(annotation_line_width), 1)
     for detection, decoded in zip(rendered, decoded_attributes):
         values = detection[:4].detach().cpu().numpy().astype(np.float32)
         x1, y1, x2, y2 = [int(round(float(value))) for value in values]
@@ -547,6 +554,7 @@ def run_one(
     iou: float,
     layer_index: int,
     method_names: list[str],
+    annotation_line_width: int,
 ) -> dict[str, Path]:
     bgr = cv2.imread(str(image), cv2.IMREAD_COLOR)
     if bgr is None:
@@ -590,6 +598,7 @@ def run_one(
             overlay_cam(rgb_float, grayscale),
             detections,
             model,
+            annotation_line_width=annotation_line_width,
         )
         destination = model_output / f"{image.stem}_{method_name}.png"
         if not cv2.imwrite(str(destination), cv2.cvtColor(result, cv2.COLOR_RGB2BGR)):
@@ -632,6 +641,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--conf", type=float, default=0.5)
     parser.add_argument("--iou", type=float, default=0.7)
     parser.add_argument("--methods", nargs="+", choices=tuple(CAM_METHODS), default=list(DEFAULT_METHODS))
+    parser.add_argument(
+        "--annotation-line-width",
+        type=int,
+        default=4,
+        help="Reference yolo_data_manager line width used for boxes and text (default: 4).",
+    )
     return parser.parse_args()
 
 
@@ -646,6 +661,8 @@ def main() -> None:
         raise ValueError("--layer must be non-negative")
     if not 0 <= args.conf <= 1 or not 0 <= args.iou <= 1:
         raise ValueError("--conf and --iou must be in [0, 1]")
+    if args.annotation_line_width < 1:
+        raise ValueError("--annotation-line-width must be positive")
     for path, label in (
         (args.mayolo_weight, "MAYOLO weight"),
         (args.yolov10_weight, "YOLOv10 weight"),
@@ -678,6 +695,7 @@ def main() -> None:
                 args.iou,
                 args.layer,
                 args.methods,
+                args.annotation_line_width,
             )
         del model
         if torch.cuda.is_available():
@@ -701,6 +719,9 @@ def main() -> None:
         "nms_iou": args.iou,
         "target": "raw class score matched to the first attribute-aware NMS detection",
         "overlay": "0.5 original image + 0.5 JET CAM",
+        "annotation_line_width": args.annotation_line_width,
+        "annotation_font_scale": args.annotation_line_width / 3,
+        "annotation_font_thickness": max(args.annotation_line_width - 1, 1),
     }
     (args.output / "cam_config.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
