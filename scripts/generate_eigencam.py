@@ -4,21 +4,24 @@ The visualization deliberately follows the 2026-09-22 reference procedure:
 one-to-many inference, attribute-aware NMS, conf=0.5, NMS IoU=0.7, and CAM
 target layer 22.  The heatmap is generated from the raw class score associated
 with the NMS detection, while the displayed boxes come from the same NMS call.
-The final annotation uses a local copy of the project's
-``yolo_data_manager.vis.renderer`` OpenCV drawing rules so the CAM overlay
-does not introduce a second visualization style or a runtime dependency on
-that repository.
+The final annotation uses a local renderer aligned with the project's
+prediction visualization rules.  Labels use a reproducible bold
+slashed-zero TrueType font so confidence values retain the same glyph style
+as the reference prediction panels without requiring the data-manager
+repository at runtime.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 import torch
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -212,26 +215,54 @@ def ydm_text_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
     return (104, 31, 17) if tuple(color) in YDM_DARK_COLORS else (255, 255, 255)
 
 
+def bgr_to_rgb(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    return int(color[2]), int(color[1]), int(color[0])
+
+
+def load_annotation_font(line_width: int) -> tuple[ImageFont.FreeTypeFont, str, int]:
+    """Load the reproducible bold slashed-zero font used for CAM labels."""
+    font_size = max(int(round(line_width * 8)), 12)
+    candidates = []
+    configured = os.environ.get("MAYOLO_CAM_FONT")
+    if configured:
+        candidates.append(Path(configured))
+    candidates.extend(
+        [
+            Path("/usr/share/fonts/truetype/noto/NotoSansMono-Bold.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"),
+            Path(r"C:\Windows\Fonts\consolab.ttf"),
+            Path(r"C:\Windows\Fonts\CascadiaMono.ttf"),
+        ]
+    )
+    for path in candidates:
+        if path.is_file():
+            return ImageFont.truetype(str(path), font_size), str(path), font_size
+    raise FileNotFoundError(
+        "No annotation font found. Set MAYOLO_CAM_FONT to a TrueType font "
+        "with the required slashed-zero glyph."
+    )
+
+
 def ydm_draw_label(
-    image: np.ndarray,
+    image: Image.Image,
+    draw: ImageDraw.ImageDraw,
     x: float,
     y: float,
     text: str,
     color: tuple[int, int, int],
     line_width: int,
+    font: ImageFont.FreeTypeFont,
 ) -> dict[str, int | float | bool] | None:
     """Draw the yolo_data_manager class label and return its layout bounds."""
     if not text:
         return None
-    height, width = image.shape[:2]
-    font_thickness = max(line_width - 1, 1)
-    font_scale = line_width / 3
-    (text_width, text_height), baseline = cv2.getTextSize(
-        str(text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
-    )
+    width, height = image.size
+    text_bbox = draw.textbbox((0, 0), str(text), font=font)
+    text_width = text_bbox[2] - text_bbox[0]
+    text_height = text_bbox[3] - text_bbox[1]
     pad = 2
     rect_width = text_width + pad * 2
-    rect_height = text_height + baseline + pad * 2
+    rect_height = text_height + pad * 2
     anchor_x = max(0, min(int(round(x)), max(width - 1, 0)))
     anchor_y = max(0, min(int(round(y)), max(height - 1, 0)))
     outside = anchor_y >= rect_height
@@ -244,31 +275,28 @@ def ydm_draw_label(
     if outside:
         top = max(0, anchor_y - rect_height)
         bottom = min(height - 1, anchor_y)
-        text_baseline = max(top + text_height + pad, bottom - baseline - pad)
     else:
         top = min(max(anchor_y, 0), max(height - rect_height, 0))
         bottom = min(height - 1, top + rect_height)
-        text_baseline = min(bottom - baseline - pad, top + text_height + pad)
     right = min(width - 1, left + rect_width)
 
-    cv2.rectangle(image, (left, top), (right, bottom), color, -1, cv2.LINE_AA)
-    cv2.putText(
-        image,
+    draw.rectangle(
+        (left, top, right, bottom),
+        fill=(*bgr_to_rgb(color), 255),
+    )
+    draw.text(
+        (left + pad - text_bbox[0], top + pad - text_bbox[1]),
         str(text),
-        (left + pad, int(text_baseline)),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        font_scale,
-        ydm_text_color(color),
-        thickness=font_thickness,
-        lineType=cv2.LINE_AA,
+        font=font,
+        fill=(*bgr_to_rgb(ydm_text_color(color)), 255),
     )
     return {
         "left": left,
         "bottom": bottom,
         "outside": outside,
-        "font_scale": font_scale,
-        "font_thickness": font_thickness,
-        "line_height": max(text_height + baseline, 1),
+        "font_scale": line_width / 3,
+        "font_thickness": max(line_width - 1, 1),
+        "line_height": max(text_height, 1),
     }
 
 
@@ -286,9 +314,11 @@ def ydm_is_negative_attribute(value) -> bool:
 
 
 def ydm_draw_attributes(
-    image: np.ndarray,
+    image: Image.Image,
+    draw: ImageDraw.ImageDraw,
     attributes: list[tuple[str, object]],
     label_info: dict[str, int | float | bool] | None,
+    font: ImageFont.FreeTypeFont,
 ) -> None:
     """Draw the yolo_data_manager attribute panel without cross-box changes.
 
@@ -300,22 +330,16 @@ def ydm_draw_attributes(
     ]
     if not attributes or label_info is None:
         return
-    height, width = image.shape[:2]
-    font_scale = float(label_info["font_scale"])
-    font_thickness = int(label_info["font_thickness"])
+    width, height = image.size
     line_height = max(int(float(label_info["line_height"]) * 0.85), 12)
     texts = [f"{name}-{value}" for name, value in attributes]
-    sizes = [
-        cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
-        for text in texts
-    ]
-    max_text_width = max(size[0][0] for size in sizes)
-    text_height = max(size[0][1] for size in sizes)
-    baseline = max(size[1] for size in sizes)
+    bboxes = [draw.textbbox((0, 0), text, font=font) for text in texts]
+    max_text_width = max(box[2] - box[0] for box in bboxes)
+    text_height = max(box[3] - box[1] for box in bboxes)
     x = max(0, min(int(label_info["left"]) + 2, max(width - max_text_width - 4, 0)))
     start_y = int(label_info["bottom"]) + line_height
     top = start_y - text_height - 2
-    bottom = start_y + line_height * (len(texts) - 1) + baseline + 2
+    bottom = start_y + line_height * (len(texts) - 1) + text_height + 2
     if bottom >= height:
         shift = bottom - height + 1
         start_y -= shift
@@ -328,21 +352,18 @@ def ydm_draw_attributes(
     right = min(width - 1, x + max_text_width + 5)
     bottom = min(height - 1, max(bottom, top))
 
-    overlay = image.copy()
-    cv2.rectangle(overlay, (x, top), (right, bottom), (255, 255, 255), -1)
-    cv2.addWeighted(overlay, 0.65, image, 0.35, 0, image)
-    for index, ((_, value), text) in enumerate(zip(attributes, texts)):
+    draw.rectangle(
+        (x, top, right, bottom),
+        fill=(255, 255, 255, 166),
+    )
+    for index, ((_, value), text), bbox in zip(range(len(texts)), zip(attributes, texts), bboxes):
         text_y = min(max(start_y + line_height * index, top + text_height), height - 1)
         text_color = (0, 0, 0) if ydm_is_negative_attribute(value) else (255, 0, 0)
-        cv2.putText(
-            image,
+        draw.text(
+            (x + 2 - bbox[0], text_y - bbox[1]),
             text,
-            (x + 2, text_y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale,
-            text_color,
-            font_thickness,
-            lineType=cv2.LINE_AA,
+            font=font,
+            fill=(*bgr_to_rgb(text_color), 255),
         )
 
 
@@ -415,6 +436,9 @@ def draw_detections(
         )
 
     output = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    pil_output = Image.fromarray(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
+    pil_draw = ImageDraw.Draw(pil_output, "RGBA")
+    annotation_font, _, _ = load_annotation_font(annotation_line_width)
     decoded_attributes = decode_attributes(
         attributes,
         attribute_names,
@@ -443,18 +467,24 @@ def draw_detections(
         class_name = names.get(class_id, class_id)
         color_id = canonical_class_id(class_name, class_id)
         color = CV2_COLORS[color_id % len(CV2_COLORS)]
-        cv2.rectangle(
-            output,
-            (x1, y1),
-            (x2, y2),
-            color,
-            thickness=line_width,
-            lineType=cv2.LINE_AA,
+        pil_draw.rectangle(
+            (x1, y1, x2, y2),
+            outline=(*bgr_to_rgb(color), 255),
+            width=line_width,
         )
         label = f"{class_name} {confidence:.2f}"
-        label_info = ydm_draw_label(output, x1, y1, label, color, line_width)
-        ydm_draw_attributes(output, decoded, label_info)
-    return cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+        label_info = ydm_draw_label(
+            pil_output,
+            pil_draw,
+            x1,
+            y1,
+            label,
+            color,
+            line_width,
+            annotation_font,
+        )
+        ydm_draw_attributes(pil_output, pil_draw, decoded, label_info, annotation_font)
+    return np.asarray(pil_output)
 
 
 def box_iou_one(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
@@ -663,6 +693,7 @@ def main() -> None:
         raise ValueError("--conf and --iou must be in [0, 1]")
     if args.annotation_line_width < 1:
         raise ValueError("--annotation-line-width must be positive")
+    _, annotation_font_path, annotation_font_size = load_annotation_font(args.annotation_line_width)
     for path, label in (
         (args.mayolo_weight, "MAYOLO weight"),
         (args.yolov10_weight, "YOLOv10 weight"),
@@ -720,8 +751,8 @@ def main() -> None:
         "target": "raw class score matched to the first attribute-aware NMS detection",
         "overlay": "0.5 original image + 0.5 JET CAM",
         "annotation_line_width": args.annotation_line_width,
-        "annotation_font_scale": args.annotation_line_width / 3,
-        "annotation_font_thickness": max(args.annotation_line_width - 1, 1),
+        "annotation_font": annotation_font_path,
+        "annotation_font_size": annotation_font_size,
     }
     (args.output / "cam_config.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
