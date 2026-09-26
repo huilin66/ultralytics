@@ -87,6 +87,15 @@ YDM_DARK_COLORS = {
     (11, 255, 162),
 }
 
+# The dataset/yolo_data_manager class order is the visual convention used in
+# the paper and in the prediction images.  Some existing checkpoints retain
+# the historical reversed order in their embedded ``names`` mapping, so
+# colors must be selected by semantic class name rather than raw model ID.
+CANONICAL_CLASS_IDS = {
+    "projecting_signboard": 0,
+    "wall_signboard": 1,
+}
+
 
 def normalize_device(device: str) -> str:
     value = str(device).strip()
@@ -133,6 +142,12 @@ def get_names(model) -> dict[int, str]:
     if isinstance(names, (list, tuple)):
         return {index: str(name) for index, name in enumerate(names)}
     return {int(index): str(name) for index, name in names.items()}
+
+
+def canonical_class_id(class_name: str, fallback: int) -> int:
+    """Return the dataset class ID used by yolo_data_manager for coloring."""
+    key = "_".join(str(class_name).strip().casefold().replace("-", " ").split())
+    return CANONICAL_CLASS_IDS.get(key, fallback)
 
 
 def get_attribute_spec(model, head) -> tuple[dict[str, list[str]], int, int, bool]:
@@ -418,7 +433,9 @@ def draw_detections(
 
         confidence = float(detection[4].detach().cpu().item())
         class_id = int(detection[5].detach().cpu().item())
-        color = CV2_COLORS[class_id % len(CV2_COLORS)]
+        class_name = names.get(class_id, class_id)
+        color_id = canonical_class_id(class_name, class_id)
+        color = CV2_COLORS[color_id % len(CV2_COLORS)]
         cv2.rectangle(
             output,
             (x1, y1),
@@ -427,7 +444,7 @@ def draw_detections(
             thickness=line_width,
             lineType=cv2.LINE_AA,
         )
-        label = f"{names.get(class_id, class_id)} {confidence:.2f}"
+        label = f"{class_name} {confidence:.2f}"
         label_info = ydm_draw_label(output, x1, y1, label, color, line_width)
         ydm_draw_attributes(output, decoded, label_info)
     return cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
@@ -671,6 +688,7 @@ def main() -> None:
     metadata = {
         "procedure": "historical_2026-09-22_cam",
         "renderer": "local port of yolo_data_manager.vis.renderer (OpenCV)",
+        "class_color_mapping": CANONICAL_CLASS_IDS,
         "methods": list(args.methods),
         "mayolo_weight": str(args.mayolo_weight),
         "yolov10_weight": str(args.yolov10_weight),
