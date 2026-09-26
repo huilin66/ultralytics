@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import importlib
 import json
 import sys
@@ -174,6 +175,80 @@ def _time_forward(
     return latencies, round(allocated, 6), round(reserved, 6)
 
 
+def _measure_forward_memory(
+    model: torch.nn.Module, inputs: torch.Tensor, device: torch.device
+) -> tuple[float | None, float | None]:
+    """Measure peak CUDA memory for one forward pass without timing it."""
+
+    if device.type != "cuda":
+        with torch.inference_mode():
+            model(inputs)
+        return None, None
+
+    torch.cuda.synchronize(device)
+    torch.cuda.reset_peak_memory_stats(device)
+    with torch.inference_mode():
+        model(inputs)
+    torch.cuda.synchronize(device)
+    allocated = torch.cuda.max_memory_allocated(device) / 2**30
+    reserved = torch.cuda.max_memory_reserved(device) / 2**30
+    return round(allocated, 6), round(reserved, 6)
+
+
+def _complexity_row(
+    yolo: YOLO,
+    network: torch.nn.Module,
+    weight: str,
+    label: str,
+    args: argparse.Namespace,
+    device: torch.device,
+    gflops: float,
+    allocated: float | None,
+    reserved: float | None,
+) -> dict[str, Any]:
+    """Build a result row when only complexity and memory are requested."""
+
+    row: dict[str, Any] = {
+        "model": label,
+        "weight": weight,
+        "task": getattr(yolo, "task", args.task or "auto"),
+        "head_mode": args.head_mode,
+        "device": str(device),
+        "device_name": _device_name(device),
+        "precision": args.precision,
+        "fused": bool(args.fuse),
+        "batch": args.batch,
+        "imgsz": args.imgsz,
+        "warmup": args.warmup,
+        "iterations": args.iterations,
+        "parameters_m": _parameter_count(network),
+        "gflops": round(gflops, 6),
+        "weight_mib": _weight_size_mib(weight),
+        "latency_batch_mean_ms": None,
+        "latency_image_mean_ms": None,
+        "latency_image_std_ms": None,
+        "latency_image_p50_ms": None,
+        "latency_image_p95_ms": None,
+        "fps": None,
+        "throughput_images_s": None,
+        "peak_vram_allocated_gib": allocated,
+        "peak_vram_reserved_gib": reserved,
+        "end_to_end_latency_batch_mean_ms": None,
+        "end_to_end_latency_image_mean_ms": None,
+        "end_to_end_latency_image_std_ms": None,
+        "end_to_end_latency_image_p50_ms": None,
+        "end_to_end_latency_image_p95_ms": None,
+        "end_to_end_fps": None,
+        "dataset_preprocess_ms": None,
+        "dataset_inference_ms": None,
+        "dataset_loss_ms": None,
+        "dataset_postprocess_ms": None,
+        "dataset_latency_ms": None,
+        "dataset_fps": None,
+    }
+    return row
+
+
 def _time_end_to_end(
     yolo: YOLO,
     args: argparse.Namespace,
@@ -299,6 +374,12 @@ def benchmark_one(weight: str, label: str, args: argparse.Namespace) -> dict[str
     """Benchmark one checkpoint and return one serializable result row."""
 
     device = select_device(args.device, verbose=False)
+    if device.type == "cuda":
+        # The benchmark processes several checkpoints sequentially. Clear
+        # objects and the allocator cache so reserved VRAM is attributable to
+        # the current model rather than to previously loaded checkpoints.
+        gc.collect()
+        torch.cuda.empty_cache()
     is_rtdetr = args.network == "rtdetr" or (
         args.network == "auto" and "rtdetr" in weight.lower()
     )
@@ -325,9 +406,18 @@ def benchmark_one(weight: str, label: str, args: argparse.Namespace) -> dict[str
         inputs = inputs.half()
 
     try:
-        gflops = float(get_flops(network, imgsz=args.imgsz))
+        # Profile at the actual benchmark resolution. The stride-size shortcut
+        # followed by area scaling is not reliable for GIA/Swin blocks and for
+        # branch-specific one-to-many inference heads.
+        gflops = float(get_flops(network, imgsz=args.imgsz, exact=True))
     except Exception:
         gflops = 0.0
+
+    if args.complexity_only:
+        allocated, reserved = _measure_forward_memory(network, inputs, device)
+        return _complexity_row(
+            yolo, network, weight, label, args, device, gflops, allocated, reserved
+        )
 
     latencies, peak_allocated, peak_reserved = _time_forward(
         network, inputs, device, args.warmup, args.iterations
@@ -409,6 +499,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iou", type=float, default=0.7, help="IoU threshold for end-to-end NMS")
     parser.add_argument("--max-det", type=int, default=300, help="Maximum detections per image")
     parser.add_argument("--fuse", action="store_true", help="Fuse Conv-BN layers before benchmarking")
+    parser.add_argument(
+        "--complexity-only",
+        action="store_true",
+        help="Only measure parameters, exact GFLOPs, weight size, and peak VRAM",
+    )
     parser.add_argument("--profile-dataset", action="store_true", help="Also record dataset-loop timing")
     parser.add_argument("--data", default=None, help="Dataset YAML used with --profile-dataset")
     parser.add_argument("--split", default="test")

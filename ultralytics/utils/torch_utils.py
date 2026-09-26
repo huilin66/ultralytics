@@ -390,13 +390,17 @@ def model_info_for_loggers(trainer):
     return results
 
 
-def get_flops(model, imgsz=640):
+def get_flops(model, imgsz=640, exact=False):
     """
     Return a YOLO model's FLOPs.
 
     Args:
         model (nn.Module): The model to calculate FLOPs for.
         imgsz (int | List[int], optional): Input image size. Defaults to 640.
+        exact (bool, optional): Profile directly at ``imgsz`` instead of
+            profiling at the maximum stride and scaling by image area. This
+            should be enabled for models containing input-dependent operators
+            or branch-dependent inference heads.
 
     Returns:
         (float): The model's FLOPs in billions.
@@ -409,6 +413,15 @@ def get_flops(model, imgsz=640):
         p = next(model.parameters())
         if not isinstance(imgsz, list):
             imgsz = [imgsz, imgsz]  # expand if int/float
+
+        if exact:
+            # Direct profiling is important for GIA/Swin-style blocks and for
+            # models whose one-to-one and one-to-many heads have different
+            # control flow. Scaling a small-stride profile by area can produce
+            # a materially incorrect value for those models.
+            im = torch.empty((1, p.shape[1], *imgsz), device=p.device, dtype=p.dtype)
+            return thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1e9 * 2
+
         try:
             # Use stride size for input tensor
             stride = max(int(model.stride.max()), 32) if hasattr(model, "stride") else 32  # max stride
