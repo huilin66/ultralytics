@@ -331,15 +331,18 @@ def ydm_draw_attributes(
     if not attributes or label_info is None:
         return
     width, height = image.size
-    line_height = max(int(float(label_info["line_height"]) * 0.85), 12)
     texts = [f"{name}-{value}" for name, value in attributes]
     bboxes = [draw.textbbox((0, 0), text, font=font) for text in texts]
     max_text_width = max(box[2] - box[0] for box in bboxes)
     text_height = max(box[3] - box[1] for box in bboxes)
+    # Start the attribute panel immediately below the class label.  The
+    # previous baseline-derived placement left one unnecessary blank line.
+    line_height = max(text_height + 2, 12)
     x = max(0, min(int(label_info["left"]) + 2, max(width - max_text_width - 4, 0)))
-    start_y = int(label_info["bottom"]) + line_height
-    top = start_y - text_height - 2
-    bottom = start_y + line_height * (len(texts) - 1) + text_height + 2
+    pad = 2
+    top = min(max(int(label_info["bottom"]) + 1, 0), max(height - 1, 0))
+    start_y = top + pad
+    bottom = top + pad * 2 + text_height + line_height * (len(texts) - 1)
     if bottom >= height:
         shift = bottom - height + 1
         start_y -= shift
@@ -349,7 +352,7 @@ def ydm_draw_attributes(
         start_y -= top
         bottom -= top
         top = 0
-    right = min(width - 1, x + max_text_width + 5)
+    right = min(width - 1, x + max_text_width + pad * 2)
     bottom = min(height - 1, max(bottom, top))
 
     draw.rectangle(
@@ -357,7 +360,7 @@ def ydm_draw_attributes(
         fill=(255, 255, 255, 166),
     )
     for index, ((_, value), text), bbox in zip(range(len(texts)), zip(attributes, texts), bboxes):
-        text_y = min(max(start_y + line_height * index, top + text_height), height - 1)
+        text_y = min(max(start_y + line_height * index, top + pad), height - 1)
         text_color = (0, 0, 0) if ydm_is_negative_attribute(value) else (255, 0, 0)
         draw.text(
             (x + 2 - bbox[0], text_y - bbox[1]),
@@ -630,12 +633,19 @@ def run_one(
             model,
             annotation_line_width=annotation_line_width,
         )
-        destination = model_output / f"{image.stem}_{method_name}.png"
+        filename = image.stem if method_name == "EigenCAM" else f"{image.stem}_{method_name}"
+        destination = model_output / f"{filename}.png"
         if not cv2.imwrite(str(destination), cv2.cvtColor(result, cv2.COLOR_RGB2BGR)):
             raise OSError(f"Failed to write {destination}")
         outputs[method_name] = destination
         print("  ", method_name, destination, flush=True)
     return outputs
+
+
+def cam_filename(image: Path, method_name: str) -> str:
+    """Return the compact filename used for the default EigenCAM output."""
+    filename = image.stem if method_name == "EigenCAM" else f"{image.stem}_{method_name}"
+    return f"{filename}.png"
 
 
 def make_side_by_side(images: list[Path], method_names: list[str], output_root: Path) -> None:
@@ -644,16 +654,16 @@ def make_side_by_side(images: list[Path], method_names: list[str], output_root: 
     for image in images:
         for method_name in method_names:
             left = cv2.imread(
-                str(output_root / "YOLOv10x" / f"{image.stem}_{method_name}.png"), cv2.IMREAD_COLOR
+                str(output_root / "YOLOv10x" / cam_filename(image, method_name)), cv2.IMREAD_COLOR
             )
             right = cv2.imread(
-                str(output_root / "MAYOLOx" / f"{image.stem}_{method_name}.png"), cv2.IMREAD_COLOR
+                str(output_root / "MAYOLOx" / cam_filename(image, method_name)), cv2.IMREAD_COLOR
             )
             if left is None or right is None:
                 raise RuntimeError(f"Cannot read CAM pair for {image.name} ({method_name})")
             if left.shape[0] != right.shape[0]:
                 right = cv2.resize(right, (right.shape[1], left.shape[0]), interpolation=cv2.INTER_AREA)
-            destination = side_output / f"{image.stem}_{method_name}.png"
+            destination = side_output / cam_filename(image, method_name)
             if not cv2.imwrite(str(destination), np.concatenate((left, right), axis=1)):
                 raise OSError(f"Failed to write {destination}")
 
