@@ -148,6 +148,12 @@ class MDetectionValidator(BaseValidator):
             na=self.attribute_channels,
         )
 
+    def _should_collect_confusion(self) -> bool:
+        """Return whether box/attribute confusion statistics should be accumulated."""
+        # Fine-grained Test evaluation needs the box confusion matrix even when
+        # plotting is disabled; the plotting scripts render it afterwards.
+        return bool(self.args.plots or str(getattr(self.args, "split", "")).lower() == "test")
+
     def _prepare_batch(self, si, batch):
         """Prepares a batch of images and annotations for validation."""
         idx = batch["batch_idx"] == si
@@ -195,7 +201,7 @@ class MDetectionValidator(BaseValidator):
                 if nl:
                     for k in self.stats.keys():
                         self.stats[k].append(stat[k])
-                    if self.args.plots:
+                    if self._should_collect_confusion():
                         self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls, gt_attributes=mdet_attributes)
                 continue
 
@@ -230,7 +236,7 @@ class MDetectionValidator(BaseValidator):
                     stat["conf"] = stat["conf"][stat["filter_small_pred"]]
                     stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
                     stat["pred_attributes"] = stat["pred_attributes"][stat["filter_small_pred"]]
-                if self.args.plots:
+                if self._should_collect_confusion():
                     self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
             for k in self.stats.keys():
                 self.stats[k].append(stat[k])

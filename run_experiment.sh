@@ -30,6 +30,7 @@ W4_SWEEP_ROOT="${W4_SWEEP_ROOT:-runs/experiments/E1_w4_5seed}"
 STAGE1_EPOCHS="${STAGE1_EPOCHS:-100}"
 STAGE2_EPOCHS="${STAGE2_EPOCHS:-100}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
+FINE_SEED="${FINE_SEED:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_100_stage2_100_w4_0p5_seed_0/weights/best.pt}"
 EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-runs/experiments/E3_versions/E3_versions_yolov10x_w4_0p5_seed_0_stage2/weights/best.pt}"
@@ -48,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1 ;;
     --device) DEVICE="$2"; shift ;;
     --seeds) SEEDS="$2"; shift ;;
+    --fine-seed) FINE_SEED="$2"; shift ;;
     --mayolo-weight) EIGENCAM_MAYOLO_WEIGHT="$2"; shift ;;
     --yolov10-weight) EIGENCAM_YOLOV10_WEIGHT="$2"; shift ;;
     --images|--image|--image-path) EIGENCAM_IMAGES="$2"; shift ;;
@@ -139,6 +141,7 @@ Options:
   --dry-run              Print commands without executing them.
   --device CUDA_DEVICE   Override DEVICE (default: 0).
   --seeds "0 1 2"        Override the seed list.
+  --fine-seed SEED        Seed used by e6.1 fine-grained Test evaluation (default: 1).
   --mayolo-weight PATH   MAYOLO checkpoint for eigencam.
   --yolov10-weight PATH  YOLOv10 checkpoint for eigencam.
   --images PATH           Input image or image directory for eigencam.
@@ -151,7 +154,8 @@ Options:
 
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
 WORKERS, IMGSZ, W4_SWEEP_VALUES, W4_SWEEP_ROOT, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
-E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, EIGENCAM_LAYER, EIGENCAM_CONF,
+E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, FINE_SEED, FINE_PROJECT_ROOT,
+FINE_YOLOV10_WEIGHT, FINE_MAYOLO_WEIGHT, EIGENCAM_LAYER, EIGENCAM_CONF,
 EIGENCAM_IOU, EIGENCAM_METHODS and EIGENCAM_IMAGE_NAMES.
 EOF
 }
@@ -667,22 +671,27 @@ e51() {
 
 e61() {
   echo "[E6.1] per-attribute/level metrics, calibration and confusion matrices"
-  local yolov10x="runs/experiments/E3_versions/E3_versions_yolov10x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt"
-  local mayolox="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_0/weights/best.pt"
+  local seed="${FINE_SEED}"
+  local fine_root="${FINE_PROJECT_ROOT:-runs/experiments/E4_4_10_finegrained_seed${seed}}"
+  local yolov10x="${FINE_YOLOV10_WEIGHT:-$E2_ROOT/${BASE_STAGE1_PREFIX}${seed}_stage2/weights/best.pt}"
+  local mayolox="${FINE_MAYOLO_WEIGHT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt}"
   need "$yolov10x"; need "$mayolox"
-  local project="runs/experiments/E3_risk_level_test"
   run "$PYTHON_BIN" scripts/eval_attribute_levels.py --data "$DATA" \
     --model "YOLOv10x=$yolov10x::native" --model "MAYOLOx=$mayolox::one2many" \
     --device "$DEVICE" --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" \
-    --project "$project" --name comparison
+    --project "$fine_root" --name levels
   run "$PYTHON_BIN" scripts/eval_attribute_calibration.py --data "$DATA" \
     --model "YOLOv10x=$yolov10x::native" --model "MAYOLOx=$mayolox::one2many" \
     --device "$DEVICE" --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" \
-    --project runs/experiments/E3_attribute_quality --name mayolox_vs_yolov10x
+    --project "$fine_root" --name calibration
   run "$PYTHON_BIN" scripts/plot_attribute_confusion_matrices.py \
-    --confusion "$project/comparison/confusion_test.csv" --data "$DATA" \
+    --confusion "$fine_root/levels/confusion_test.csv" --data "$DATA" \
     --models YOLOv10x MAYOLOx --head-mode all \
-    --output "$project/comparison/confusion_figures"
+    --output "$fine_root/confusion"
+  run "$PYTHON_BIN" scripts/plot_box_confusion_matrix.py \
+    --confusion "$fine_root/levels/box_confusion_test.csv" \
+    --models YOLOv10x MAYOLOx --head-mode all \
+    --output "$fine_root/box_confusion"
 }
 
 eigencam() {

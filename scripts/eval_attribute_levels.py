@@ -148,11 +148,20 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
         raise RuntimeError("The test validator did not expose box metrics for class-wise AP export.")
     class_ap50 = np.asarray(getattr(box_metrics, "ap50", []), dtype=np.float64)
     class_ap5095 = np.asarray(getattr(box_metrics, "ap", []), dtype=np.float64)
+    class_precision = np.asarray(getattr(box_metrics, "p", []), dtype=np.float64)
+    class_recall = np.asarray(getattr(box_metrics, "r", []), dtype=np.float64)
     class_indices = np.asarray(getattr(box_metrics, "ap_class_index", []), dtype=np.int64)
-    if not (len(class_ap50) == len(class_ap5095) == len(class_indices)):
+    if not (
+        len(class_ap50)
+        == len(class_ap5095)
+        == len(class_precision)
+        == len(class_recall)
+        == len(class_indices)
+    ):
         raise RuntimeError(
             "Class-wise AP arrays have inconsistent lengths: "
             f"AP50={len(class_ap50)}, AP50-95={len(class_ap5095)}, "
+            f"Precision={len(class_precision)}, Recall={len(class_recall)}, "
             f"class_index={len(class_indices)}."
         )
     class_names = _dataset_class_names(args.data)
@@ -170,8 +179,47 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
             "AP50_test": float(ap50),
             "AP50-95_test": float(ap5095),
         }
-        for class_index, ap50, ap5095 in zip(class_indices, class_ap50, class_ap5095)
+        for class_index, precision, recall, ap50, ap5095 in zip(
+            class_indices, class_precision, class_recall, class_ap50, class_ap5095
+        )
     ]
+    for row, precision, recall in zip(per_class, class_precision, class_recall):
+        row["Precision_test"] = float(precision)
+        row["Recall_test"] = float(recall)
+
+    # MDetectionValidator collects the standard box confusion matrix during
+    # an explicit Test evaluation.  Export it as a long CSV so it can be
+    # plotted together with the attribute confusion matrices.
+    box_confusion_object = getattr(metrics, "confusion_matrix", None)
+    box_confusion = np.asarray(getattr(box_confusion_object, "matrix", []), dtype=np.float64)
+    box_confusion_rows = []
+    if box_confusion.ndim == 2 and box_confusion.shape[0] == box_confusion.shape[1]:
+        background_index = box_confusion.shape[0] - 1
+        for predicted_index in range(box_confusion.shape[0]):
+            for true_index in range(box_confusion.shape[1]):
+                predicted_name = "background" if predicted_index == background_index else str(
+                    class_names.get(predicted_index, predicted_index)
+                )
+                true_name = "background" if true_index == background_index else str(
+                    class_names.get(true_index, true_index)
+                )
+                box_confusion_rows.append(
+                    {
+                        "model": label,
+                        "mode": mode,
+                        "weight": weights,
+                        "predicted_index": predicted_index,
+                        "predicted_name": predicted_name,
+                        "true_index": true_index,
+                        "true_name": true_name,
+                        "count": int(round(box_confusion[predicted_index, true_index])),
+                    }
+                )
+    else:
+        raise RuntimeError(
+            "The Test validator did not expose a square box confusion matrix. "
+            "Ensure Test confusion collection is enabled."
+        )
 
     detailed_by_class = getattr(getattr(metrics, "attributes", None), "detailed_by_class", None) or {}
     per_class_attribute = []
@@ -288,6 +336,7 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
     return {
         "summary": row,
         "per_class": per_class,
+        "box_confusion": box_confusion_rows,
         "per_class_attribute": per_class_attribute,
         "per_class_attribute_detail": per_class_attribute_detail,
         "per_attribute": detailed["per_attribute"],
@@ -303,6 +352,10 @@ def main() -> None:
     _write_rows(output_dir / "summary.csv", [result["summary"] for result in results])
     _write_rows(output_dir / "per_class_test.csv", [row for result in results for row in result["per_class"]])
     _write_rows(
+        output_dir / "box_confusion_test.csv",
+        [row for result in results for row in result["box_confusion"]],
+    )
+    _write_rows(
         output_dir / "per_class_attribute_test.csv",
         [row for result in results for row in result["per_class_attribute"]],
     )
@@ -315,6 +368,7 @@ def main() -> None:
     _write_rows(output_dir / "confusion_test.csv", [row for result in results for row in result["confusion"]])
     print(f"[summary] {output_dir / 'summary.csv'}")
     print(f"[details] {output_dir / 'per_class_test.csv'}")
+    print(f"[details] {output_dir / 'box_confusion_test.csv'}")
     print(f"[details] {output_dir / 'per_class_attribute_test.csv'}")
     print(f"[details] {output_dir / 'per_class_attribute_detail_test.csv'}")
     print(f"[details] {output_dir / 'per_attribute_test.csv'}")
