@@ -117,9 +117,8 @@ def _plot(
     vmax = 1.0 if normalized else max(1, max(float(matrix.max()) for matrix in values.values()))
     figure, axes = plt.subplots(1, len(models), figsize=(5.1 * len(models), 4.7), squeeze=False)
     axes_flat = axes.ravel()
-    image = None
     for axis, model in zip(axes_flat, models):
-        image = axis.imshow(values[model], cmap="Blues", vmin=0.0, vmax=vmax)
+        axis.imshow(values[model], cmap="Blues", vmin=0.0, vmax=vmax)
         axis.set_title(model)
         axis.set_xlabel("True class")
         axis.set_ylabel("Predicted class")
@@ -129,7 +128,6 @@ def _plot(
             value = values[model][predicted_index, true_index]
             text = f"{value:.2f}" if normalized else f"{int(value)}"
             axis.text(true_index, predicted_index, text, ha="center", va="center", fontsize=9)
-    figure.colorbar(image, ax=axes_flat.tolist(), fraction=0.035, pad=0.04)
     title = "Box confusion matrix (true-normalized)" if normalized else "Box confusion matrix (counts)"
     figure.suptitle(title)
     figure.tight_layout(rect=(0, 0, 1, 0.94))
