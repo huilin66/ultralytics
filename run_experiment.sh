@@ -30,6 +30,15 @@ STAGE1_EPOCHS="${STAGE1_EPOCHS:-100}"
 STAGE2_EPOCHS="${STAGE2_EPOCHS:-100}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 DRY_RUN="${DRY_RUN:-0}"
+EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-}"
+EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-}"
+EIGENCAM_IMAGES="${EIGENCAM_IMAGES:-}"
+EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_eigencam}"
+EIGENCAM_LAYERS="${EIGENCAM_LAYERS:-10 12 14 16 18}"
+EIGENCAM_CONF="${EIGENCAM_CONF:-0.2}"
+EIGENCAM_RATIO="${EIGENCAM_RATIO:-0.02}"
+EIGENCAM_SHOW_BOX="${EIGENCAM_SHOW_BOX:-1}"
+EIGENCAM_RENORMALIZE="${EIGENCAM_RENORMALIZE:-1}"
 
 CODE="${1:-help}"
 shift || true
@@ -38,6 +47,10 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1 ;;
     --device) DEVICE="$2"; shift ;;
     --seeds) SEEDS="$2"; shift ;;
+    --mayolo-weight) EIGENCAM_MAYOLO_WEIGHT="$2"; shift ;;
+    --yolov10-weight) EIGENCAM_YOLOV10_WEIGHT="$2"; shift ;;
+    --images|--image-path) EIGENCAM_IMAGES="$2"; shift ;;
+    --output) EIGENCAM_OUTPUT="$2"; shift ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -100,16 +113,22 @@ Codes:
   e6.eval    Test inference only for existing E6 checkpoints.
   e5.1       Offline robustness-variant generation and evaluation.
   e6.1       Per-attribute/level metrics, calibration and confusion matrices.
+  eigencam    Generate EigenCAM for MAYOLOx and YOLOv10x and side-by-side images.
   all        Run automated sections in dependency order.
 
 Options:
   --dry-run              Print commands without executing them.
   --device CUDA_DEVICE   Override DEVICE (default: 0).
   --seeds "0 1 2"        Override the seed list.
+  --mayolo-weight PATH   MAYOLO checkpoint for eigencam.
+  --yolov10-weight PATH  YOLOv10 checkpoint for eigencam.
+  --images PATH           Input image or image directory for eigencam.
+  --output PATH           EigenCAM output directory.
 
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
 WORKERS, IMGSZ, W4_SWEEP_VALUES, W4_SWEEP_ROOT, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
-E2_PERF_SEEDS, E3_PERF_ROOT and E3_PERF_SEEDS.
+E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, EIGENCAM_LAYERS, EIGENCAM_CONF,
+EIGENCAM_RATIO, EIGENCAM_SHOW_BOX and EIGENCAM_RENORMALIZE.
 EOF
 }
 
@@ -642,6 +661,39 @@ e61() {
     --output "$project/comparison/confusion_figures"
 }
 
+eigencam() {
+  echo "[EigenCAM] MAYOLOx vs YOLOv10x"
+  need scripts/generate_eigencam.py
+  need "$EIGENCAM_MAYOLO_WEIGHT"
+  need "$EIGENCAM_YOLOV10_WEIGHT"
+  if [[ "$DRY_RUN" != "1" && ! -e "$EIGENCAM_IMAGES" ]]; then
+    echo "Missing image file or directory: $EIGENCAM_IMAGES" >&2
+    exit 1
+  fi
+
+  local -a layers=()
+  read -r -a layers <<< "$EIGENCAM_LAYERS"
+  if [[ "${#layers[@]}" -eq 0 ]]; then
+    echo "EIGENCAM_LAYERS must contain at least one layer index" >&2
+    exit 2
+  fi
+
+  local -a cmd=(
+    "$PYTHON_BIN" scripts/generate_eigencam.py
+    --mayolo-weight "$EIGENCAM_MAYOLO_WEIGHT"
+    --yolov10-weight "$EIGENCAM_YOLOV10_WEIGHT"
+    --images "$EIGENCAM_IMAGES"
+    --output "$EIGENCAM_OUTPUT"
+    --device "$DEVICE"
+    --layers "${layers[@]}"
+    --conf "$EIGENCAM_CONF"
+    --ratio "$EIGENCAM_RATIO"
+  )
+  [[ "$EIGENCAM_SHOW_BOX" == "1" ]] && cmd+=(--show-box)
+  [[ "$EIGENCAM_RENORMALIZE" == "1" ]] && cmd+=(--renormalize)
+  run "${cmd[@]}"
+}
+
 all_experiments() {
   preflight
   e20
@@ -686,6 +738,7 @@ case "$CODE" in
   e6.eval) e6_eval ;;
   e5.1) e51 ;;
   e6.1) e61 ;;
+  eigencam) eigencam ;;
   all) all_experiments ;;
   *) echo "Unknown experiment code: $CODE" >&2; usage; exit 2 ;;
 esac
