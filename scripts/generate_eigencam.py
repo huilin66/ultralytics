@@ -4,6 +4,8 @@ The visualization deliberately follows the 2026-09-22 reference procedure:
 one-to-many inference, attribute-aware NMS, conf=0.5, NMS IoU=0.7, and CAM
 target layer 22.  The heatmap is generated from the raw class score associated
 with the NMS detection, while the displayed boxes come from the same NMS call.
+The final annotation is rendered through the local ``MdetResults`` renderer,
+which follows the project's ``yolo_data_manager`` visualization convention.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from pytorch_grad_cam import (  # noqa: E402
     RandomCAM,
     XGradCAM,
 )
+from ultralytics.engine.results import MdetResults  # noqa: E402
 from ultralytics.nn.tasks import attempt_load_weights  # noqa: E402
 from ultralytics.utils.ops import non_max_suppression_with_attributes, xywh2xyxy  # noqa: E402
 
@@ -96,32 +99,92 @@ def get_names(model) -> dict[int, str]:
     return {int(index): str(name) for index, name in names.items()}
 
 
+def get_attribute_spec(model, head) -> tuple[dict[str, list[str]], int, int, bool]:
+    """Return the attribute metadata required by ``MdetResults.plot``.
+
+    The result renderer is the same renderer used by the project prediction
+    path.  A small fallback keeps CAM visualization usable for older
+    checkpoints that contain the head but not the attribute-name mapping.
+    """
+    model_core = getattr(model, "model", model)
+    attribute_names = getattr(model, "attribute_names", None)
+    if attribute_names is None:
+        attribute_names = getattr(model_core, "attribute_names", None)
+
+    attribute_count = int(getattr(head, "na", 0) or 0)
+    attribute_levels = int(getattr(head, "nal", 2) or 2)
+    if not isinstance(attribute_names, dict) or len(attribute_names) != attribute_count:
+        level_names = ["no", "yes"] if attribute_levels == 2 else [str(i) for i in range(attribute_levels)]
+        attribute_names = {
+            f"attribute_{index}": list(level_names) for index in range(attribute_count)
+        }
+    multiclass = bool(getattr(head, "multiclass_attributes", False))
+    return attribute_names, attribute_count, attribute_levels, multiclass
+
+
 def draw_detections(
     rgb: np.ndarray,
-    detections: np.ndarray,
-    names: dict[int, str],
-    target_index: int,
+    detections: torch.Tensor,
+    model,
 ) -> np.ndarray:
-    """Reference box style: green target, orange remaining detections."""
-    output = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    for index, detection in enumerate(detections):
-        x1, y1, x2, y2 = [int(round(float(value))) for value in detection[:4]]
-        confidence, class_id = float(detection[4]), int(float(detection[5]))
-        color = (0, 255, 0) if index == target_index else (255, 180, 0)
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(output.shape[1] - 1, x2), min(output.shape[0] - 1, y2)
-        cv2.rectangle(output, (x1, y1), (x2, y2), color, 3 if index == target_index else 2)
-        cv2.putText(
-            output,
-            f"{names.get(class_id, class_id)} {confidence:.2f}",
-            (x1, max(20, y1 - 7)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.60,
-            color,
-            2,
-            cv2.LINE_AA,
+    """Draw CAM detections with the project/yolo_data_manager-style renderer.
+
+    This deliberately uses ``MdetResults.plot`` instead of a second custom
+    label implementation.  Consequently class colors, attribute colors,
+    attribute text format, top-left placement, and image-boundary handling
+    stay identical to normal prediction visualization.  The CAM target is
+    represented by the heatmap itself; boxes are rendered exactly as ordinary
+    predictions rather than with an extra target-only color.
+    """
+    if detections.numel() == 0:
+        return rgb
+
+    model_core = getattr(model, "model", model)
+    model_container = getattr(model_core, "model", model_core)
+    head = model_container[-1]
+    attribute_names, attribute_count, attribute_levels, multiclass = get_attribute_spec(model, head)
+    attribute_channels = int(getattr(head, "attribute_channels", attribute_count))
+
+    # NMS coordinates are in the letterboxed 640x640 image space.  Clamp only
+    # the displayed copy so labels and rectangles cannot leave the CAM image.
+    rendered = detections.detach().clone().float()
+    height, width = rgb.shape[:2]
+    rendered[:, [0, 2]].clamp_(0, width - 1)
+    rendered[:, [1, 3]].clamp_(0, height - 1)
+    boxes = rendered[:, :6]
+    attributes = rendered[:, 6 : 6 + attribute_channels]
+    if attributes.shape[1] != attribute_channels:
+        raise RuntimeError(
+            f"NMS returned {attributes.shape[1]} attribute channels, "
+            f"but the model head declares {attribute_channels}"
         )
-    return cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+
+    cam_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    results = MdetResults(
+        cam_bgr,
+        path="cam",
+        names=get_names(model),
+        boxes=boxes,
+        attributes=attributes,
+        attribute_names=attribute_names,
+        nc=int(getattr(head, "nc", len(get_names(model)))),
+        na=attribute_count,
+        nal=attribute_levels,
+        risk_enlarge=1,
+        multiclass_attributes=multiclass,
+        attribute_channels=attribute_channels,
+    )
+    annotated_bgr = results.plot(
+        img=cam_bgr,
+        conf=True,
+        labels=True,
+        boxes=True,
+        attributes=True,
+        masks=False,
+        probs=False,
+        filter_no=True,
+    )
+    return cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
 
 
 def box_iou_one(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
@@ -233,7 +296,6 @@ def run_one(
     detections, class_index, raw_index, target_conf, match_iou = prepare_detection(model, tensor, conf, iou)
     wrapper = RawModel(model).to(device)
     target_layer = model.model[layer_index]
-    names = get_names(model)
     model_output = output_root / model_name
     model_output.mkdir(parents=True, exist_ok=True)
 
@@ -263,9 +325,8 @@ def run_one(
         grayscale = cv2.resize(grayscale, (rgb.shape[1], rgb.shape[0]), interpolation=cv2.INTER_LINEAR)
         result = draw_detections(
             overlay_cam(rgb_float, grayscale),
-            detections.detach().cpu().numpy(),
-            names,
-            target_index=0,
+            detections,
+            model,
         )
         destination = model_output / f"{image.stem}_{method_name}.png"
         if not cv2.imwrite(str(destination), cv2.cvtColor(result, cv2.COLOR_RGB2BGR)):
@@ -363,6 +424,7 @@ def main() -> None:
 
     metadata = {
         "procedure": "historical_2026-09-22_cam",
+        "renderer": "ultralytics.engine.results.MdetResults.plot (yolo_data_manager-compatible)",
         "methods": list(args.methods),
         "mayolo_weight": str(args.mayolo_weight),
         "yolov10_weight": str(args.yolov10_weight),
