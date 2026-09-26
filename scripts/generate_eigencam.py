@@ -4,8 +4,10 @@ The visualization deliberately follows the 2026-09-22 reference procedure:
 one-to-many inference, attribute-aware NMS, conf=0.5, NMS IoU=0.7, and CAM
 target layer 22.  The heatmap is generated from the raw class score associated
 with the NMS detection, while the displayed boxes come from the same NMS call.
-The final annotation is rendered through the local ``MdetResults`` renderer,
-which follows the project's ``yolo_data_manager`` visualization convention.
+The final annotation uses a local copy of the project's
+``yolo_data_manager.vis.renderer`` OpenCV drawing rules so the CAM overlay
+does not introduce a second visualization style or a runtime dependency on
+that repository.
 """
 
 from __future__ import annotations
@@ -33,7 +35,6 @@ from pytorch_grad_cam import (  # noqa: E402
     RandomCAM,
     XGradCAM,
 )
-from ultralytics.engine.results import MdetResults  # noqa: E402
 from ultralytics.nn.tasks import attempt_load_weights  # noqa: E402
 from ultralytics.utils.ops import non_max_suppression_with_attributes, xywh2xyxy  # noqa: E402
 
@@ -50,6 +51,41 @@ CAM_METHODS = {
     "EigenGradCAM": EigenGradCAM,
 }
 DEFAULT_METHODS = tuple(CAM_METHODS)
+
+# Copied from yolo_data_manager.vis.renderer.  These values are OpenCV BGR
+# colors, matching the palette used by the normal prediction visualizer.
+CV2_COLORS = (
+    (255, 42, 4),
+    (235, 219, 11),
+    (243, 243, 243),
+    (183, 223, 0),
+    (104, 31, 17),
+    (221, 111, 255),
+    (79, 68, 255),
+    (0, 237, 204),
+    (68, 243, 0),
+    (255, 0, 189),
+    (186, 0, 221),
+    (255, 255, 0),
+    (0, 192, 38),
+    (179, 255, 1),
+    (255, 36, 125),
+    (104, 0, 123),
+    (108, 27, 255),
+    (47, 109, 252),
+    (11, 255, 162),
+)
+YDM_DARK_COLORS = {
+    (235, 219, 11),
+    (243, 243, 243),
+    (183, 223, 0),
+    (221, 111, 255),
+    (0, 237, 204),
+    (68, 243, 0),
+    (255, 255, 0),
+    (179, 255, 1),
+    (11, 255, 162),
+}
 
 
 def normalize_device(device: str) -> str:
@@ -100,11 +136,10 @@ def get_names(model) -> dict[int, str]:
 
 
 def get_attribute_spec(model, head) -> tuple[dict[str, list[str]], int, int, bool]:
-    """Return the attribute metadata required by ``MdetResults.plot``.
+    """Return attribute metadata in the format used by the project renderer.
 
-    The result renderer is the same renderer used by the project prediction
-    path.  A small fallback keeps CAM visualization usable for older
-    checkpoints that contain the head but not the attribute-name mapping.
+    A small fallback keeps CAM visualization usable for older checkpoints
+    that contain the attribute head but not the attribute-name mapping.
     """
     model_core = getattr(model, "model", model)
     attribute_names = getattr(model, "attribute_names", None)
@@ -114,12 +149,217 @@ def get_attribute_spec(model, head) -> tuple[dict[str, list[str]], int, int, boo
     attribute_count = int(getattr(head, "na", 0) or 0)
     attribute_levels = int(getattr(head, "nal", 2) or 2)
     if not isinstance(attribute_names, dict) or len(attribute_names) != attribute_count:
-        level_names = ["no", "yes"] if attribute_levels == 2 else [str(i) for i in range(attribute_levels)]
+        level_names = ["No risk", "High risk"] if attribute_levels == 2 else [str(i) for i in range(attribute_levels)]
         attribute_names = {
             f"attribute_{index}": list(level_names) for index in range(attribute_count)
         }
+    else:
+        # Existing checkpoints may store the two levels as False/True, no/yes,
+        # or 0/1.  Keep the prediction index unchanged but use the paper-facing
+        # labels in the visualization.
+        normalized = {}
+        for name, levels in attribute_names.items():
+            normalized[str(name)] = [
+                normalize_attribute_level(level, index)
+                for index, level in enumerate(levels)
+            ]
+        attribute_names = normalized
     multiclass = bool(getattr(head, "multiclass_attributes", False))
     return attribute_names, attribute_count, attribute_levels, multiclass
+
+
+def normalize_attribute_level(level, index: int) -> str:
+    """Map legacy boolean levels to the displayed risk terminology."""
+    if isinstance(level, (bool, np.bool_)):
+        return "High risk" if bool(level) else "No risk"
+    text = str(level).strip()
+    lowered = text.casefold()
+    if lowered in {"true", "yes", "1", "high risk", "high-risk"}:
+        return "High risk"
+    if lowered in {"false", "no", "0", "no risk", "no-risk"}:
+        return "No risk"
+    # Some old checkpoints store numeric levels as integers.  Only the first
+    # two binary levels are relabeled; other multi-level names are preserved.
+    if index == 0 and lowered == "0":
+        return "No risk"
+    if index == 1 and lowered == "1":
+        return "High risk"
+    return text
+
+
+def ydm_line_width(image: np.ndarray) -> int:
+    """Use yolo_data_manager's image-size-dependent line width."""
+    return max(round(sum(image.shape) / 2 * 0.003), 2)
+
+
+def ydm_text_color(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Use yolo_data_manager's readable text color for a label background."""
+    return (104, 31, 17) if tuple(color) in YDM_DARK_COLORS else (255, 255, 255)
+
+
+def ydm_draw_label(
+    image: np.ndarray,
+    x: float,
+    y: float,
+    text: str,
+    color: tuple[int, int, int],
+    line_width: int,
+) -> dict[str, int | float | bool] | None:
+    """Draw the yolo_data_manager class label and return its layout bounds."""
+    if not text:
+        return None
+    height, width = image.shape[:2]
+    font_thickness = max(line_width - 1, 1)
+    font_scale = line_width / 3
+    (text_width, text_height), baseline = cv2.getTextSize(
+        str(text), cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
+    )
+    pad = 2
+    rect_width = text_width + pad * 2
+    rect_height = text_height + baseline + pad * 2
+    anchor_x = max(0, min(int(round(x)), max(width - 1, 0)))
+    anchor_y = max(0, min(int(round(y)), max(height - 1, 0)))
+    outside = anchor_y >= rect_height
+    if outside and anchor_y - rect_height < 0:
+        outside = False
+    elif not outside and anchor_y + rect_height >= height:
+        outside = True
+
+    left = max(0, min(anchor_x, max(width - rect_width, 0)))
+    if outside:
+        top = max(0, anchor_y - rect_height)
+        bottom = min(height - 1, anchor_y)
+        text_baseline = max(top + text_height + pad, bottom - baseline - pad)
+    else:
+        top = min(max(anchor_y, 0), max(height - rect_height, 0))
+        bottom = min(height - 1, top + rect_height)
+        text_baseline = min(bottom - baseline - pad, top + text_height + pad)
+    right = min(width - 1, left + rect_width)
+
+    cv2.rectangle(image, (left, top), (right, bottom), color, -1, cv2.LINE_AA)
+    cv2.putText(
+        image,
+        str(text),
+        (left + pad, int(text_baseline)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale,
+        ydm_text_color(color),
+        thickness=font_thickness,
+        lineType=cv2.LINE_AA,
+    )
+    return {
+        "left": left,
+        "bottom": bottom,
+        "outside": outside,
+        "font_scale": font_scale,
+        "font_thickness": font_thickness,
+        "line_height": max(text_height + baseline, 1),
+    }
+
+
+def ydm_is_negative_attribute(value) -> bool:
+    """Identify the non-risk level for attribute-text coloring."""
+    if value is False or value is None:
+        return True
+    return str(value).strip().casefold() in {
+        "false",
+        "no",
+        "no risk",
+        "no-risk",
+        "0",
+    }
+
+
+def ydm_draw_attributes(
+    image: np.ndarray,
+    attributes: list[tuple[str, object]],
+    label_info: dict[str, int | float | bool] | None,
+) -> None:
+    """Draw the yolo_data_manager attribute panel without cross-box changes."""
+    if not attributes or label_info is None:
+        return
+    height, width = image.shape[:2]
+    font_scale = float(label_info["font_scale"])
+    font_thickness = int(label_info["font_thickness"])
+    line_height = max(int(float(label_info["line_height"]) * 0.85), 12)
+    texts = [f"{name}-{value}" for name, value in attributes]
+    sizes = [
+        cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
+        for text in texts
+    ]
+    max_text_width = max(size[0][0] for size in sizes)
+    text_height = max(size[0][1] for size in sizes)
+    baseline = max(size[1] for size in sizes)
+    x = max(0, min(int(label_info["left"]) + 2, max(width - max_text_width - 4, 0)))
+    start_y = int(label_info["bottom"]) + line_height
+    top = start_y - text_height - 2
+    bottom = start_y + line_height * (len(texts) - 1) + baseline + 2
+    if bottom >= height:
+        shift = bottom - height + 1
+        start_y -= shift
+        top -= shift
+        bottom -= shift
+    if top < 0:
+        start_y -= top
+        bottom -= top
+        top = 0
+    right = min(width - 1, x + max_text_width + 5)
+    bottom = min(height - 1, max(bottom, top))
+
+    overlay = image.copy()
+    cv2.rectangle(overlay, (x, top), (right, bottom), (255, 255, 255), -1)
+    cv2.addWeighted(overlay, 0.65, image, 0.35, 0, image)
+    for index, ((_, value), text) in enumerate(zip(attributes, texts)):
+        text_y = min(max(start_y + line_height * index, top + text_height), height - 1)
+        text_color = (0, 0, 0) if ydm_is_negative_attribute(value) else (255, 0, 0)
+        cv2.putText(
+            image,
+            text,
+            (x + 2, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            text_color,
+            font_thickness,
+            lineType=cv2.LINE_AA,
+        )
+
+
+def decode_attributes(
+    attributes: torch.Tensor,
+    attribute_names: dict[str, list[str]],
+    attribute_count: int,
+    attribute_levels: int,
+    multiclass: bool,
+) -> list[list[tuple[str, object]]]:
+    """Decode NMS attribute channels using the same levels as predictions."""
+    if attribute_count == 0 or attributes.numel() == 0:
+        return [[] for _ in range(len(attributes))]
+    data = attributes.detach()
+    names = list(attribute_names.items())
+    if multiclass:
+        expected = attribute_count * attribute_levels
+        if data.shape[-1] != expected:
+            raise RuntimeError(
+                f"Expected {expected} attribute channels, got {data.shape[-1]}"
+            )
+        indices = data.reshape(-1, attribute_count, attribute_levels).argmax(dim=-1)
+        max_levels = torch.tensor(
+            [len(levels) for _, levels in names], device=indices.device, dtype=indices.dtype
+        )
+        indices = torch.minimum(indices, (max_levels - 1).clamp_min(0))
+    else:
+        indices = torch.floor(data * attribute_levels).long().clamp(0, attribute_levels - 1)
+
+    decoded: list[list[tuple[str, object]]] = []
+    for row in indices.detach().cpu().tolist():
+        decoded.append(
+            [
+                (name, levels[min(int(level), len(levels) - 1)])
+                for (name, levels), level in zip(names, row)
+                if levels
+            ]
+        )
+    return decoded
 
 
 def draw_detections(
@@ -127,15 +367,7 @@ def draw_detections(
     detections: torch.Tensor,
     model,
 ) -> np.ndarray:
-    """Draw CAM detections with the project/yolo_data_manager-style renderer.
-
-    This deliberately uses ``MdetResults.plot`` instead of a second custom
-    label implementation.  Consequently class colors, attribute colors,
-    attribute text format, top-left placement, and image-boundary handling
-    stay identical to normal prediction visualization.  The CAM target is
-    represented by the heatmap itself; boxes are rendered exactly as ordinary
-    predictions rather than with an extra target-only color.
-    """
+    """Draw CAM detections with yolo_data_manager's OpenCV renderer."""
     if detections.numel() == 0:
         return rgb
 
@@ -159,32 +391,39 @@ def draw_detections(
             f"but the model head declares {attribute_channels}"
         )
 
-    cam_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    results = MdetResults(
-        cam_bgr,
-        path="cam",
-        names=get_names(model),
-        boxes=boxes,
-        attributes=attributes,
-        attribute_names=attribute_names,
-        nc=int(getattr(head, "nc", len(get_names(model)))),
-        na=attribute_count,
-        nal=attribute_levels,
-        risk_enlarge=1,
-        multiclass_attributes=multiclass,
-        attribute_channels=attribute_channels,
+    output = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    decoded_attributes = decode_attributes(
+        attributes,
+        attribute_names,
+        attribute_count,
+        attribute_levels,
+        multiclass,
     )
-    annotated_bgr = results.plot(
-        img=cam_bgr,
-        conf=True,
-        labels=True,
-        boxes=True,
-        attributes=True,
-        masks=False,
-        probs=False,
-        filter_no=True,
-    )
-    return cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
+    names = get_names(model)
+    line_width = ydm_line_width(output)
+    for detection, decoded in zip(rendered, decoded_attributes):
+        values = detection[:4].detach().cpu().numpy().astype(np.float32)
+        x1, y1, x2, y2 = [int(round(float(value))) for value in values]
+        x1, x2 = sorted((max(0, min(x1, width - 1)), max(0, min(x2, width - 1))))
+        y1, y2 = sorted((max(0, min(y1, height - 1)), max(0, min(y2, height - 1))))
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        confidence = float(detection[4].detach().cpu().item())
+        class_id = int(detection[5].detach().cpu().item())
+        color = CV2_COLORS[class_id % len(CV2_COLORS)]
+        cv2.rectangle(
+            output,
+            (x1, y1),
+            (x2, y2),
+            color,
+            thickness=line_width,
+            lineType=cv2.LINE_AA,
+        )
+        label = f"{names.get(class_id, class_id)} {confidence:.2f}"
+        label_info = ydm_draw_label(output, x1, y1, label, color, line_width)
+        ydm_draw_attributes(output, decoded, label_info)
+    return cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
 
 
 def box_iou_one(box: torch.Tensor, boxes: torch.Tensor) -> torch.Tensor:
@@ -424,7 +663,7 @@ def main() -> None:
 
     metadata = {
         "procedure": "historical_2026-09-22_cam",
-        "renderer": "ultralytics.engine.results.MdetResults.plot (yolo_data_manager-compatible)",
+        "renderer": "local port of yolo_data_manager.vis.renderer (OpenCV)",
         "methods": list(args.methods),
         "mayolo_weight": str(args.mayolo_weight),
         "yolov10_weight": str(args.yolov10_weight),
