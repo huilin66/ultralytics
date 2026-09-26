@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings('ignore')
 warnings.simplefilter('ignore')
+import inspect
 import torch, yaml, cv2, os, shutil, sys
 import numpy as np
 np.random.seed(0)
@@ -239,7 +240,12 @@ class yolov8_heatmap:
         
         target = yolov8_target(backward_type, conf_threshold, ratio)
         target_layers = [model.model[l] for l in layer]
-        method = eval(method)(model, target_layers, use_cuda=device.type == 'cuda')
+        method_class = eval(method)
+        method_parameters = inspect.signature(method_class).parameters
+        method_kwargs = {}
+        if 'use_cuda' in method_parameters:
+            method_kwargs['use_cuda'] = device.type == 'cuda'
+        method = method_class(model, target_layers, **method_kwargs)
         method.activations_and_grads = ActivationsAndGradients(model, target_layers, None)
         
         colors = np.asarray(
@@ -286,9 +292,20 @@ class yolov8_heatmap:
         inside every bounding boxes, and zero outside of the bounding boxes. """
         renormalized_cam = np.zeros(grayscale_cam.shape, dtype=np.float32)
         for x1, y1, x2, y2 in boxes:
-            x1, y1 = max(x1, 0), max(y1, 0)
-            x2, y2 = min(grayscale_cam.shape[1] - 1, x2), min(grayscale_cam.shape[0] - 1, y2)
-            renormalized_cam[y1:y2, x1:x2] = scale_cam_image(grayscale_cam[y1:y2, x1:x2].copy())    
+            if not np.isfinite((x1, y1, x2, y2)).all():
+                continue
+            x1, x2 = sorted((int(np.floor(x1)), int(np.ceil(x2))))
+            y1, y2 = sorted((int(np.floor(y1)), int(np.ceil(y2))))
+            x1 = max(0, min(x1, grayscale_cam.shape[1]))
+            y1 = max(0, min(y1, grayscale_cam.shape[0]))
+            x2 = max(0, min(x2, grayscale_cam.shape[1]))
+            y2 = max(0, min(y2, grayscale_cam.shape[0]))
+            if x2 <= x1 or y2 <= y1:
+                continue
+            region = grayscale_cam[y1:y2, x1:x2].copy()
+            if region.size == 0:
+                continue
+            renormalized_cam[y1:y2, x1:x2] = scale_cam_image(region)
         renormalized_cam = scale_cam_image(renormalized_cam)
         eigencam_image_renormalized = show_cam_on_image(image_float_np, renormalized_cam, use_rgb=True)
         return eigencam_image_renormalized
