@@ -113,6 +113,12 @@ class MDetectionValidator(BaseValidator):
             risk_enlarge=self.args.risk_enlarge,
             eval_att_by_class=self.args.eval_att_by_class,
         )
+        # Exact box-level confusion matrix used by the fine-grained Test
+        # export.  It is built from the same IoU>=0.5/class-correct matches
+        # that provide the attribute metrics, rather than from the validator's
+        # separate confidence-filtered plotting confusion matrix.
+        self.box_confusion_matrix = np.zeros((self.nc + 1, self.nc + 1), dtype=np.int64)
+        self._last_box_confusion = None
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], ap=[], conf_mat=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_attributes=[], target_attributes=[], filter_small_gt=[], filter_small_pred=[])
@@ -203,6 +209,7 @@ class MDetectionValidator(BaseValidator):
                         self.stats[k].append(stat[k])
                     if self._should_collect_confusion():
                         self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls, gt_attributes=mdet_attributes)
+                        self.box_confusion_matrix[self.nc, cls.long().cpu().numpy()] += 1
                 continue
 
             # Predictions
@@ -214,6 +221,7 @@ class MDetectionValidator(BaseValidator):
             stat["pred_attributes"] = predn[:, 6:6 + self.attribute_channels]
 
             # Evaluate
+            box_confusion = None
             if nl:
                 (
                     stat["tp"],
@@ -225,6 +233,9 @@ class MDetectionValidator(BaseValidator):
                     matched_probs,
                     matched_classes,
                 ) = self._process_batch(predn, bbox, cls, mdet_attributes)
+                box_confusion = self._last_box_confusion
+                if box_confusion is None:
+                    raise RuntimeError("Exact box confusion matrix was not produced for the current Test batch.")
                 if self.collect_detailed_level_metrics and matched_targets.numel() and matched_probs.numel():
                     self.level_targets.append(matched_targets.detach().cpu().numpy())
                     self.level_probs.append(matched_probs.detach().cpu().numpy())
@@ -236,8 +247,13 @@ class MDetectionValidator(BaseValidator):
                     stat["conf"] = stat["conf"][stat["filter_small_pred"]]
                     stat["pred_cls"] = stat["pred_cls"][stat["filter_small_pred"]]
                     stat["pred_attributes"] = stat["pred_attributes"][stat["filter_small_pred"]]
-                if self._should_collect_confusion():
-                    self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+            if self._should_collect_confusion():
+                self.confusion_matrix.process_batch(predn, bbox, cls, mdet_attributes)
+                if nl:
+                    self.box_confusion_matrix += box_confusion
+                else:
+                    pred_classes = predn[:, 5].long().cpu().numpy()
+                    self.box_confusion_matrix[pred_classes, self.nc] += 1
             for k in self.stats.keys():
                 self.stats[k].append(stat[k])
 
@@ -252,6 +268,7 @@ class MDetectionValidator(BaseValidator):
         """Set final values for metrics speed and confusion matrix."""
         self.metrics.speed = self.speed
         self.metrics.confusion_matrix = self.confusion_matrix
+        self.metrics.box_confusion_matrix = self.box_confusion_matrix
 
     def get_stats(self):
         """Returns metrics statistics and results dictionary."""
@@ -346,6 +363,47 @@ class MDetectionValidator(BaseValidator):
                 batch_conf_mat[k, gi, pi] += 1
         return batch_conf_mat.unsqueeze(0)
 
+    def _build_box_confusion(self, iou, matched_box, pred_classes, true_classes):
+        """Build a box confusion matrix using the attribute-metric matching basis.
+
+        Class-correct IoU>=0.5 pairs are inserted first, so the diagonal is
+        exactly the set of detections used for the attribute metrics. Remaining
+        wrong-class IoU>=0.5 pairs are then matched for off-diagonal entries;
+        all unmatched predictions and targets are assigned to background.
+        """
+        iou_np = iou.detach().cpu().numpy()
+        matched_np = matched_box.detach().cpu().numpy().astype(bool)
+        pred_cls_np = pred_classes.detach().cpu().numpy().astype(np.int64)
+        true_cls_np = true_classes.detach().cpu().numpy().astype(np.int64)
+        matrix = np.zeros((self.nc + 1, self.nc + 1), dtype=np.int64)
+
+        matched_gt = matched_np.any(axis=1) if matched_np.size else np.zeros(len(true_cls_np), dtype=bool)
+        matched_pred = matched_np.any(axis=0) if matched_np.size else np.zeros(len(pred_cls_np), dtype=bool)
+        for gt_index, pred_index in np.argwhere(matched_np):
+            matrix[pred_cls_np[pred_index], true_cls_np[gt_index]] += 1
+
+        # Match remaining wrong-class pairs only after class-correct pairs have
+        # been reserved. This retains useful off-diagonal class-confusion
+        # counts without changing the diagonal/matched-instance definition.
+        if len(true_cls_np) and len(pred_cls_np):
+            candidates = (iou_np >= 0.5) & ~matched_gt[:, None] & ~matched_pred[None, :]
+            candidates &= true_cls_np[:, None] != pred_cls_np[None, :]
+            candidate_pairs = np.argwhere(candidates)
+            if candidate_pairs.size:
+                scores = iou_np[candidate_pairs[:, 0], candidate_pairs[:, 1]]
+                for gt_index, pred_index in candidate_pairs[np.argsort(scores)[::-1]]:
+                    if matched_gt[gt_index] or matched_pred[pred_index]:
+                        continue
+                    matrix[pred_cls_np[pred_index], true_cls_np[gt_index]] += 1
+                    matched_gt[gt_index] = True
+                    matched_pred[pred_index] = True
+
+        for gt_index in np.flatnonzero(~matched_gt):
+            matrix[self.nc, true_cls_np[gt_index]] += 1
+        for pred_index in np.flatnonzero(~matched_pred):
+            matrix[pred_cls_np[pred_index], self.nc] += 1
+        return matrix
+
     def match_predictions(self, pred_boxes, gt_boxes, pred_classes, true_classes, iou, pred_attributes,
                           gt_attributes, nal=2, use_scipy=False, pbatch=None):
         """
@@ -379,6 +437,7 @@ class MDetectionValidator(BaseValidator):
         else:
             keep_gt = None
             keep_pred = None
+        raw_iou = iou.clone()
         # Dx10 matrix, where D - detections, 10 - IoU thresholds
         correct = np.zeros((pred_classes.shape[0], self.iouv.shape[0])).astype(bool)
         # LxD matrix where L - labels (rows), D - detections (columns)
@@ -458,6 +517,7 @@ class MDetectionValidator(BaseValidator):
         # attribute confusion matrix, but retain the softmax probabilities for
         # threshold-independent level metrics such as PR-AUC.
         matched_gt_idx, matched_pred_idx = torch.where(matched_box)
+        box_confusion = self._build_box_confusion(raw_iou, matched_box, pred_classes, true_classes)
         matched_targets = gt_attributes[matched_gt_idx].long()
         matched_classes = true_classes[matched_gt_idx].long()
         if matched_pred_idx.numel():
@@ -478,6 +538,7 @@ class MDetectionValidator(BaseValidator):
         else:
             matched_probs = pred_attributes.new_empty((0, self.na, self.nal), dtype=torch.float32)
 
+        self._last_box_confusion = box_confusion
         return correct, ap, batch_conf_mat, keep_gt, keep_pred, matched_targets, matched_probs, matched_classes
 
     def build_dataset(self, img_path, mode="val", batch=None):

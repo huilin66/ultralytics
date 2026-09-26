@@ -187,11 +187,11 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
         row["Precision_test"] = float(precision)
         row["Recall_test"] = float(recall)
 
-    # MDetectionValidator collects the standard box confusion matrix during
-    # an explicit Test evaluation.  Export it as a long CSV so it can be
-    # plotted together with the attribute confusion matrices.
-    box_confusion_object = getattr(metrics, "confusion_matrix", None)
-    box_confusion = np.asarray(getattr(box_confusion_object, "matrix", []), dtype=np.float64)
+    # MDetectionValidator exports a box confusion matrix built from the same
+    # IoU>=0.5/class-correct matching basis as the attribute metrics.  The
+    # standard plotting confusion matrix uses an independent confidence
+    # threshold and is therefore not suitable for this table.
+    box_confusion = np.asarray(getattr(metrics, "box_confusion_matrix", []), dtype=np.float64)
     box_confusion_rows = []
     if box_confusion.ndim == 2 and box_confusion.shape[0] == box_confusion.shape[1]:
         background_index = box_confusion.shape[0] - 1
@@ -217,8 +217,8 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
                 )
     else:
         raise RuntimeError(
-            "The Test validator did not expose a square box confusion matrix. "
-            "Ensure Test confusion collection is enabled."
+            "The Test validator did not expose the exact square box confusion matrix. "
+            "Ensure the updated mdetect validator is loaded."
         )
 
     detailed_by_class = getattr(getattr(metrics, "attributes", None), "detailed_by_class", None) or {}
