@@ -33,6 +33,7 @@ DRY_RUN="${DRY_RUN:-0}"
 EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-}"
 EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-}"
 EIGENCAM_IMAGES="${EIGENCAM_IMAGES:-}"
+EIGENCAM_IMAGE_NAMES="${EIGENCAM_IMAGE_NAMES:-}"
 EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_gradcam_acm_all8}"
 EIGENCAM_LAYER="${EIGENCAM_LAYER:-22}"
 EIGENCAM_CONF="${EIGENCAM_CONF:-0.5}"
@@ -48,7 +49,19 @@ while [[ $# -gt 0 ]]; do
     --seeds) SEEDS="$2"; shift ;;
     --mayolo-weight) EIGENCAM_MAYOLO_WEIGHT="$2"; shift ;;
     --yolov10-weight) EIGENCAM_YOLOV10_WEIGHT="$2"; shift ;;
-    --images|--image-path) EIGENCAM_IMAGES="$2"; shift ;;
+    --images|--image|--image-path) EIGENCAM_IMAGES="$2"; shift ;;
+    --image-names)
+      shift
+      EIGENCAM_IMAGE_NAMES=""
+      while [[ $# -gt 0 && "$1" != --* ]]; do
+        if [[ -n "$EIGENCAM_IMAGE_NAMES" ]]; then
+          EIGENCAM_IMAGE_NAMES+=" "
+        fi
+        EIGENCAM_IMAGE_NAMES+="$1"
+        shift
+      done
+      continue
+      ;;
     --output) EIGENCAM_OUTPUT="$2"; shift ;;
     --layer) EIGENCAM_LAYER="$2"; shift ;;
     --iou) EIGENCAM_IOU="$2"; shift ;;
@@ -125,6 +138,8 @@ Options:
   --mayolo-weight PATH   MAYOLO checkpoint for eigencam.
   --yolov10-weight PATH  YOLOv10 checkpoint for eigencam.
   --images PATH           Input image or image directory for eigencam.
+  --image-names NAMES      Optional names when --images is a directory; accepts
+                           "A B" or separate names: A B.
   --output PATH           CAM output directory.
   --layer INDEX           CAM target layer (default: 22).
   --iou VALUE             NMS IoU threshold (default: 0.7).
@@ -133,7 +148,7 @@ Options:
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
 WORKERS, IMGSZ, W4_SWEEP_VALUES, W4_SWEEP_ROOT, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
 E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, EIGENCAM_LAYER, EIGENCAM_CONF,
-EIGENCAM_IOU and EIGENCAM_METHODS.
+EIGENCAM_IOU, EIGENCAM_METHODS and EIGENCAM_IMAGE_NAMES.
 EOF
 }
 
@@ -688,6 +703,11 @@ eigencam() {
     exit 2
   fi
 
+  local -a image_names=()
+  if [[ -n "$EIGENCAM_IMAGE_NAMES" ]]; then
+    read -r -a image_names <<< "$EIGENCAM_IMAGE_NAMES"
+  fi
+
   local -a cmd=(
     "$PYTHON_BIN" scripts/generate_eigencam.py
     --mayolo-weight "$EIGENCAM_MAYOLO_WEIGHT"
@@ -700,6 +720,9 @@ eigencam() {
     --iou "$EIGENCAM_IOU"
     --methods "${methods[@]}"
   )
+  if [[ "${#image_names[@]}" -gt 0 ]]; then
+    cmd+=(--image-names "${image_names[@]}")
+  fi
   run "${cmd[@]}"
 }
 
