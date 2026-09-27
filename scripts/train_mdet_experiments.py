@@ -602,7 +602,10 @@ def _train_one(
 
     # Keep imports lazy so --help/--dry-run can validate the experiment matrix
     # on a machine that does not have the GPU environment installed.
-    from mayolo_r1 import myolo_train_full
+    try:
+        from mayolo_r1 import myolo_train_full
+    except ModuleNotFoundError:
+        from scripts.mayolo_r1 import myolo_train_full
     from ultralytics import RTDETR, YOLO
 
     network = RTDETR if network_name == "rtdetr" else YOLO
@@ -710,7 +713,10 @@ def _train_direct_stage(
     if args.dry_run:
         return None
 
-    from mayolo_r1 import myolo_train
+    try:
+        from mayolo_r1 import myolo_train
+    except ModuleNotFoundError:
+        from scripts.mayolo_r1 import myolo_train
     from ultralytics import RTDETR, YOLO
 
     train_kwargs = _training_kwargs(args, w4, seed, hsv=hsv)
@@ -1023,7 +1029,10 @@ def _train_gca_warmup(
     if args.dry_run:
         return None
 
-    from mayolo_r1 import myolo_train_gca_warmup
+    try:
+        from mayolo_r1 import myolo_train_gca_warmup
+    except ModuleNotFoundError:
+        from scripts.mayolo_r1 import myolo_train_gca_warmup
     from ultralytics import YOLO
 
     train_kwargs = _training_kwargs(args, args.w4, args.seed)

@@ -1,7 +1,7 @@
 """Run a short GPU-memory smoke test for mdet model variants.
 
 The test intentionally uses the real mdet training entry point from
-``mayolo_r1.py``.  It runs each selected model for two epochs, records the
+``scripts/mayolo_r1.py``.  It runs each selected model for two epochs, records the
 peak CUDA memory, and continues with the remaining models when one model is
 missing a checkpoint or runs out of memory.  This script only covers mdet;
 segmentation models are not included.
@@ -275,7 +275,10 @@ def _report_path(project: Path, stem: str) -> Path:
 
 def _run_one(args, name: str, spec: Dict[str, str], checkpoint: str, torch, device, index: int) -> Dict[str, object]:
     """Run one short mdet smoke test and return its memory record."""
-    from mayolo_r1 import myolo_train
+    try:
+        from mayolo_r1 import myolo_train
+    except ModuleNotFoundError:
+        from scripts.mayolo_r1 import myolo_train
     from ultralytics import RTDETR, YOLO
 
     network = RTDETR if spec["network"] == "rtdetr" else YOLO
