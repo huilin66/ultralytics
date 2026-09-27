@@ -25,15 +25,14 @@ BATCH="${BATCH:-16}"
 WORKERS="${WORKERS:-8}"
 IMGSZ="${IMGSZ:-640}"
 W4="${W4:-0.5}"
-W4_SWEEP_VALUES="${W4_SWEEP_VALUES:-0 0.25 0.5 0.75 1.0}"
-W4_SWEEP_ROOT="${W4_SWEEP_ROOT:-runs/experiments/E1_w4_5seed}"
 STAGE1_EPOCHS="${STAGE1_EPOCHS:-100}"
 STAGE2_EPOCHS="${STAGE2_EPOCHS:-100}"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 FINE_SEED="${FINE_SEED:-1}"
 DRY_RUN="${DRY_RUN:-0}"
-EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_100_stage2_100_w4_0p5_seed_0/weights/best.pt}"
-EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-runs/experiments/E3_versions/E3_versions_yolov10x_w4_0p5_seed_0_stage2/weights/best.pt}"
+WEIGHTS_MANIFEST="${WEIGHTS_MANIFEST:-}"
+EIGENCAM_MAYOLO_WEIGHT="${EIGENCAM_MAYOLO_WEIGHT:-}"
+EIGENCAM_YOLOV10_WEIGHT="${EIGENCAM_YOLOV10_WEIGHT:-}"
 EIGENCAM_IMAGES="${EIGENCAM_IMAGES:-/localnvme/data/billboard/mayolo_v3/heatmap_demo}"
 EIGENCAM_IMAGE_NAMES="${EIGENCAM_IMAGE_NAMES:-}"
 EIGENCAM_OUTPUT="${EIGENCAM_OUTPUT:-runs/experiments/E3_final_test/heatmaps_eigencam}"
@@ -50,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --device) DEVICE="$2"; shift ;;
     --seeds) SEEDS="$2"; shift ;;
     --fine-seed) FINE_SEED="$2"; shift ;;
+    --weights-manifest) WEIGHTS_MANIFEST="$2"; shift ;;
     --mayolo-weight) EIGENCAM_MAYOLO_WEIGHT="$2"; shift ;;
     --yolov10-weight) EIGENCAM_YOLOV10_WEIGHT="$2"; shift ;;
     --images|--image|--image-path) EIGENCAM_IMAGES="$2"; shift ;;
@@ -77,26 +77,24 @@ done
 read -r -a SEED_LIST <<< "$SEEDS"
 W4_TAG="${W4//./p}"
 
-E2_ROOT="${E2_ROOT:-runs/experiments/E2_27_baseline_gia_seed5}"
+E2_OUTPUT_ROOT="${E2_OUTPUT_ROOT:-runs/experiments/E2_27_baseline_gia_seed5}"
 E2_LABEL="${E2_LABEL:-E2_27_baseline_gia_seed5}"
-BASE_STAGE1_PREFIX="${E2_LABEL}_baseline_w4_${W4_TAG}_seed_"
-GIA_STAGE1_PREFIX="${E2_LABEL}_gia_v2_5_7_w4_${W4_TAG}_seed_"
 PURE_GCA_CONFIG="${PURE_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GCA_margin_residual.yaml}"
 GIA_GCA_CONFIG="${GIA_GCA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7_GCA_margin_residual.yaml}"
 GIA_CONFIG="${GIA_CONFIG:-ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml}"
 
 GNN_TYPES=(gcn gat graphsage gin)
 GIA_POSITION_VARIANTS=(
-  "gia_v2_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml"
-  "gia_v2_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml"
-  "gia_v2_8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml"
-  "gia_v2_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml"
-  "gia_v2_10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml"
-  "gia_v2_13=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_13.yaml"
-  "gia_v2_16=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_16.yaml"
-  "gia_v2_19=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_19.yaml"
-  "gia_v2_22=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_22.yaml"
-  "gia_v2_5_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml"
+  "gia_6=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_6.yaml"
+  "gia_7=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_7.yaml"
+  "gia_8=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_8.yaml"
+  "gia_9=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_9.yaml"
+  "gia_10=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_10.yaml"
+  "gia_13=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_13.yaml"
+  "gia_16=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_16.yaml"
+  "gia_19=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_19.yaml"
+  "gia_22=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_22.yaml"
+  "gia=ultralytics/cfg/models/exp_ablation/yolov10x_GIA_v2_5_7.yaml"
 )
 
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
@@ -109,15 +107,14 @@ usage() {
   cat <<'EOF'
 Usage: bash run_experiment.sh CODE [options]
 
-Default EigenCAM command (uses the configured MAYOLOx/YOLOv10x checkpoints):
-  bash run_experiment.sh eigencam --device 0
+EigenCAM requires explicit checkpoints:
+  bash run_experiment.sh eigencam --device 0 --mayolo-weight PATH --yolov10-weight PATH
 
 Codes:
   preflight  Check repository inputs and paths.
   e1         E1 w4 validation scan.
-  e1.w4-5seed  E1 w4 sweep with five seeds (0, 0.25, 0.5, 0.75, 1.0).
   e2.0       Baseline/GIA five-seed Stage1+Stage2 training.
-  e2.1       GIA-v2 position Stage1 sweep.
+  e2.1       GIA position Stage1+Stage2 sweep.
   e2.2       Pure Baseline+GCA, 4 graph operators x 5 seeds.
   e2.3       Baseline HO Test evaluation.
   e2.4       GIA HO Test evaluation.
@@ -132,8 +129,8 @@ Codes:
   e5.eval    Test inference only for existing E5 checkpoints.
   e6         Two-stage detector + multi-label classifier training/Test inference.
   e6.eval    Test inference only for existing E6 checkpoints.
-  e5.1       Offline robustness-variant generation and evaluation.
-  e6.1       Per-attribute/level metrics, calibration and confusion matrices.
+  e7         Offline robustness-variant generation and evaluation.
+  e8         Per-attribute/level metrics, calibration and confusion matrices.
   eigencam    Generate EigenCAM visualizations for MAYOLOx and YOLOv10x and side-by-side images.
   all        Run automated sections in dependency order.
 
@@ -141,7 +138,8 @@ Options:
   --dry-run              Print commands without executing them.
   --device CUDA_DEVICE   Override DEVICE (default: 0).
   --seeds "0 1 2"        Override the seed list.
-  --fine-seed SEED        Seed used by e6.1 fine-grained Test evaluation (default: 1).
+  --fine-seed SEED        Seed used by e8 fine-grained Test evaluation (default: 1).
+  --weights-manifest PATH Checkpoint manifest for existing-weight commands.
   --mayolo-weight PATH   MAYOLO checkpoint for eigencam.
   --yolov10-weight PATH  YOLOv10 checkpoint for eigencam.
   --images PATH           Input image or image directory for eigencam.
@@ -152,11 +150,19 @@ Options:
   --iou VALUE             NMS IoU threshold (default: 0.7).
   --all-methods           Generate all eight supported CAM methods.
 
+Commands that evaluate existing checkpoints (e2.2--e2.8, e3.eval, e5.eval,
+e6, e6.eval, e7 and e8) require --weights-manifest or WEIGHTS_MANIFEST.
+The manifest is tab-separated with one entry per line:
+  KEY<TAB>SEED<TAB>CHECKPOINT_PATH
+Blank lines and lines beginning with # are ignored.  Required keys are
+documented by each command's error message; common keys include baseline,
+gia, gca_gin, gia_gca_gin, YOLOv10x, MAYOLOx, E5 and E6-classifier.
+
 Common environment overrides: PYTHON_BIN, DATA, PRETRAIN, COM_CROSS, BATCH,
-WORKERS, IMGSZ, W4_SWEEP_VALUES, W4_SWEEP_ROOT, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_PERFORMANCE_ROOT,
-E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, FINE_SEED, FINE_PROJECT_ROOT,
-FINE_YOLOV10_WEIGHT, FINE_MAYOLO_WEIGHT, EIGENCAM_LAYER, EIGENCAM_CONF,
-EIGENCAM_IOU, EIGENCAM_METHODS and EIGENCAM_IMAGE_NAMES.
+WORKERS, IMGSZ, STAGE1_EPOCHS, STAGE2_EPOCHS, E2_OUTPUT_ROOT,
+E2_PERFORMANCE_ROOT, E2_PERF_SEEDS, E3_PERF_ROOT, E3_PERF_SEEDS, FINE_SEED,
+FINE_PROJECT_ROOT, EIGENCAM_LAYER, EIGENCAM_CONF, EIGENCAM_IOU,
+EIGENCAM_METHODS and EIGENCAM_IMAGE_NAMES.
 EOF
 }
 
@@ -176,19 +182,34 @@ need() {
   }
 }
 
-stage1_weight() {
-  local prefix="$1" seed="$2"
-  echo "$E2_ROOT/${prefix}${seed}_stage1/weights/best.pt"
+require_weights_manifest() {
+  [[ -n "$WEIGHTS_MANIFEST" ]] || {
+    echo "This command requires --weights-manifest PATH (or WEIGHTS_MANIFEST)." >&2
+    exit 2
+  }
+  need "$WEIGHTS_MANIFEST"
 }
 
-stage2_plain_weight() {
-  local prefix="$1" seed="$2"
-  echo "$E2_ROOT/${prefix}${seed}_stage2/weights/best.pt"
+manifest_weight() {
+  local key="$1" seed="$2" path
+  require_weights_manifest
+  path="$(awk -F $'\t' -v wanted_key="$key" -v wanted_seed="$seed" \
+    '$0 !~ /^[[:space:]]*#/ && NF >= 3 && $1 == wanted_key && $2 == wanted_seed { print $3; exit }' \
+    "$WEIGHTS_MANIFEST")"
+  [[ -n "$path" ]] || {
+    echo "Missing manifest entry: key=$key seed=$seed in $WEIGHTS_MANIFEST" >&2
+    exit 1
+  }
+  need "$path"
+  printf '%s\n' "$path"
 }
 
-stage2_weight() {
-  local root="$1" label="$2" operator="$3" seed="$4"
-  echo "$root/${label}_${operator}_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt"
+collect_manifest_group() {
+  local key="$1" seed
+  COLLECTED=()
+  for seed in "${SEED_LIST[@]}"; do
+    COLLECTED+=("$(manifest_weight "$key" "$seed")")
+  done
 }
 
 preflight() {
@@ -210,30 +231,13 @@ e1() {
     --project runs/experiments/E1_w4 --label E1_w4 --skip-existing
 }
 
-e1_w4_5seed() {
-  echo "[E1] w4 five-seed sweep: values=${W4_SWEEP_VALUES}, seeds=${SEEDS}"
-  need "$DATA"; need "$MD_MODEL"; need "$PRETRAIN"
-  local -a w4_values=()
-  read -r -a w4_values <<< "$W4_SWEEP_VALUES"
-  if [[ "${#w4_values[@]}" -eq 0 ]]; then
-    echo "W4_SWEEP_VALUES must contain at least one value" >&2
-    exit 2
-  fi
-  py scripts/train_mdet_experiments.py w4-seeds \
-    --data "$DATA" --model "$MD_MODEL" --pretrain "$PRETRAIN" \
-    --w4-values "${w4_values[@]}" --seeds "${SEED_LIST[@]}" \
-    --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
-    --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE" \
-    --project "$W4_SWEEP_ROOT" --label E1_w4_5seed --skip-existing
-}
-
 e20() {
   echo "[E2.0] baseline and GIA five-seed Stage1+Stage2"
   need "$DATA"; need "$MD_MODEL"; need "$GIA_CONFIG"
   local seed
   for seed in "${SEED_LIST[@]}"; do
     py scripts/train_mdet_experiments.py variants \
-      --data "$DATA" --project "$E2_ROOT" --imgsz "$IMGSZ" --batch "$BATCH" \
+      --data "$DATA" --project "$E2_OUTPUT_ROOT" --imgsz "$IMGSZ" --batch "$BATCH" \
       --workers "$WORKERS" --device "$DEVICE" --seed "$seed" --w4 "$W4" \
       --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS" \
       --label "$E2_LABEL" --variant "baseline=$MD_MODEL" \
@@ -242,17 +246,17 @@ e20() {
 }
 
 e21() {
-  echo "[E2.1] GIA-v2 position Stage1 sweep"
+  echo "[E2.1] GIA position Stage1+Stage2 sweep"
   need "$DATA"
   local seed variant
   for seed in "${SEED_LIST[@]}"; do
     local -a cmd=(
       "$PYTHON_BIN" scripts/train_mdet_experiments.py gia-position
-      --data "$DATA" --project runs/experiments/E2_1_GIA_v2_position
+      --data "$DATA" --project runs/experiments/E2_1_GIA_position
       --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" --device "$DEVICE"
       --seed "$seed" --w4 "$W4"
       --stage1-epochs "$STAGE1_EPOCHS" --stage2-epochs "$STAGE2_EPOCHS"
-      --label E2_1_GIA_v2_position --pretrain "$PRETRAIN" --stage1-only --skip-existing
+      --label E2_1_GIA_position --pretrain "$PRETRAIN" --skip-existing
     )
     for variant in "${GIA_POSITION_VARIANTS[@]}"; do cmd+=(--variant "$variant"); done
     run "${cmd[@]}"
@@ -260,8 +264,9 @@ e21() {
 }
 
 gca_train() {
-  local label="$1" root="$2" config="$3" matrix_path="$4" prefix="$5"
+  local label="$1" root="$2" config="$3" matrix_path="$4" stage1_key="$5"
   need "$DATA"; need "$config"; need "$matrix_path"
+  require_weights_manifest
   local -a cmd=(
     "$PYTHON_BIN" scripts/train_mdet_experiments.py gca-stage2-seeds
     --label "$label" --data "$DATA" --project "$root"
@@ -273,8 +278,7 @@ gca_train() {
   )
   local seed checkpoint
   for seed in "${SEED_LIST[@]}"; do
-    checkpoint="$(stage1_weight "$prefix" "$seed")"
-    need "$checkpoint"
+    checkpoint="$(manifest_weight "$stage1_key" "$seed")"
     cmd+=(--stage1-checkpoint-map "${seed}=${checkpoint}")
   done
   run "${cmd[@]}"
@@ -284,14 +288,14 @@ e22() {
   echo "[E2.2] pure Baseline+GCA: Cross matrix and four graph operators"
   gca_train E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
     runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
-    "$PURE_GCA_CONFIG" "$COM_CROSS" "$BASE_STAGE1_PREFIX"
+    "$PURE_GCA_CONFIG" "$COM_CROSS" baseline_stage1
 }
 
 e25() {
   echo "[E2.5] GIA+GCA Stage2: Cross matrix and four graph operators"
   gca_train E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
     runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
-    "$GIA_GCA_CONFIG" "$COM_CROSS" "$GIA_STAGE1_PREFIX"
+    "$GIA_GCA_CONFIG" "$COM_CROSS" gia_stage1
 }
 
 eval_ho() {
@@ -309,71 +313,61 @@ eval_ho() {
   run "${cmd[@]}"
 }
 
-collect_stage2() {
-  local prefix="$1"
-  COLLECTED=()
-  local seed
-  for seed in "${SEED_LIST[@]}"; do
-    COLLECTED+=("$E2_ROOT/${prefix}${seed}_stage2/weights/best.pt")
-  done
-}
-
-collect_gca() {
-  local root="$1" label="$2"
-  COLLECTED=()
-  local operator seed
-  for operator in "${GNN_TYPES[@]}"; do
-    for seed in "${SEED_LIST[@]}"; do
-      COLLECTED+=("$(stage2_weight "$root" "$label" "$operator" "$seed")")
-    done
-  done
-}
-
 e23() {
   echo "[E2.3] Baseline HO Test evaluation"
-  collect_stage2 "$BASE_STAGE1_PREFIX"
+  collect_manifest_group baseline
   eval_ho runs/experiments/E2_27_HO/summary.csv E2_27_HO one2many "${COLLECTED[@]}"
 }
 
 e24() {
   echo "[E2.4] GIA HO Test evaluation"
-  collect_stage2 "$GIA_STAGE1_PREFIX"
+  collect_manifest_group gia
   eval_ho runs/experiments/E2_27_GIA_v2_5_7_stage2_recheck/one2many_summary.csv \
     E2_27_GIA_v2_5_7_stage2_recheck one2many "${COLLECTED[@]}"
 }
 
 e26() {
   echo "[E2.6] Baseline+GCA HO Test evaluation"
-  local root="runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross"
-  local label="E2_29_Baseline_GCA_pure_margin_residual_5seed_cross"
-  collect_gca "$root" "$label"
+  require_weights_manifest
+  local root="${E2_GCA_HO_ROOT:-runs/experiments/E2_6_Baseline_GCA_HO}"
+  COLLECTED=()
+  local operator seed
+  for operator in "${GNN_TYPES[@]}"; do
+    for seed in "${SEED_LIST[@]}"; do
+      COLLECTED+=("$(manifest_weight "gca_${operator}" "$seed")")
+    done
+  done
   eval_ho "$root/ho_summary.csv" "E2_6_Baseline_GCA_cross_HO" one2many \
     "${COLLECTED[@]}"
 }
 
 e27() {
   echo "[E2.7] GIA+GCA HO Test evaluation (MAYOLO)"
-  local root="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
-  local label="E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross"
-  collect_gca "$root" "$label"
+  require_weights_manifest
+  local root="${E2_GIA_GCA_HO_ROOT:-runs/experiments/E2_7_MAYOLO_HO}"
+  COLLECTED=()
+  local operator seed
+  for operator in "${GNN_TYPES[@]}"; do
+    for seed in "${SEED_LIST[@]}"; do
+      COLLECTED+=("$(manifest_weight "gia_gca_${operator}" "$seed")")
+    done
+  done
   eval_ho "$root/ho_summary.csv" "E2_7_MAYOLO_cross_HO" one2many \
     "${COLLECTED[@]}"
 }
 
 e28() {
   echo "[E2.8] ablation/performance profile for eight models x five seeds"
+  require_weights_manifest
   local root="${E2_PERFORMANCE_ROOT:-runs/experiments/performance_profile/E2_8_5seed_repro}"
   local perf_seeds="${E2_PERF_SEEDS:-0 1 2 3 4}"
   read -r -a PERF_SEED_LIST <<< "$perf_seeds"
   local seed baseline gia gca gia_gca
   for seed in "${PERF_SEED_LIST[@]}"; do
-    baseline="$(stage2_plain_weight "$BASE_STAGE1_PREFIX" "$seed")"
-    gia="$(stage2_plain_weight "$GIA_STAGE1_PREFIX" "$seed")"
-    gca="$(stage2_weight runs/experiments/E2_29_Baseline_GCA_pure_margin_residual_5seed_cross \
-      E2_29_Baseline_GCA_pure_margin_residual_5seed_cross gin "$seed")"
-    gia_gca="$(stage2_weight runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross \
-      E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross gin "$seed")"
-    need "$baseline"; need "$gia"; need "$gca"; need "$gia_gca"
+    baseline="$(manifest_weight baseline "$seed")"
+    gia="$(manifest_weight gia "$seed")"
+    gca="$(manifest_weight gca_gin "$seed")"
+    gia_gca="$(manifest_weight gia_gca_gin "$seed")"
 
     run "$PYTHON_BIN" scripts/benchmark_performance.py \
       --weights "$baseline" "$gia" "$gca" "$gia_gca" \
@@ -460,6 +454,7 @@ e3_train() {
 
 e3_perf() {
   echo "[E3/E4] five-seed performance profile"
+  require_weights_manifest
   local perf_seeds="${E3_PERF_SEEDS:-0 1 2 3 4}"
   read -r -a PERF_SEED_LIST <<< "$perf_seeds"
   local root="${E3_PERF_ROOT:-runs/experiments/performance_profile/E3_E4_5seed}"
@@ -467,7 +462,6 @@ e3_perf() {
   local -a native_weights=() native_labels=()
   local -a mayolo_weights=() mayolo_labels=()
   local -a rtdetr_weights=()
-  local rtdetr_root="runs/experiments/E4_rtdetr_LX"
 
   for seed in "${PERF_SEED_LIST[@]}"; do
     echo "[E3/E4] performance seed=${seed}"
@@ -480,9 +474,9 @@ e3_perf() {
     for family in yolov8 yolov9 yolov10 yolov11 yolov12 yolov13 yolov26; do
       for size in $(e3_sizes "$family"); do
         name="${family}${size}"
-        weight="runs/experiments/E3_versions/E3_versions_${name}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-        need "$weight"
-        native_weights+=("$weight"); native_labels+=("YOLO${family#yolo}${size}")
+        name="YOLO${family#yolo}${size}"
+        weight="$(manifest_weight "$name" "$seed")"
+        native_weights+=("$weight"); native_labels+=("$name")
       done
     done
     run "$PYTHON_BIN" scripts/benchmark_performance.py \
@@ -493,12 +487,11 @@ e3_perf() {
       --output "$root/E3_seed${seed}_native.csv"
 
     for size in ${MAYOLO_SIZES:-n s m l b}; do
-      weight="runs/experiments/E3_versions/E3_MAYOLO_final_mayolo${size}_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-      need "$weight"
-      mayolo_weights+=("$weight"); mayolo_labels+=("MAYOLO$size")
+      name="MAYOLO$size"
+      weight="$(manifest_weight "$name" "$seed")"
+      mayolo_weights+=("$weight"); mayolo_labels+=("$name")
     done
-    weight="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt"
-    need "$weight"
+    weight="$(manifest_weight MAYOLOx "$seed")"
     mayolo_weights+=("$weight"); mayolo_labels+=("MAYOLOx")
     run "$PYTHON_BIN" scripts/benchmark_performance.py \
       --weights "${mayolo_weights[@]}" --labels "${mayolo_labels[@]}" \
@@ -508,10 +501,9 @@ e3_perf() {
       --output "$root/E3_seed${seed}_mayolo.csv"
 
     rtdetr_weights=(
-      "$rtdetr_root/E4_rtdetr_LX_rtdetr_l_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
-      "$rtdetr_root/E4_rtdetr_LX_rtdetr_x_w4_${W4_TAG}_seed_${seed}_stage2/weights/best.pt"
+      "$(manifest_weight RT-DETR-L "$seed")"
+      "$(manifest_weight RT-DETR-X "$seed")"
     )
-    for weight in "${rtdetr_weights[@]}"; do need "$weight"; done
     run "$PYTHON_BIN" scripts/benchmark_performance.py \
       --weights "${rtdetr_weights[@]}" --labels RT-DETR-L RT-DETR-X \
       --network rtdetr --head-mode native --device "$DEVICE" \
@@ -573,16 +565,14 @@ e6() {
   local model="${E6_MODEL:-ultralytics/cfg/models/v10/yolov10x-cls.yaml}"
   local pretrain="${E6_PRETRAIN:-yolov10x.pt}"
   local project="${E6_PROJECT:-runs/experiments/E6_two_stage_yolov10x}"
-  local detector_root="${E6_DETECTOR_ROOT:-runs/experiments/E3_versions}"
-  local detector_prefix="${E6_DETECTOR_PREFIX:-E3_versions_yolov10x_w4_${W4_TAG}_seed_}"
+  local detector_key="${E6_DETECTOR_KEY:-YOLOv10x}"
   local seed seed_project detector
   if [[ ! -f "$data" ]]; then
     py scripts/prepare_two_stage_crops.py --data "$DATA" --output "$generated" --exist-ok
   fi
-  need "$data"; need "$model"; need "$pretrain"
+  need "$data"; need "$model"; need "$pretrain"; require_weights_manifest
   for seed in "${SEED_LIST[@]}"; do
-    detector="$detector_root/${detector_prefix}${seed}_stage2/weights/best.pt"
-    need "$detector"
+    detector="$(manifest_weight "$detector_key" "$seed")"
     if [[ "$seed" == "0" ]]; then seed_project="$project"; else seed_project="${project}_matched_seed${seed}"; fi
     if [[ "${E6_SKIP_EXISTING:-1}" == "1" && -f "$seed_project/${E6_NAME:-detector_yolov10x_classifier_yolov10x_cls}/weights/best.pt" ]]; then
       echo "[skip] $seed_project"
@@ -601,10 +591,9 @@ e5_eval() {
   local data="${E5_DATA:-/localnvme/data/billboard/mayolo_v3_multilabel/data.yaml}"
   local project="${E5_PROJECT:-runs/experiments/E5_multilabel_200_seedfix_final}"
   local seed weight
-  need "$data"
+  need "$data"; require_weights_manifest
   for seed in "${SEED_LIST[@]}"; do
-    weight="$project/yolov10x_seed$seed/weights/best.pt"
-    need "$weight"
+    weight="$(manifest_weight E5 "$seed")"
     run "$PYTHON_BIN" scripts/eval_e5_e6.py e5 --device "$DEVICE" --batch "$BATCH" \
       --workers "$WORKERS" --imgsz "$IMGSZ" --project "$project/test_summary_200" \
       --name "seed$seed" --summary "$project/test_summary_200/seed$seed.csv" \
@@ -616,15 +605,15 @@ e6_eval() {
   echo "[E6] Test inference for each matched seed"
   local source_data="$DATA"
   local project="${E6_PROJECT:-runs/experiments/E6_two_stage_yolov10x}"
-  local detector_root="${E6_DETECTOR_ROOT:-runs/experiments/E3_versions}"
-  local detector_prefix="${E6_DETECTOR_PREFIX:-E3_versions_yolov10x_w4_${W4_TAG}_seed_}"
+  local detector_key="${E6_DETECTOR_KEY:-YOLOv10x}"
+  local classifier_key="${E6_CLASSIFIER_KEY:-E6-classifier}"
   local name="${E6_NAME:-detector_yolov10x_classifier_yolov10x_cls}"
   local seed detector seed_project classifier
+  require_weights_manifest
   for seed in "${SEED_LIST[@]}"; do
-    detector="$detector_root/${detector_prefix}${seed}_stage2/weights/best.pt"
+    detector="$(manifest_weight "$detector_key" "$seed")"
     if [[ "$seed" == "0" ]]; then seed_project="$project"; else seed_project="${project}_matched_seed${seed}"; fi
-    classifier="$seed_project/$name/weights/best.pt"
-    need "$detector"; need "$classifier"
+    classifier="$(manifest_weight "$classifier_key" "$seed")"
     run "$PYTHON_BIN" scripts/eval_e5_e6.py e6 --device "$DEVICE" --batch "$BATCH" \
       --workers "$WORKERS" --imgsz "$IMGSZ" --project "$project" \
       --name "test_seed$seed" --summary "$project/test_summary_seed$seed.csv" \
@@ -633,8 +622,9 @@ e6_eval() {
   done
 }
 
-e51() {
-  echo "[E5.1] deterministic test-set robustness evaluation"
+e7() {
+  echo "[E7] deterministic test-set robustness evaluation"
+  require_weights_manifest
   local root="${ROBUSTNESS_ROOT:-runs/experiments/E5_robustness/seed0_v1}"
   local generated="$root/data"
   if [[ ! -f "$generated/manifest.json" ]]; then
@@ -643,39 +633,29 @@ e51() {
   fi
   need "$generated/manifest.json"
 
-  local e3root="runs/experiments/E3_versions"
-  local rtdetrroot="runs/experiments/E4_rtdetr_LX"
-  local mayolox="runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_0/weights/best.pt"
   local -a specs=()
   local label weight
   for label in YOLOv8x YOLOv9e YOLOv10x YOLOv11x YOLOv12x YOLOv13x YOLO26x; do
-    case "$label" in
-      YOLOv8x) weight="$e3root/E3_versions_yolov8x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-      YOLOv9e) weight="$e3root/E3_versions_yolov9e_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-      YOLOv10x) weight="$e3root/E3_versions_yolov10x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-      YOLOv11x) weight="$e3root/E3_versions_yolov11x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-      YOLOv12x) weight="$e3root/E3_versions_yolov12x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-      YOLOv13x) weight="$e3root/E3_versions_yolov13x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-      YOLO26x) weight="$e3root/E3_versions_yolov26x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt" ;;
-    esac
-    need "$weight"; specs+=(--model "$label=$weight")
+    weight="$(manifest_weight "$label" 0)"
+    specs+=(--model "$label=$weight")
   done
-  weight="$rtdetrroot/E4_rtdetr_LX_rtdetr_x_w4_${W4_TAG}_seed_0_stage2/weights/best.pt"
-  need "$weight"; specs+=(--model "RT-DETR-x=$weight")
-  need "$mayolox"; specs+=(--model "MAYOLOx=$mayolox::one2many")
+  weight="$(manifest_weight RT-DETR-X 0)"
+  specs+=(--model "RT-DETR-x=$weight")
+  weight="$(manifest_weight MAYOLOx 0)"
+  specs+=(--model "MAYOLOx=$weight::one2many")
   run "$PYTHON_BIN" scripts/eval_robustness.py --data "$DATA" \
     --manifest "$generated/manifest.json" --device "$DEVICE" --imgsz "$IMGSZ" \
     --batch "${ROBUSTNESS_BATCH:-4}" --workers 0 --project "$root" --name seed0_full \
     --seed 0 --resume "${specs[@]}"
 }
 
-e61() {
-  echo "[E6.1] per-attribute/level metrics, calibration and confusion matrices"
+e8() {
+  echo "[E8] per-attribute/level metrics, calibration and confusion matrices"
   local seed="${FINE_SEED}"
   local fine_root="${FINE_PROJECT_ROOT:-runs/experiments/E4_4_10_finegrained_seed${seed}}"
-  local yolov10x="${FINE_YOLOV10_WEIGHT:-$E2_ROOT/${BASE_STAGE1_PREFIX}${seed}_stage2/weights/best.pt}"
-  local mayolox="${FINE_MAYOLO_WEIGHT:-runs/experiments/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross/E2_28_GIA_v2_5_7_GCA_margin_residual_5seed_cross_gin_margin_residual_stage1_${STAGE1_EPOCHS}_stage2_${STAGE2_EPOCHS}_w4_${W4_TAG}_seed_${seed}/weights/best.pt}"
-  need "$yolov10x"; need "$mayolox"
+  require_weights_manifest
+  local yolov10x="$(manifest_weight YOLOv10x "$seed")"
+  local mayolox="$(manifest_weight MAYOLOx "$seed")"
   run "$PYTHON_BIN" scripts/eval_attribute_levels.py --data "$DATA" \
     --model "YOLOv10x=$yolov10x::native" --model "MAYOLOx=$mayolox::one2many" \
     --device "$DEVICE" --imgsz "$IMGSZ" --batch "$BATCH" --workers "$WORKERS" \
@@ -697,6 +677,10 @@ e61() {
 eigencam() {
   echo "[CAM historical-2026-09-22] MAYOLOx vs YOLOv10x"
   need scripts/generate_eigencam.py
+  [[ -n "$EIGENCAM_MAYOLO_WEIGHT" && -n "$EIGENCAM_YOLOV10_WEIGHT" ]] || {
+    echo "eigencam requires --mayolo-weight PATH and --yolov10-weight PATH." >&2
+    exit 2
+  }
   need "$EIGENCAM_MAYOLO_WEIGHT"
   need "$EIGENCAM_YOLOV10_WEIGHT"
   if [[ "$DRY_RUN" != "1" && ! -e "$EIGENCAM_IMAGES" ]]; then
@@ -756,15 +740,14 @@ all_experiments() {
   e6
   e6_eval
   e3_eval
-  e51
-  e61
+  e7
+  e8
 }
 
 case "$CODE" in
   help|-h|--help) usage ;;
   preflight) preflight ;;
   e1) e1 ;;
-  e1.w4-5seed) e1_w4_5seed ;;
   e2.0) e20 ;;
   e2.1) e21 ;;
   e2.2) e22 ;;
@@ -781,8 +764,8 @@ case "$CODE" in
   e5.eval) e5_eval ;;
   e6) e6 ;;
   e6.eval) e6_eval ;;
-  e5.1) e51 ;;
-  e6.1) e61 ;;
+  e7) e7 ;;
+  e8) e8 ;;
   eigencam) eigencam ;;
   all) all_experiments ;;
   *) echo "Unknown experiment code: $CODE" >&2; usage; exit 2 ;;
