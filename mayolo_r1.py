@@ -54,11 +54,7 @@ def _set_model_names_from_data(model, data_path=DATA):
 
 def _build_model(network, model_path, model_seed=None):
     """Build a model while keeping the YOLO and RT-DETR constructor signatures separate."""
-    model = (
-        network(model_path)
-        if _is_rtdetr(network)
-        else network(model_path, task=TASK, model_seed=model_seed)
-    )
+    model = network(model_path) if _is_rtdetr(network) else network(model_path, task=TASK, model_seed=model_seed)
     return _set_model_names_from_data(model)
 
 
@@ -137,9 +133,7 @@ def _gca_residual_modules(model):
     """Return the residual GCA/GNN modules in an mdet model."""
     root = model.model if hasattr(model, "model") else model
     return [
-        module
-        for module in root.modules()
-        if module.__class__.__name__.startswith("GCA") and hasattr(module, "gamma")
+        module for module in root.modules() if module.__class__.__name__.startswith("GCA") and hasattr(module, "gamma")
     ]
 
 
@@ -607,23 +601,3 @@ def mayolo(cfg_path, weight_path="yolov10x.pt", auto_optim=False, **kwargs):
 
 
 # endregion
-
-if __name__ == "__main__":
-    # test
-    # rtdetr(
-    #     r"ultralytics/cfg/models/rt-detr/rtdetr-l-md.yaml",
-    #     weight_path=r"rtdetr-l.pt",
-    #     data=DATA,
-    #     stage1_epochs=100,
-    #     stage2_epochs=100,
-    # )
-    # myolo10(r"yolov10x-mdetect.yaml", data="mayolo_v1.yaml")
-    # mayolo(r"mayolovx.yaml", data="mayolo_v1.yaml")
-    # model_val(r"runs/mdetect/mayolox_stage1/weights/best.pt")
-    # model_val(r"runs/mdetect/mayolox_stage2/weights/best.pt")
-    # model_val(r"runs/mdetect/myolo10x_stage1/weights/best.pt")
-    # model_val(r"runs/mdetect/myolo10x_stage2/weights/best.pt")
-    # model_val_dir(r"runs/mdetect")  # validates best.pt & last.pt under every exp dir
-    # model_val_dir(r"runs/mdetect", save_txt=r"runs/mdetect/mdetect_stats.csv")  # val+test in one row, CSV
-    model_val_dir(r"runs/experiments/E2_3_GIA_v2_5_7_GCA5x6_cross")
-    model_val_dir(r"runs/experiments/E2_3_GIA_v2_5_7_GCA5x6_conditional")
