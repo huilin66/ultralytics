@@ -705,93 +705,105 @@ Offline variant manifest relative path:
 
 ## 6. Fine-grained Test Comparison: YOLOv10x vs MAYOLOx
 
-本节对应论文 4.4.10，统一使用 Baseline seed=0 与 MAYOLOx seed=0 的 Test
+本节对应论文 4.4.10，统一使用 Baseline seed=1 与 MAYOLOx seed=1 的 Test
 推理结果。属性指标只在类别正确且 IoU≥0.5 的检测框—真实框匹配对上计算；
 Micro-F1 在二级互斥属性设置下与 OA 数值相同。
 
 ### 6.1 Class-wise detection and attribute Test metrics
 
-`Matched instances` counts correctly classified detection--ground-truth pairs, with one count per matched object. Each matched object contributes ten attribute decisions; therefore, the generated summary also reports `matched_attribute_decisions`, which is ten times the matched-object count and must not be interpreted as the number of matched objects.
+`Matched instances` counts correctly classified detection--ground-truth pairs, with one count per matched object. Each matched object contributes ten attribute decisions; therefore, the generated summary also reports `matched_attribute_decisions`, which is ten times the matched-object count and must not be interpreted as the number of matched objects. `Box P` and `Box R` are per-class detection precision and recall obtained from the box evaluator; `Attr P` and `Attr R` are attribute precision and recall computed only on the matched pairs.
 
-| Model | Category | Matched instances | AP50 | AP50-95 | Macro-F1 | Micro-F1 | Precision | Recall |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | projecting_signboard | 109 | 0.728310 | 0.490442 | 0.624813 | 0.963303 | 0.665961 | 0.613926 |
-| YOLOv10x | wall_signboard | 84 | 0.604576 | 0.416524 | 0.570262 | 0.982143 | 0.593165 | 0.561167 |
-| MAYOLOx | projecting_signboard | 105 | 0.759608 | 0.522517 | 0.604879 | 0.963810 | 0.652802 | 0.600255 |
-| MAYOLOx | wall_signboard | 88 | 0.614965 | 0.443828 | 0.562825 | 0.985227 | 0.572217 | 0.556202 |
+| Model | Category | Matched instances | AP50 | AP50-95 | Box P | Box R | Attr Macro-F1 | Attr Micro-F1 | Attr P | Attr R |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv10x | projecting_signboard | 106 | 0.686790 | 0.449881 | 0.672689 | 0.652455 | 0.588058 | 0.961321 | 0.598801 | 0.585407 |
+| YOLOv10x | wall_signboard | 96 | 0.557165 | 0.377410 | 0.544763 | 0.586777 | 0.573379 | 0.981250 | 0.601820 | 0.563311 |
+| MAYOLOx | projecting_signboard | 104 | 0.755672 | 0.540540 | 0.810577 | 0.722222 | 0.624551 | 0.962500 | 0.624055 | 0.631374 |
+| MAYOLOx | wall_signboard | 84 | 0.597743 | 0.434456 | 0.705860 | 0.553719 | 0.592366 | 0.986905 | 0.605731 | 0.584324 |
 
 结果文件相对路径：
 
-    runs/experiments/E4_4_10_finegrained_seed0/levels/summary.csv
-    runs/experiments/E4_4_10_finegrained_seed0/levels/per_class_test.csv
-    runs/experiments/E4_4_10_finegrained_seed0/levels/per_class_attribute_test.csv
-    runs/experiments/E4_4_10_finegrained_seed0/levels/per_class_attribute_detail_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/summary.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/per_class_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/box_confusion_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/per_class_attribute_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/per_class_attribute_detail_test.csv
+
+Box confusion matrix figures:
+
+    runs/experiments/E4_4_10_finegrained_seed1/box_confusion/box_confusion_counts.png
+    runs/experiments/E4_4_10_finegrained_seed1/box_confusion/box_confusion_true_normalized.png
+
+The box confusion matrices use the same class-correct IoU≥0.5 matching basis
+as the attribute metrics; therefore, their diagonal entries equal the
+`Matched instances` counts in the table. Remaining wrong-class matches are
+shown off diagonal, while unmatched predictions and targets are assigned to
+the background row/column.
 
 ### 6.2 Calibration and Ordinal MAE
 
 | Model | ECE | Brier Score | NLL | Ordinal MAE |
 |---|---:|---:|---:|---:|
-| YOLOv10x | 0.023581 | 0.047812 | 0.105002 | 0.028497 |
-| MAYOLOx | 0.022308 | 0.047678 | 0.109175 | 0.026425 |
+| YOLOv10x | 0.020844 | 0.047715 | 0.098308 | 0.029208 |
+| MAYOLOx | 0.020430 | 0.043987 | 0.102707 | 0.026596 |
 
 Calibration 与 Ordinal MAE 均基于相同的匹配框。由于每个属性只有两个等级，
 Ordinal MAE 等价于二分类属性错误率；Calibration 指标使用完整 softmax 概率。
 
 结果文件相对路径：
 
-    runs/experiments/E4_4_10_finegrained_seed0/calibration/summary.csv
-    runs/experiments/E4_4_10_finegrained_seed0/calibration/per_attribute.csv
+    runs/experiments/E4_4_10_finegrained_seed1/calibration/summary.csv
+    runs/experiments/E4_4_10_finegrained_seed1/calibration/per_attribute.csv
 
 ### 6.3 Per-attribute Test metrics
 
 | Model | Metric | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | Micro-F1 | 0.979275 | 0.984456 | 0.953368 | 0.937824 | 0.984456 | 0.968912 | 0.958549 | 0.994819 | 0.994819 | 0.958549 |
-|  | Macro-F1 | 0.661404 | 0.496084 | 0.791951 | 0.650362 | 0.696063 | 0.804392 | 0.655971 | 0.498701 | 0.498701 | 0.703533 |
-|  | PR-AUC | 0.688807 | 0.535632 | 0.781837 | 0.697363 | 0.657244 | 0.821615 | 0.629154 | 0.506025 | 0.514481 | 0.773495 |
-| MAYOLOx | Micro-F1 | 0.989637 | 0.994819 | 0.958549 | 0.948187 | 0.979275 | 0.943005 | 0.958549 | 0.994819 | 0.994819 | 0.974093 |
-|  | Macro-F1 | 0.747382 | 0.498701 | 0.789071 | 0.708635 | 0.494764 | 0.745718 | 0.589362 | 0.498701 | 0.498701 | 0.800990 |
-|  | PR-AUC | 0.741623 | 0.549945 | 0.750029 | 0.748553 | 0.570897 | 0.760294 | 0.633742 | 0.506423 | 0.510086 | 0.800914 |
+| YOLOv10x | Micro-F1 | 0.985149 | 0.995050 | 0.940594 | 0.960396 | 0.975248 | 0.935644 | 0.960396 | 1.000000 | 0.995050 | 0.960396 |
+|  | Macro-F1 | 0.696241 | 0.498759 | 0.651123 | 0.789583 | 0.493734 | 0.673505 | 0.656463 | 0.500000 | 0.498759 | 0.789583 |
+|  | PR-AUC | 0.693860 | 0.508917 | 0.697109 | 0.772689 | 0.777990 | 0.624031 | 0.650241 | 1.000000 | 0.522601 | 0.835934 |
+| MAYOLOx | Micro-F1 | 1.000000 | 0.994681 | 0.941489 | 0.941489 | 0.973404 | 0.962766 | 0.957447 | 0.994681 | 0.994681 | 0.973404 |
+|  | Macro-F1 | 1.000000 | 0.498667 | 0.722602 | 0.695120 | 0.493261 | 0.805986 | 0.655678 | 0.498667 | 0.498667 | 0.826408 |
+|  | PR-AUC | 1.000000 | 0.549942 | 0.697942 | 0.635402 | 0.577284 | 0.806227 | 0.636032 | 0.506837 | 0.506837 | 0.888878 |
 
 结果文件相对路径：
 
-    runs/experiments/E4_4_10_finegrained_seed0/levels/per_attribute_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/per_attribute_test.csv
 
 ### 6.4 Per-attribute and per-level Test metrics
 
 | Model | Level | Metric | surface_missing | surface_incomplete | surface_corroded | frame_corroded | surface_peeling | surface_fade | surface_deformed | frame_deformed | disconnected | added_billboard |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | No risk | Support | 190 | 192 | 181 | 181 | 189 | 184 | 185 | 192 | 192 | 185 |
-|  |  | Precision | 0.989474 | 0.994764 | 0.972527 | 0.951872 | 0.984375 | 0.978495 | 0.968254 | 0.994819 | 0.994819 | 0.973262 |
-|  |  | Recall | 0.989474 | 0.989583 | 0.977901 | 0.983425 | 1.000000 | 0.972222 | 0.989189 | 1.000000 | 1.000000 | 0.983784 |
-|  |  | F1 | 0.989474 | 0.992167 | 0.975207 | 0.967391 | 0.992126 | 0.972222 | 0.978610 | 0.997403 | 0.997403 | 0.978495 |
-|  |  | Balanced Accuracy | 0.661404 | 0.494792 | 0.780617 | 0.616713 | 0.625000 | 0.772343 | 0.619595 | 0.500000 | 0.500000 | 0.679392 |
-|  |  | PR-AUC | 0.999836 | 0.999836 | 0.997801 | 0.992512 | 0.997127 | 0.992929 | 0.983700 | 0.998891 | 0.999549 | 0.998093 |
-| YOLOv10x | High risk | Support | 3 | 1 | 12 | 12 | 4 | 9 | 8 | 1 | 1 | 8 |
-|  |  | Precision | 0.333333 | 0.000000 | 0.636364 | 0.500000 | 1.000000 | 0.714286 | 0.500000 | 0.000000 | 0.000000 | 0.500000 |
-|  |  | Recall | 0.333333 | 0.000000 | 0.583333 | 0.250000 | 0.250000 | 0.555556 | 0.250000 | 0.000000 | 0.000000 | 0.375000 |
-|  |  | F1 | 0.333333 | 0.000000 | 0.608696 | 0.333333 | 0.400000 | 0.625000 | 0.333333 | 0.000000 | 0.000000 | 0.428571 |
-|  |  | Balanced Accuracy | 0.661404 | 0.494792 | 0.780617 | 0.616713 | 0.625000 | 0.772343 | 0.619595 | 0.500000 | 0.500000 | 0.679392 |
-|  |  | PR-AUC | 0.377778 | 0.071429 | 0.565873 | 0.402214 | 0.317362 | 0.650301 | 0.274608 | 0.013158 | 0.029412 | 0.548897 |
-| MAYOLOx | No risk | Support | 190 | 192 | 181 | 181 | 189 | 184 | 186 | 192 | 192 | 185 |
-|  |  | Precision | 0.989583 | 0.994819 | 0.967568 | 0.957219 | 0.979275 | 0.983240 | 0.968421 | 0.994819 | 0.994819 | 0.978723 |
-|  |  | Recall | 1.000000 | 1.000000 | 0.988950 | 0.988950 | 1.000000 | 0.956522 | 0.989247 | 1.000000 | 1.000000 | 0.994595 |
-|  |  | F1 | 0.994764 | 0.997403 | 0.978142 | 0.972826 | 0.989529 | 0.969697 | 0.978723 | 0.997403 | 0.997403 | 0.986595 |
-|  |  | Balanced Accuracy | 0.666667 | 0.500000 | 0.744475 | 0.661142 | 0.500000 | 0.811594 | 0.566052 | 0.500000 | 0.500000 | 0.747297 |
-|  |  | PR-AUC | 0.997920 | 0.999891 | 0.991035 | 0.992284 | 0.998423 | 0.991972 | 0.990157 | 0.998958 | 0.999339 | 0.995157 |
-| MAYOLOx | High risk | Support | 3 | 1 | 12 | 12 | 4 | 9 | 7 | 1 | 1 | 8 |
-|  |  | Precision | 1.000000 | 0.000000 | 0.750000 | 0.666667 | 0.000000 | 0.428571 | 0.333333 | 0.000000 | 0.000000 | 0.800000 |
-|  |  | Recall | 0.333333 | 0.000000 | 0.500000 | 0.333333 | 0.000000 | 0.666667 | 0.142857 | 0.000000 | 0.000000 | 0.500000 |
-|  |  | F1 | 0.500000 | 0.000000 | 0.600000 | 0.444444 | 0.000000 | 0.521739 | 0.200000 | 0.000000 | 0.000000 | 0.615385 |
-|  |  | Balanced Accuracy | 0.666667 | 0.500000 | 0.744475 | 0.661142 | 0.500000 | 0.811594 | 0.566052 | 0.500000 | 0.500000 | 0.747297 |
-|  |  | PR-AUC | 0.485326 | 0.100000 | 0.509023 | 0.504822 | 0.143372 | 0.528616 | 0.277326 | 0.013889 | 0.020833 | 0.606671 |
+| YOLOv10x | No risk | Support | 199 | 201 | 192 | 191 | 197 | 192 | 194 | 202 | 201 | 193 |
+|  |  | Precision | 0.990000 | 0.995050 | 0.963918 | 0.974093 | 0.975248 | 0.968586 | 0.969697 | 1.000000 | 0.995050 | 0.984293 |
+|  |  | Recall | 0.994975 | 1.000000 | 0.973958 | 0.984293 | 1.000000 | 0.963542 | 0.989691 | 1.000000 | 1.000000 | 0.974093 |
+|  |  | F1 | 0.992481 | 0.997519 | 0.968912 | 0.979167 | 0.987469 | 0.966057 | 0.979592 | 1.000000 | 0.997519 | 0.979167 |
+|  |  | Balanced Accuracy | 0.664154 | 0.500000 | 0.636979 | 0.764874 | 0.500000 | 0.681771 | 0.619845 | 0.500000 | 0.500000 | 0.820380 |
+|  |  | PR-AUC | 0.999823 | 0.999315 | 0.994412 | 0.996618 | 0.998106 | 0.986242 | 0.982359 | 1.000000 | 0.999747 | 0.997656 |
+| YOLOv10x | High risk | Support | 3 | 1 | 10 | 11 | 5 | 10 | 8 | 0 | 1 | 9 |
+|  |  | Precision | 0.500000 | 0.000000 | 0.375000 | 0.666667 | 0.000000 | 0.363636 | 0.500000 | 0.000000 | 0.000000 | 0.545455 |
+|  |  | Recall | 0.333333 | 0.000000 | 0.300000 | 0.545455 | 0.000000 | 0.400000 | 0.250000 | 0.000000 | 0.000000 | 0.666667 |
+|  |  | F1 | 0.400000 | 0.000000 | 0.333333 | 0.600000 | 0.000000 | 0.380952 | 0.333333 | 0.000000 | 0.000000 | 0.600000 |
+|  |  | Balanced Accuracy | 0.664154 | 0.500000 | 0.636979 | 0.764874 | 0.500000 | 0.681771 | 0.619845 | 0.500000 | 0.500000 | 0.820380 |
+|  |  | PR-AUC | 0.387897 | 0.018519 | 0.399807 | 0.548760 | 0.557873 | 0.261819 | 0.318123 | N/A | 0.045455 | 0.674213 |
+| MAYOLOx | No risk | Support | 186 | 187 | 177 | 178 | 184 | 179 | 181 | 187 | 187 | 180 |
+|  |  | Precision | 1.000000 | 0.994681 | 0.966292 | 0.966480 | 0.978610 | 0.983146 | 0.972678 | 0.994681 | 0.994681 | 0.983425 |
+|  |  | Recall | 1.000000 | 1.000000 | 0.971751 | 0.971910 | 0.994565 | 0.977654 | 0.983425 | 1.000000 | 1.000000 | 0.988889 |
+|  |  | F1 | 1.000000 | 0.997333 | 0.969014 | 0.969188 | 0.986523 | 0.980392 | 0.978022 | 0.997333 | 0.997333 | 0.986150 |
+|  |  | Balanced Accuracy | 1.000000 | 0.500000 | 0.713148 | 0.685955 | 0.497283 | 0.822160 | 0.634570 | 0.500000 | 0.500000 | 0.806944 |
+|  |  | PR-AUC | 1.000000 | 0.999885 | 0.994638 | 0.994229 | 0.995710 | 0.996578 | 0.978074 | 0.998968 | 0.998968 | 0.998945 |
+| MAYOLOx | High risk | Support | 2 | 1 | 11 | 10 | 4 | 9 | 7 | 1 | 1 | 8 |
+|  |  | Precision | 1.000000 | 0.000000 | 0.500000 | 0.444444 | 0.000000 | 0.600000 | 0.400000 | 0.000000 | 0.000000 | 0.714286 |
+|  |  | Recall | 1.000000 | 0.000000 | 0.454545 | 0.400000 | 0.000000 | 0.666667 | 0.285714 | 0.000000 | 0.000000 | 0.625000 |
+|  |  | F1 | 1.000000 | 0.000000 | 0.476190 | 0.421053 | 0.000000 | 0.631579 | 0.333333 | 0.000000 | 0.000000 | 0.666667 |
+|  |  | Balanced Accuracy | 1.000000 | 0.500000 | 0.713148 | 0.685955 | 0.497283 | 0.822160 | 0.634570 | 0.500000 | 0.500000 | 0.806944 |
+|  |  | PR-AUC | 1.000000 | 0.100000 | 0.401246 | 0.276574 | 0.158857 | 0.615875 | 0.293990 | 0.014706 | 0.014706 | 0.778811 |
 
 完整逐 level 与 TP/FP/FN/TN 明细：
 
-    runs/experiments/E4_4_10_finegrained_seed0/levels/per_level_test.csv
-    runs/experiments/E4_4_10_finegrained_seed0/levels/confusion_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/per_level_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1/levels/confusion_test.csv
 
-`Support` in the per-level table is reported separately for each attribute and level. It must not be summed across the ten attributes when interpreting the number of matched object instances.
+`Support` in the per-level table is reported separately for each attribute and level. It must not be summed across the ten attributes when interpreting the number of matched object instances. When a level has zero positive support, its PR-AUC is undefined and is reported as `N/A`.
 
 ### 6.5 Attribute confusion matrices
 
@@ -799,11 +811,11 @@ Ordinal MAE 等价于二分类属性错误率；Calibration 指标使用完整 s
 
 结果目录：
 
-    runs/experiments/E4_4_10_finegrained_seed0/confusion/
+    runs/experiments/E4_4_10_finegrained_seed1/confusion/
 
 矩阵数值：
 
-    runs/experiments/E4_4_10_finegrained_seed0/confusion/confusion_matrix_values.csv
+    runs/experiments/E4_4_10_finegrained_seed1/confusion/confusion_matrix_values.csv
 
 图像包括：
 
