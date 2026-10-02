@@ -1,0 +1,8 @@
+path: D:/zhl/data/CCTSDB 2021/CCTSDB2021_yolo
+
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: traffic_sign

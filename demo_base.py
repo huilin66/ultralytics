@@ -383,7 +383,15 @@ def model_val_summary(
 
 
 def model_predict(
-    weight_path, img_dir, weight_name=True, network=YOLO, save=True, save_txt=True, stream=True, **kwargs
+    weight_path,
+    img_dir,
+    weight_name=True,
+    network=YOLO,
+    save=True,
+    save_txt=True,
+    save_conf=True,
+    stream=True,
+    **kwargs,
 ):
     if isinstance(weight_path, list):
         for w_path in weight_path:
