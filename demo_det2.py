@@ -18,19 +18,19 @@ demo_base.DATA = "road_forniture_v2.yaml"
 
 if __name__ == "__main__":
     NAME = None
-    # demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME)
-    # demo_base.yolo9("yolov9e.yaml", auto_optim=False, name=NAME)
-    # demo_base.yolo11("yolo11x.yaml", auto_optim=False, name=NAME)
-    # demo_base.yolo26("yolo26x.yaml", auto_optim=False, name=NAME)
 
-    # demo_base.model_val("road_forniture_v1-[yolov8x]-3", data="road_forniture_v1.yaml")
-    # demo_base.model_val("road_forniture_v1-[yolov9e]", data="road_forniture_v1.yaml")
-    # demo_base.model_val("road_forniture_v1-[yolo11x]", data="road_forniture_v1.yaml")
-    # demo_base.model_val("road_forniture_v1-[yolo26x]", data="road_forniture_v1.yaml")
-    demo_base.model_val("road_forniture_v2-[yolo26x]")
-
-    # img_dir = r"D:\zhl\data\road_forniture_v1_rename\images"
-    # demo_base.model_predict("road_forniture_v1-[yolov8x]-3", img_dir=img_dir, conf=0.1)
-    # demo_base.model_predict("road_forniture_v1-[yolov9e]", img_dir=img_dir, conf=0.1)
-    # demo_base.model_predict("road_forniture_v1-[yolo11x]", img_dir=img_dir, conf=0.1)
-    # demo_base.model_predict("road_forniture_v1-[yolo26x]", img_dir=img_dir, conf=0.1)
+    # demo_base.model_val("road_forniture_v2-[yolo26x]", data="road_forniture_add_v1_c2.yaml")
+    # demo_base.model_val("road_forniture_v2-[yolo26x]", data="road_forniture_add_v2_c2.yaml")
+    # demo_base.model_val("road_forniture_add_v1_c2-[yolo26x]-4", data="road_forniture_add_v1_c2.yaml")
+    # demo_base.model_val("road_forniture_add_v2_c2-[yolo26x]", data="road_forniture_add_v2_c2.yaml")
+    # demo_base.model_val("road_forniture_add_v1_c2-[yolo26x]-4", data="road_forniture_add_v2_c2.yaml")
+    # demo_base.model_val("road_forniture_add_v2_c2-[yolo26x]", data="road_forniture_add_v1_c2.yaml")
+    # demo_base.model_val("road_furniture_add_v3-[yolo26x]")
+    # demo_base.model_val("road_furniture_add_v3-[yolo26x]-2")
+    # demo_base.model_val("road_furniture_add_v3-[yolo26x]-3")
+    # demo_base.model_val("road_furniture_add_v3_c3-[yolo26x]")
+    # demo_base.model_val("road_furniture_add_v3_c3-[yolo26x]-2")
+    # demo_base.model_val("road_furniture_add_v3_c3-[yolo26x]-3")
+    demo_base.model_val("road_forniture_add_v2_c2-[yolo26x]-2")
+    demo_base.model_val("road_furniture_add_v3_c2-[yolo26x]")
+    demo_base.model_val("road_furniture_add_v3_c2_split-[yolo26x]-2")
