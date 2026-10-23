@@ -1,9 +1,10 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-"""Train HMT datasets using absolute image-list files derived from YAML."""
+"""Train HMT clean datasets (bdd_hmt_clean_v1) using absolute image-list files."""
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import sys
 
@@ -11,19 +12,25 @@ import yaml
 
 
 DATASETS = {
-    "t": {"yaml": "hmt_t_update.yaml", "name": "hmt_t_update-yolov8x", "epochs": 240, "imgsz": 640, "batch": -1},
-    "rgb": {
-        "yaml": "hmt_rgb_update.yaml",
-        "name": "hmt_rgb_update-yolov8x",
-        "epochs": 240,
-        "imgsz": 768,
+    "sua_t": {
+        "yaml": "hmt_clean_v1_sua_t.yaml",
+        "name": "hmt_clean_v1_sua_t-yolov8x",
+        "epochs": 200,
+        "imgsz": 640,
         "batch": -1,
     },
-    "cube": {
-        "yaml": "hmt_bp_cube_update.yaml",
-        "name": "hmt_bp_cube_update-yolov8x",
+    "sua_rgb": {
+        "yaml": "hmt_clean_v1_sua_rgb.yaml",
+        "name": "hmt_clean_v1_sua_rgb-yolov8x",
+        "epochs": 200,
+        "imgsz": 1280,
+        "batch": -1,
+    },
+    "bp_cube": {
+        "yaml": "hmt_clean_v1_bp_cube.yaml",
+        "name": "hmt_clean_v1_bp_cube-yolov8x",
         "epochs": 300,
-        "imgsz": 1024,
+        "imgsz": 960,
         "batch": -1,
     },
 }
@@ -35,6 +42,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=Path, default=Path("yolov8x.pt"))
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--dataset", choices=("all", *DATASETS), default="all")
+    parser.add_argument(
+        "--data-root",
+        type=Path,
+        default=None,
+        help="Directory that contains sua_t/ sua_rgb/ bp_cube/; overrides the yaml `path` field.",
+    )
     parser.add_argument("--seed", type=int, default=233)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", default="0")
@@ -54,7 +67,17 @@ def resolve_model(model: Path, repo_root: Path) -> Path:
     return model
 
 
-def dataset_root(data: dict, config: Path) -> Path:
+def resolve_data_root(args: argparse.Namespace) -> Path | None:
+    """Return the override dataset root, if any (CLI wins over env var)."""
+    if args.data_root is not None:
+        return args.data_root
+    env_root = os.environ.get("HMT_DATA_ROOT")
+    return Path(env_root) if env_root else None
+
+
+def dataset_root(data: dict, config: Path, override: Path | None, key: str) -> Path:
+    if override is not None:
+        return (override / key).resolve()
     value = data.get("path") or config.parent
     root = Path(value)
     return (config.parent / root).resolve() if not root.is_absolute() else root.resolve()
@@ -83,9 +106,9 @@ def absolute_list(value: str | list[str], root: Path, out: Path) -> str:
     return str(out.resolve())
 
 
-def runtime_config(config: Path, run_root: Path, key: str) -> Path:
+def runtime_config(config: Path, run_root: Path, key: str, data_root: Path | None) -> Path:
     data = yaml.safe_load(config.read_text(encoding="utf-8"))
-    root = dataset_root(data, config)
+    root = dataset_root(data, config, data_root, key)
     workspace = run_root / "hmt_absolute_lists" / key
     workspace.mkdir(parents=True, exist_ok=True)
     for split in ("train", "val", "test"):
@@ -94,10 +117,11 @@ def runtime_config(config: Path, run_root: Path, key: str) -> Path:
     data["path"] = str(root)
     output = workspace / "dataset.yaml"
     output.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    print(f"[hmt_train] dataset_root={root}")
     return output
 
 
-def train_one(args: argparse.Namespace, key: str) -> None:
+def train_one(args: argparse.Namespace, key: str, data_root: Path | None) -> None:
     repo_root = args.repo_root.resolve()
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
@@ -108,7 +132,7 @@ def train_one(args: argparse.Namespace, key: str) -> None:
     if not config.exists():
         raise FileNotFoundError(f"dataset config not found: {config}")
     args.run_root.mkdir(parents=True, exist_ok=True)
-    data_config = runtime_config(config, args.run_root, key)
+    data_config = runtime_config(config, args.run_root, key, data_root)
     model_path = resolve_model(args.model, repo_root)
     print(f"[hmt_train] dataset={key} model={model_path} data={data_config}")
     model = YOLO(str(model_path))
@@ -140,8 +164,11 @@ def train_one(args: argparse.Namespace, key: str) -> None:
 
 def main() -> int:
     args = parse_args()
+    data_root = resolve_data_root(args)
+    if data_root is not None:
+        print(f"[hmt_train] data_root override: {data_root}")
     for key in DATASETS if args.dataset == "all" else (args.dataset,):
-        train_one(args, key)
+        train_one(args, key, data_root)
     print("[hmt_train] requested HMT training jobs completed")
     return 0
 
