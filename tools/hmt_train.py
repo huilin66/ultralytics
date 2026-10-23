@@ -101,7 +101,16 @@ def absolute_list(value: str | list[str], root: Path, out: Path) -> str:
         if not line:
             continue
         path = Path(line)
-        output_lines.append(str(path if path.is_absolute() else (root / path).resolve()))
+        if path.is_absolute() and path.is_file():
+            output_lines.append(str(path))
+            continue
+        # Portable fallback: POSIX-absolute lists copied from another OS, or a
+        # plain file name, resolve against <root>/images when that exists.
+        fallback = root / "images" / path.name
+        if fallback.is_file():
+            output_lines.append(str(fallback.resolve()))
+        else:
+            output_lines.append(str(path if path.is_absolute() else (root / path).resolve()))
     out.write_text("\n".join(output_lines) + ("\n" if output_lines else ""), encoding="utf-8")
     return str(out.resolve())
 
