@@ -50,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=233)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--patience", type=int, default=80)
     parser.add_argument("--device", default="0")
     for key, defaults in DATASETS.items():
         parser.add_argument(f"--epochs-{key}", type=int, default=defaults["epochs"])
@@ -159,7 +160,7 @@ def train_one(args: argparse.Namespace, key: str, data_root: Path | None) -> Non
         optimizer="auto",
         cos_lr=True,
         close_mosaic=20,
-        patience=80,
+        patience=args.patience,
         save=True,
         save_period=10,
         plots=True,
