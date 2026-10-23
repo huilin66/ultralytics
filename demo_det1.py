@@ -10,7 +10,7 @@ demo_base.EPOCHS = 100
 demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device("cuda:2")
 demo_base.BATCH_SIZE = 16
-demo_base.DATA = "rmcc_re.yaml"
+demo_base.DATA = "pole_v1.yaml"
 # demo_base.DATA = "panel.yaml"  # [local] new panel dataset test
 # demo_base.DATA = "BP_HMT_1216.yaml"
 # demo_base.DATA = "hmt_t.yaml"  # origin/main_demo
@@ -19,5 +19,4 @@ demo_base.DATA = "rmcc_re.yaml"
 
 if __name__ == "__main__":
     NAME = None
-    # demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME)
-    demo_base.yolo26("yolo26x.yaml", auto_optim=True, name=NAME)
+    demo_base.yolo26("yolo26x.yaml", auto_optim=False, name=NAME)
