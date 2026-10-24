@@ -11,7 +11,7 @@ demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device("cuda:0")
 demo_base.BATCH_SIZE = 16
 demo_base.CONF_VAL = 0.001
-
+os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/train_leakage_loss_mask.txt"
 
 if __name__ == "__main__":
     pass
@@ -22,7 +22,7 @@ if __name__ == "__main__":
         load_as_model=False,
         auto_optim=False,
         name="debug",
-        data="hmt_clean_v1_sua_t.yaml",
+        data="hmt_sua_t_v6.yaml",
         cls_pw=0.5,
         hsv_h=0.0,
         hsv_s=0.0,
