@@ -1,0 +1,20 @@
+# Clean HMT v1 (bdd_hmt_clean_v1) — sua_rgb visible dataset.
+# 0-based ids, no background slot. Dataset root can be overridden at runtime
+# with `--data-root` or the HMT_DATA_ROOT environment variable.
+path: /data/huilin/data/bdd_hmt/sua_rgb_update_v1
+train: train.txt
+val: val.txt
+test: test.txt
+
+names:
+  0: "background"
+  1: "Broken Low Risk"
+  2: "Broken High Risk"
+  3: "Corrosion"
+  4: "Cracked Tile"
+  5: "Delaminated Tile Low Risk"
+  6: "Delaminate Tile High Risk"
+  7: "Efforescene Low Gray"
+  8: "Efflorescene Low Risk"
+  9: "Efflorescene High Risk"
+  10: "Spalling"

@@ -16,7 +16,41 @@ os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/tr
 img_dir=r'/data/huilin/data/bdd_hmt/hmt_t_update_v6/images'
 if __name__ == "__main__":
     pass
-    # Primary HMT clean-v1 experiment (thermal, 3 classes).
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v2.yaml",
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v3.yaml",
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v2.yaml",
+    #     cls_pw=0.5,
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v3.yaml",
+    #     cls_pw=0.5,
+    # )
+    # # rgb leakage
     # demo_base.yolo8(
     #     "yolov8x.yaml",
     #     weight_path="yolov8x.pt",
@@ -83,44 +117,77 @@ if __name__ == "__main__":
     #     hsv_v=0.0,
     #     mosaic=0.25,
     # )
-    # demo_base.yolo8(
-    #     "yolov8x.yaml",
-    #     weight_path="yolov8x.pt",
-    #     load_as_model=False,
-    #     auto_optim=False,
-    #     name="debug",
-    #     data="hmt_sua_t_v6.yaml",
-    #     cls_pw=0.5,
-    #     hsv_h=0.0,
-    #     hsv_s=0.0,
-    #     hsv_v=0.0,
-    #     mosaic=0.25,
-    #     imgsz=960,
-    # )
-    # demo_base.yolo8(
-    #     "yolov8x.yaml",
-    #     weight_path="yolov8x.pt",
-    #     load_as_model=False,
-    #     auto_optim=False,
-    #     name="debug",
-    #     data="hmt_sua_t_v6.yaml",
-    #     cls_pw=0.5,
-    #     hsv_h=0.0,
-    #     hsv_s=0.0,
-    #     hsv_v=0.0,
-    #     mosaic=0.25,
-    #     imgsz=1280,
-    # )
-    # rgb
     demo_base.yolo8(
         "yolov8x.yaml",
         weight_path="yolov8x.pt",
         load_as_model=False,
         auto_optim=False,
         name="debug",
-        data="hmt_clean_v1_sua_t.yaml",
+        data="hmt_sua_t_v6.yaml",
+        cls_pw=0.5,
+        hsv_h=0.0,
+        hsv_s=0.0,
+        hsv_v=0.0,
+        mosaic=0.25,
+        imgsz=960,
     )
-
+    demo_base.yolo8(
+        "yolov8x.yaml",
+        weight_path="yolov8x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        name="debug",
+        data="hmt_sua_t_v6.yaml",
+        cls_pw=0.5,
+        hsv_h=0.0,
+        hsv_s=0.0,
+        hsv_v=0.0,
+        mosaic=0.25,
+        imgsz=1280,
+    )
+    # rgb
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v1.yaml",
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v2.yaml",
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v3.yaml",
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v2.yaml",
+    #     cls_pw=0.5,
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v3.yaml",
+    #     cls_pw=0.5,
+    # )
     # demo_base.model_val("debug-12")
     # demo_base.model_val("debug-13") best
     # demo_base.model_val("debug-16")
