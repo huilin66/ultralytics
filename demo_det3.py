@@ -29,11 +29,20 @@ if __name__ == "__main__":
     # demo_base.model_val("hmt_sua_t_v6-[yolo11x]")
     # demo_base.model_val("hmt_sua_t_v6-[yolo12x]")
     # demo_base.model_val("hmt_sua_t_v6-[yolo26x]")
-    demo_base.model_val("debug-23")
-    demo_base.model_val("debug-24")
+    # demo_base.model_val("debug-23")
+    # demo_base.model_val("debug-24")
+    # demo_base.model_val("debug-26")
+    # demo_base.model_val("debug-27")
 
     # demo_base.model_val("debug-18")
     # demo_base.model_val("debug-19")
     # demo_base.model_val("debug-20")
     # demo_base.model_val("debug-21")
     # demo_base.model_val("debug-22")
+
+    # demo_base.model_val("debug-30")
+    # demo_base.model_val("debug-31")
+
+    img_dir=r'/data/huilin/data/bdd_hmt/hmt_rgb_update_v5/images'
+    demo_base.model_predict("debug-30", img_dir, save_conf=True)
+    demo_base.model_predict("debug-31", img_dir, save_conf=True)

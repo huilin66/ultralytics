@@ -389,7 +389,6 @@ def model_predict(
     network=YOLO,
     save=True,
     save_txt=True,
-    save_conf=True,
     stream=True,
     **kwargs,
 ):

@@ -12,7 +12,7 @@ demo_base.DEVICE = torch.device("cuda:0")
 demo_base.BATCH_SIZE = 16
 demo_base.CONF_VAL = 0.001
 demo_base.DATA="hmt_sua_t_v6.yaml"
-os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/train_leakage_loss_mask.txt"
+# os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/train_leakage_loss_mask.txt"
 img_dir=r'/data/huilin/data/bdd_hmt/hmt_t_update_v6/images'
 if __name__ == "__main__":
     pass
@@ -117,34 +117,34 @@ if __name__ == "__main__":
     #     hsv_v=0.0,
     #     mosaic=0.25,
     # )
-    demo_base.yolo8(
-        "yolov8x.yaml",
-        weight_path="yolov8x.pt",
-        load_as_model=False,
-        auto_optim=False,
-        name="debug",
-        data="hmt_sua_t_v6.yaml",
-        cls_pw=0.5,
-        hsv_h=0.0,
-        hsv_s=0.0,
-        hsv_v=0.0,
-        mosaic=0.25,
-        imgsz=960,
-    )
-    demo_base.yolo8(
-        "yolov8x.yaml",
-        weight_path="yolov8x.pt",
-        load_as_model=False,
-        auto_optim=False,
-        name="debug",
-        data="hmt_sua_t_v6.yaml",
-        cls_pw=0.5,
-        hsv_h=0.0,
-        hsv_s=0.0,
-        hsv_v=0.0,
-        mosaic=0.25,
-        imgsz=1280,
-    )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_t_v6.yaml",
+    #     cls_pw=0.5,
+    #     hsv_h=0.0,
+    #     hsv_s=0.0,
+    #     hsv_v=0.0,
+    #     mosaic=0.25,
+    #     imgsz=960,
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_t_v6.yaml",
+    #     cls_pw=0.5,
+    #     hsv_h=0.0,
+    #     hsv_s=0.0,
+    #     hsv_v=0.0,
+    #     mosaic=0.25,
+    #     imgsz=1280,
+    # )
     # rgb
     # demo_base.yolo8(
     #     "yolov8x.yaml",
@@ -188,6 +188,20 @@ if __name__ == "__main__":
     #     data="hmt_sua_rgb_v3.yaml",
     #     cls_pw=0.5,
     # )
-    # demo_base.model_val("debug-12")
-    # demo_base.model_val("debug-13") best
-    # demo_base.model_val("debug-16")
+    demo_base.yolo8(
+        "yolov8x.yaml",
+        weight_path="yolov8x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        name="debug",
+        data="hmt_sua_rgb_v5.yaml",
+    )
+    demo_base.yolo8(
+        "yolov8x.yaml",
+        weight_path="yolov8x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        name="debug",
+        data="hmt_sua_rgb_v5.yaml",
+        cls_pw=0.5,
+    )
