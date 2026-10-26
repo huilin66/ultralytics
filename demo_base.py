@@ -41,8 +41,7 @@ def read_yaml_safely(path):
 
 
 def append_dict_to_csv(row, csv_path):
-    """Append one dict row to CSV. If new keys appear, rewrite CSV with expanded header.
-    """
+    """Append one dict row to CSV. If new keys appear, rewrite CSV with expanded header."""
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
