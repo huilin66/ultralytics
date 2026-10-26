@@ -213,12 +213,10 @@ class MultiModalDataset(YOLODataset):
         self.modalities = Modalities(data)
         super().__init__(*args, data=data, **kwargs)
 
-    def get_labels(self) -> list[dict]:
-        """Load normal YOLO labels and establish a private, fused-image disk-cache namespace."""
-        labels = super().get_labels()
+    def _cache_file(self, i: int) -> Path:
+        """Address the current image after rectangular sorting using its ordered modality layout."""
         layout = sha256(repr(self.modalities.items).encode()).hexdigest()[:16]
-        self._cache_files = [Path(path).with_suffix(f".mm{layout}.npy") for path in self.im_files]
-        return labels
+        return Path(self.im_files[i]).with_suffix(f".mm{layout}.npy")
 
     def _resize(self, image: np.ndarray, width: int, height: int) -> np.ndarray:
         """Resize every modality group independently with the same output geometry."""
@@ -237,7 +235,7 @@ class MultiModalDataset(YOLODataset):
         """Load a fused sample and resize every modality with the same geometry."""
         image = self.ims[i]
         if image is None:
-            cache_file = self._cache_files[i]
+            cache_file = self._cache_file(i)
             if cache_file.exists():
                 try:
                     image = np.load(cache_file, allow_pickle=False)
@@ -278,7 +276,7 @@ class MultiModalDataset(YOLODataset):
 
     def cache_images_to_disk(self, i: int) -> None:
         """Save the fused, pre-resize image rather than only the primary modality."""
-        cache_file = self._cache_files[i]
+        cache_file = self._cache_file(i)
         if not cache_file.exists():
             np.save(cache_file, self.modalities.load(self.im_files[i]), allow_pickle=False)
 
@@ -291,7 +289,7 @@ class MultiModalDataset(YOLODataset):
             progress = TQDM(enumerate(results), total=self.ni, disable=LOCAL_RANK > 0)
             for i, loaded in progress:
                 if self.cache == "disk":
-                    total_bytes += self._cache_files[i].stat().st_size
+                    total_bytes += self._cache_file(i).stat().st_size
                 else:
                     self.ims[i], self.im_hw0[i], self.im_hw[i] = loaded
                     total_bytes += self.ims[i].nbytes

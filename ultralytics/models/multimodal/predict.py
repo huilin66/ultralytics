@@ -26,6 +26,10 @@ class MultiModalPredictorMixin:
             data = check_det_dataset(self.args.data)
             if "modalities" in data:
                 self.modalities = Modalities(data)
+                spec = getattr(getattr(self.model, "model", None), "fusion_spec", None)
+                sections = tuple(item.channels for item in self.modalities.items)
+                if spec and sections != spec.input_sections:
+                    raise ValueError(f"Dataset modality sections {sections} do not match {spec.input_sections}.")
                 if self.modalities.channels != self.model.channels:
                     raise ValueError(
                         f"data.yaml declares {self.modalities.channels} channels, "

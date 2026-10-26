@@ -370,7 +370,7 @@ def test_multimodal_disk_cache_separates_modality_order(tmp_path):
     second = MultiModalDataset(
         img_path=tmp_path / "images/rgb/train", imgsz=32, augment=False, data=data, hyp=DEFAULT_CFG
     )
-    assert first._cache_files[0] != second._cache_files[0]
+    assert first._cache_file(0) != second._cache_file(0)
     image = second.load_image(0)[0]
     assert np.all(image[..., 3] == 30)
     assert np.all(image[..., 4] == 20)
@@ -383,6 +383,31 @@ def test_multimodal_disk_cache_separates_modality_order(tmp_path):
         patch.setattr(np, "save", fail_save)
         with pytest.raises(OSError, match="disk write failed"):
             second.cache_images_to_disk(0)
+
+
+def test_multimodal_rectangular_sort_preserves_cache_pairing(tmp_path):
+    """Rectangular validation must load the cache belonging to the sorted image path."""
+    _write_dataset(tmp_path)
+    for name, shape, suffix in [
+        ("rgb", (20, 12, 3), ".jpg"),
+        ("thermal", (20, 12), ".png"),
+        ("depth", (20, 12), ".png"),
+    ]:
+        assert cv2.imwrite(str(tmp_path / f"images/{name}/train/sample_0{suffix}"), np.full(shape, 71, np.uint8))
+    kwargs = dict(
+        img_path=tmp_path / "images/rgb/train",
+        imgsz=32,
+        batch_size=2,
+        augment=False,
+        data=_data(tmp_path),
+        hyp=DEFAULT_CFG,
+    )
+    original = MultiModalDataset(**kwargs)
+    for index in range(len(original)):
+        original.cache_images_to_disk(index)
+    sorted_dataset = MultiModalDataset(**kwargs, rect=True)
+    assert sorted_dataset.im_files[0].endswith("sample_1.jpg")
+    assert np.all(sorted_dataset.load_image(0)[0][..., 0] == 10)
 
 
 @pytest.mark.parametrize("from_img", [False, True])
@@ -446,7 +471,7 @@ def test_multimodal_trainer_initializes_actual_training_weights():
     cfg["scale"] = "n"
     trainer = object.__new__(MultiModalDetectionTrainer)
     trainer.args = SimpleNamespace(pretrained="source.pt", cls_remap=False)
-    trainer.data = {"nc": 3, "channels": 5}
+    trainer.data = {"nc": 3, "channels": 5, "modalities": [{"channels": 3}, {"channels": 1}, {"channels": 1}]}
     trainer.resume = False
     model = trainer.get_model(cfg, weights=source, verbose=False)
     torch.testing.assert_close(model.model[0].conv.weight[:, :3], source.model[0].conv.weight)
@@ -455,6 +480,28 @@ def test_multimodal_trainer_initializes_actual_training_weights():
         model.model[0].conv.weight.fill_(0.75)
     finetuned = trainer.get_model(cfg, weights=model, verbose=False)
     torch.testing.assert_close(finetuned.model[0].conv.weight, model.model[0].conv.weight)
+    trainer.data["modalities"] = [{"channels": 1}, {"channels": 3}, {"channels": 1}]
+    with pytest.raises(ValueError, match="modality sections"):
+        trainer.get_model(cfg, verbose=False)
+
+
+def test_multimodal_prediction_rejects_wrong_sensor_sections(tmp_path, monkeypatch):
+    """Matching channel totals cannot substitute for matching ordered sensor sections."""
+    import ultralytics.models.multimodal.predict as multimodal_predict
+    from ultralytics.models.yolo.detect.predict import DetectionPredictor
+
+    data = _data(tmp_path)
+    data["modalities"][:2] = reversed(data["modalities"][:2])
+    monkeypatch.setattr(multimodal_predict, "check_det_dataset", lambda path: data)
+    monkeypatch.setattr(
+        DetectionPredictor, "setup_source", lambda self, *args: setattr(self, "dataset", SimpleNamespace(mode="image"))
+    )
+    predictor = MultiModalDetectionPredictor(overrides={"data": "data.yaml", "save": False})
+    predictor.model = SimpleNamespace(
+        channels=5, model=SimpleNamespace(fusion_spec=SimpleNamespace(input_sections=(3, 1, 1)))
+    )
+    with pytest.raises(ValueError, match="modality sections"):
+        predictor.setup_source("image.jpg")
 
 
 def test_mm2_transfer_averages_equal_width_auxiliary_input():
