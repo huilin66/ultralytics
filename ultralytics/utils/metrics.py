@@ -1140,7 +1140,7 @@ class DetMetrics(SimpleClass, DataExportMixin):
         self.names = names if names is not None else {}
         self.box = Metric(fitness_weights=fitness_weights)
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
-        self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
+        self.stats = {"tp": [], "conf": [], "pred_cls": [], "target_cls": [], "target_img": []}
         self.nt_per_class = None
         self.nt_per_image = None
 
@@ -1151,7 +1151,7 @@ class DetMetrics(SimpleClass, DataExportMixin):
             stat (dict[str, Any]): Dictionary containing new statistical values to append. Keys should match existing
                 keys in self.stats.
         """
-        for k in self.stats.keys():
+        for k in self.stats:
             self.stats[k].append(stat[k])
         self.box.update_image_metrics(stat["tp"], stat["target_cls"], stat["pred_cls"], stat["im_name"])
 
@@ -1802,7 +1802,7 @@ class SemanticMetrics(SimpleClass, DataExportMixin):
         fig, ax = plt.subplots(1, 1, figsize=(10, 6), tight_layout=True)
         names = list(self.names.values()) if self.names else [str(i) for i in range(self.nc)]
         x = np.arange(self.nc)
-        bars = ax.bar(x, self._per_class_iou, color=[list(c / 255.0 for c in colors(i, False)) for i in range(self.nc)])
+        bars = ax.bar(x, self._per_class_iou, color=[[c / 255.0 for c in colors(i, False)] for i in range(self.nc)])
         ax.set_xlabel("Class")
         ax.set_ylabel("IoU")
         ax.set_title("Per-Class IoU")

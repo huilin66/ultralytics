@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ultralytics.data import build_dataloader, build_yolo_dataset
 from ultralytics.engine.trainer import BaseTrainer
@@ -62,6 +62,7 @@ class DetectionTrainer(BaseTrainer):
             _callbacks (dict, optional): Dictionary of callback functions to be executed during training.
         """
         super().__init__(cfg, overrides, _callbacks)
+
     @staticmethod
     def _leakage_only_dataset_records(dataset) -> list[tuple[str, list[int]]]:
         """Collect image filenames and class IDs without re-reading image or label files."""

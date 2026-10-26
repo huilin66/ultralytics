@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from ultralytics.utils import LOGGER
 from ultralytics.utils.leakage import load_leakage_only_files
@@ -409,9 +409,7 @@ class v8DetectionLoss:
             names_to_paths[name].add(os.path.normcase(os.path.abspath(os.fspath(im_file))))
             names_to_classes[name].update(int(cls) for cls in classes)
 
-        duplicate_names = {
-            name: sorted(paths) for name, paths in names_to_paths.items() if len(paths) > 1
-        }
+        duplicate_names = {name: sorted(paths) for name, paths in names_to_paths.items() if len(paths) > 1}
         if duplicate_names:
             details = "; ".join(f"{name}: {paths}" for name, paths in sorted(duplicate_names.items()))
             raise ValueError(f"Duplicate training image filenames found in different directories: {details}")
@@ -427,8 +425,7 @@ class v8DetectionLoss:
         }
         if invalid_labels:
             raise ValueError(
-                "Leakage-only images contain labels outside class "
-                f"{self.leakage_only_class_id}: {invalid_labels}"
+                f"Leakage-only images contain labels outside class {self.leakage_only_class_id}: {invalid_labels}"
             )
 
         LOGGER.info(
@@ -452,9 +449,9 @@ class v8DetectionLoss:
         ).view(batch_size, 1, 1)
         normal_mask = torch.ones((batch_size, 1, self.nc), device=device, dtype=dtype)
         leakage_only_class_mask = torch.ones((1, 1, self.nc), device=device, dtype=dtype)
-        masked_class_ids = torch.tensor(
-            self.leakage_only_masked_class_ids, device=device, dtype=torch.long
-        ).view(1, 1, -1)
+        masked_class_ids = torch.tensor(self.leakage_only_masked_class_ids, device=device, dtype=torch.long).view(
+            1, 1, -1
+        )
         leakage_only_class_mask = leakage_only_class_mask.scatter(
             2, masked_class_ids, torch.zeros_like(masked_class_ids, dtype=dtype)
         )
@@ -482,9 +479,7 @@ class v8DetectionLoss:
         x = (points[:, 0] * mask_width / max(float(image_width), 1.0)).floor().long().clamp(0, mask_width - 1)
         y = (points[:, 1] * mask_height / max(float(image_height), 1.0)).floor().long().clamp(0, mask_height - 1)
         normal_region = spatial_mask[:, y, x] > 0
-        class_mask = torch.ones(
-            (batch_size, anchor_points.shape[0], self.nc), device=anchor_points.device, dtype=dtype
-        )
+        class_mask = torch.ones((batch_size, anchor_points.shape[0], self.nc), device=anchor_points.device, dtype=dtype)
         masked_class_ids = torch.as_tensor(
             self.leakage_only_masked_class_ids, device=anchor_points.device, dtype=torch.long
         )

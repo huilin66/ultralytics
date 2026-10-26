@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ultralytics.models.yolo.model import YOLO
 from ultralytics.utils import LOGGER

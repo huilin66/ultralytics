@@ -7,13 +7,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ultralytics.data.augment import BaseMixTransform, CopyPaste, Format, Mosaic, RandomFlip, RandomPerspective
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.utils.instance import Instances
-from ultralytics.utils.tal import make_anchors
 from ultralytics.utils.loss import E2ELoss, v8DetectionLoss
+from ultralytics.utils.tal import make_anchors
 
 
 class DummyDetectHead(nn.Module):
@@ -188,9 +188,7 @@ def test_leakage_source_crop_keeps_context_and_removes_severe_truncation(monkeyp
 def test_spatial_mask_follows_affine_and_flip():
     labels = make_mosaic_label("normal.jpg", [0], [[10, 10, 20, 20]], 1)
     labels["cls_loss_spatial_mask"][:, :50] = 0
-    perspective = RandomPerspective(
-        degrees=0, translate=0, scale=(1.2, 1.2), shear=0, perspective=0, size=(80, 80)
-    )
+    perspective = RandomPerspective(degrees=0, translate=0, scale=(1.2, 1.2), shear=0, perspective=0, size=(80, 80))
     transformed = perspective(labels)
     assert transformed["cls_loss_spatial_mask"].shape == (80, 80)
 
@@ -310,6 +308,7 @@ def test_e2e_loss_initializes_both_leakage_criteria(monkeypatch, tmp_path):
     assert not hasattr(model, "_leakage_only_dataset_records")
     assert model._leakage_only_dataset_validated_for == frozenset({"leak.jpg"})
 
+
 def test_leakage_only_masked_classification_and_box_dfl_gradients(monkeypatch, tmp_path):
     criterion = make_criterion(
         monkeypatch,
@@ -405,6 +404,7 @@ def test_leakage_only_list_accepts_full_training_paths(monkeypatch, tmp_path, im
     )
     mask = criterion._get_leakage_only_loss_mask([image_path], 1, torch.device("cpu"), torch.float32)
     assert torch.equal(mask[0, 0, :2], torch.zeros(2))
+
 
 def test_leakage_only_list_must_exist_and_contain_a_name(monkeypatch, tmp_path):
     missing = tmp_path / "missing.txt"

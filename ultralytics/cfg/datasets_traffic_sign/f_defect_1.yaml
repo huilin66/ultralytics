@@ -4,4 +4,4 @@ val: val.txt # val images (relative to 'path') 4 images
 test: test.txt # test images (optional)
 
 # Classes
-names: ['damaged guardrail', 'guardrails']
+names: ["damaged guardrail", "guardrails"]

@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from typing import Type, TypeVar
 
-import torch.nn as nn
+from torch import nn
 
 ModuleType = TypeVar("ModuleType", bound=Type[nn.Module])
-_MODULES: dict[str, Type[nn.Module]] = {}
+_MODULES: dict[str, type[nn.Module]] = {}
 
 
 def register_module(module: ModuleType) -> ModuleType:
@@ -21,7 +21,7 @@ def register_module(module: ModuleType) -> ModuleType:
     return module
 
 
-def get_module(name: str) -> Type[nn.Module]:
+def get_module(name: str) -> type[nn.Module]:
     """Return a registered optional module class by YAML name."""
     try:
         return _MODULES[name]

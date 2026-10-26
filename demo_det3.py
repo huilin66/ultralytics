@@ -17,9 +17,6 @@ demo_base.CONF_VAL = 0.001
 if __name__ == "__main__":
     NAME = "debug"
 
-
-
-
     # demo_base.model_val("debug-12")
     # demo_base.model_val("debug-13")
     # demo_base.model_val("debug-16")

@@ -23,7 +23,7 @@ from ultralytics.utils.patches import imread
 def _logical_absolute_path(path: str | Path) -> Path:
     """Make a path absolute without resolving its symbolic links.
 
-    Paired layouts may stage primary images as links to a source dataset.  Modalities are addressed relative to the
+    Paired layouts may stage primary images as links to a source dataset. Modalities are addressed relative to the
     staged directory declared in data YAML, so resolving such a link before calculating that relative path would lose
     the layout information.
     """
@@ -233,9 +233,7 @@ class MultiModalDataset(YOLODataset):
                     ratio = self.imgsz / min(h0, w0)
                     if ratio != 1:
                         width, height = (
-                            (math.ceil(w0 * ratio), self.imgsz)
-                            if h0 < w0
-                            else (self.imgsz, math.ceil(h0 * ratio))
+                            (math.ceil(w0 * ratio), self.imgsz) if h0 < w0 else (self.imgsz, math.ceil(h0 * ratio))
                         )
                         image = self._resize(image, width, height)
                 else:

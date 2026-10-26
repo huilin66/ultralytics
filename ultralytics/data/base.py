@@ -126,9 +126,7 @@ class BaseDataset(Dataset):
         if self.rect:
             assert self.batch_size is not None
             self.set_rectangle()
-        self.leakage_only_files = (
-            load_leakage_only_files(os.environ.get("LEAKAGE_ONLY_LIST")) if self.augment else None
-        )
+        self.leakage_only_files = load_leakage_only_files(os.environ.get("LEAKAGE_ONLY_LIST")) if self.augment else None
 
         # Buffer thread for mosaic images
         self.buffer = []  # buffer size = batch size

@@ -4,9 +4,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 LIST_NAMES = ("train.txt", "train_balanced.txt", "val.txt", "test.txt", "all.txt")
 

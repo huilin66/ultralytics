@@ -16,15 +16,15 @@ CONDA_ENV="${CONDA_ENV:-yolo}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 DATA_ROOT="${HMT_DATA_ROOT:-/data/huilin/data/bdd_hmt_clean_v1}"
 
-if command -v conda >/dev/null 2>&1; then
-    run_python() {
-        conda run --no-capture-output -n "${CONDA_ENV}" "${PYTHON_BIN}" "$@"
-    }
+if command -v conda > /dev/null 2>&1; then
+  run_python() {
+    conda run --no-capture-output -n "${CONDA_ENV}" "${PYTHON_BIN}" "$@"
+  }
 else
-    echo "[train_hmt] conda was not found; using ${PYTHON_BIN} from the active environment" >&2
-    run_python() {
-        "${PYTHON_BIN}" "$@"
-    }
+  echo "[train_hmt] conda was not found; using ${PYTHON_BIN} from the active environment" >&2
+  run_python() {
+    "${PYTHON_BIN}" "$@"
+  }
 fi
 
 MODEL="${MODEL:-${REPO_ROOT}/yolov8x.pt}"
@@ -32,21 +32,21 @@ RUN_ROOT="${HMT_RUN_ROOT:-${REPO_ROOT}/runs/hmt_clean_v1}"
 DATASET="${HMT_DATASET:-all}"
 
 run_python "${REPO_ROOT}/tools/hmt_train.py" \
-    --repo-root "${REPO_ROOT}" \
-    --model "${MODEL}" \
-    --run-root "${RUN_ROOT}" \
-    --data-root "${DATA_ROOT}" \
-    --dataset "${DATASET}" \
-    --seed "${HMT_SEED:-233}" \
-    --workers "${HMT_WORKERS:-4}" \
-    --device "${HMT_DEVICE:-0}" \
-    --epochs-sua_t "${HMT_EPOCHS_T:-200}" \
-    --epochs-sua_rgb "${HMT_EPOCHS_RGB:-200}" \
-    --epochs-bp_cube "${HMT_EPOCHS_CUBE:-300}" \
-    --imgsz-sua_t "${HMT_IMGSZ_T:-640}" \
-    --imgsz-sua_rgb "${HMT_IMGSZ_RGB:-1280}" \
-    --imgsz-bp_cube "${HMT_IMGSZ_CUBE:-960}" \
-    --batch-sua_t "${HMT_BATCH_T:--1}" \
-    --batch-sua_rgb "${HMT_BATCH_RGB:--1}" \
-    --batch-bp_cube "${HMT_BATCH_CUBE:--1}" \
-    "$@"
+  --repo-root "${REPO_ROOT}" \
+  --model "${MODEL}" \
+  --run-root "${RUN_ROOT}" \
+  --data-root "${DATA_ROOT}" \
+  --dataset "${DATASET}" \
+  --seed "${HMT_SEED:-233}" \
+  --workers "${HMT_WORKERS:-4}" \
+  --device "${HMT_DEVICE:-0}" \
+  --epochs-sua_t "${HMT_EPOCHS_T:-200}" \
+  --epochs-sua_rgb "${HMT_EPOCHS_RGB:-200}" \
+  --epochs-bp_cube "${HMT_EPOCHS_CUBE:-300}" \
+  --imgsz-sua_t "${HMT_IMGSZ_T:-640}" \
+  --imgsz-sua_rgb "${HMT_IMGSZ_RGB:-1280}" \
+  --imgsz-bp_cube "${HMT_IMGSZ_CUBE:-960}" \
+  --batch-sua_t "${HMT_BATCH_T:--1}" \
+  --batch-sua_rgb "${HMT_BATCH_RGB:--1}" \
+  --batch-bp_cube "${HMT_BATCH_CUBE:--1}" \
+  "$@"

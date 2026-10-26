@@ -6,6 +6,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ "${SKIP_PREPARE:-0}" != "1" ]]; then
-    bash "${SCRIPT_DIR}/prepare_hmt.sh"
+  bash "${SCRIPT_DIR}/prepare_hmt.sh"
 fi
 bash "${SCRIPT_DIR}/train_hmt.sh" "$@"

@@ -13,20 +13,20 @@ Every MM2 configuration has this input contract:
 ```yaml
 channels: 6
 multimodal:
-  input_sections: [3, 3]
+    input_sections: [3, 3]
 ```
 
 The first three channels belong to the primary image and the final three to the auxiliary image. The data YAML must
 declare the same ordered channel layout. `tools/train_yolo_mb.py` verifies that contract before constructing a model.
 
-| Configuration | Fusion point | Description |
-|---|---|---|
-| `yolov8x-mm2-if.yaml` | Input | Stack both images before a single shared encoder. |
-| `yolov8x-mm2-ef.yaml` | Encoder | Fuse P3, P4 and P5 after the two encoders. |
-| `yolov8x-mm2-nif.yaml` | Nape-in | Fuse P3/P4 at encoder exits and P5 within the nape. |
-| `yolov8x-mm2-bf.yaml` | Backbone | Fuse two completed backbone feature pyramids. |
-| `yolov8x-mm2-nf.yaml` | Neck | Fuse two completed backbone-and-neck branches. |
-| `yolov8x-mm2-hf.yaml` | Head feature | Fuse projected P3, P4 and P5 head features before `Detect`. |
+| Configuration          | Fusion point | Description                                                 |
+| ---------------------- | ------------ | ----------------------------------------------------------- |
+| `yolov8x-mm2-if.yaml`  | Input        | Stack both images before a single shared encoder.           |
+| `yolov8x-mm2-ef.yaml`  | Encoder      | Fuse P3, P4 and P5 after the two encoders.                  |
+| `yolov8x-mm2-nif.yaml` | Nape-in      | Fuse P3/P4 at encoder exits and P5 within the nape.         |
+| `yolov8x-mm2-bf.yaml`  | Backbone     | Fuse two completed backbone feature pyramids.               |
+| `yolov8x-mm2-nf.yaml`  | Neck         | Fuse two completed backbone-and-neck branches.              |
+| `yolov8x-mm2-hf.yaml`  | Head feature | Fuse projected P3, P4 and P5 head features before `Detect`. |
 
 For the project launcher, select one of the same names without the `.yaml` extension:
 

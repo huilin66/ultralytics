@@ -23,6 +23,7 @@ class MultiModalTrainerMixin:
         stride = max(int(unwrap_model(self.model).stride.max()), 32)
         return build_multimodal_dataset(self.args, img_path, batch, self.data, mode, mode == "val", stride)
 
+
 class MultiModalDetectionTrainer(MultiModalTrainerMixin, yolo.detect.DetectionTrainer):
     """Detection trainer backed by ``MultiModalDataset``."""
 

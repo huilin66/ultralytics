@@ -13,22 +13,22 @@ multimodal:
   pretrained:
     source: yolov8
     copies:
-    - source:
-      - [0, 9]
-      - [10, 21]
-      target:
-      - [2, 11]
-      - [23, 34]
-      input_init: copy
-    - source:
-      - [0, 9]
-      - [10, 21]
-      target:
-      - [13, 22]
-      - [35, 46]
-      input_init: mean
-    - source: [22, 22]
-      target: [59, 59]
+      - source:
+          - [0, 9]
+          - [10, 21]
+        target:
+          - [2, 11]
+          - [23, 34]
+        input_init: copy
+      - source:
+          - [0, 9]
+          - [10, 21]
+        target:
+          - [13, 22]
+          - [35, 46]
+        input_init: mean
+      - source: [22, 22]
+        target: [59, 59]
     identity_projections: [47, 48, 49, 50, 51, 52]
     fusion_projections: [54, 56, 58]
 scales:
