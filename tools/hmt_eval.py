@@ -5,16 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--weights", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True, help="dataset.yaml (absolute list files are fine)")
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1],
-                        help="Ultralytics repo root (defaults to the parent of tools/)")
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+        help="Ultralytics repo root (defaults to the parent of tools/)",
+    )
     parser.add_argument("--split", default="test", choices=("train", "val", "test"))
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--device", default="0")

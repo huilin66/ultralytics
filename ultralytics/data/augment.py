@@ -342,10 +342,7 @@ class BaseMixTransform(BaseTransform):
             >>> transform = BaseMixTransform(dataset, pre_transform=None, p=0.5)
             >>> result = transform({"image": img, "bboxes": boxes, "cls": classes})
         """
-        if (
-            (self._is_leakage_only(labels) and not self.allow_leakage_only_primary)
-            or random.uniform(0, 1) > self.p
-        ):
+        if (self._is_leakage_only(labels) and not self.allow_leakage_only_primary) or random.uniform(0, 1) > self.p:
             return labels
 
         params = self.get_params(labels)
@@ -526,7 +523,7 @@ class Mosaic(BaseMixTransform):
         classes = np.asarray(labels["cls"]).reshape(-1).astype(np.int64)
         leakage_indices = np.flatnonzero(classes == 2)
         if not len(leakage_indices):
-            raise ValueError(f"Leakage-only image has no class-2 box: {labels.get('im_file', '<unknown>')}")
+            return  # Empty-label sources retain the full image and leakage-only classification mask.
 
         instances = labels["instances"]
         instances.convert_bbox(format="xyxy")
@@ -537,12 +534,8 @@ class Mosaic(BaseMixTransform):
         box_width = max(float(x2 - x1), 1.0)
         box_height = max(float(y2 - y1), 1.0)
         context = random.uniform(*self.leakage_context_range)
-        crop_width = min(
-            width, max(int(round(box_width * context)), int(round(width * self.leakage_min_crop_fraction)))
-        )
-        crop_height = min(
-            height, max(int(round(box_height * context)), int(round(height * self.leakage_min_crop_fraction)))
-        )
+        crop_width = min(width, max(round(box_width * context), round(width * self.leakage_min_crop_fraction)))
+        crop_height = min(height, max(round(box_height * context), round(height * self.leakage_min_crop_fraction)))
 
         x0_min = max(0, int(np.ceil(x2 - crop_width)))
         x0_max = min(int(np.floor(x1)), width - crop_width)
@@ -690,9 +683,7 @@ class Mosaic(BaseMixTransform):
         has_spatial_mask = any("cls_loss_spatial_mask" in item["labels_patch"] for item in layout)
         if self.n == 4:
             img4 = np.full((self.imgsz * 2, self.imgsz * 2, labels["img"].shape[2]), 114, dtype=np.uint8)
-            spatial_mask4 = (
-                np.ones((self.imgsz * 2, self.imgsz * 2), dtype=np.uint8) if has_spatial_mask else None
-            )
+            spatial_mask4 = np.ones((self.imgsz * 2, self.imgsz * 2), dtype=np.uint8) if has_spatial_mask else None
             for item in layout:
                 labels_patch = item["labels_patch"]
                 img = labels_patch["img"]
@@ -709,9 +700,7 @@ class Mosaic(BaseMixTransform):
                 labels["cls_loss_spatial_mask"] = spatial_mask4
         elif self.n == 9:
             img9 = np.full((self.imgsz * 3, self.imgsz * 3, labels["img"].shape[2]), 114, dtype=np.uint8)
-            spatial_mask9 = (
-                np.ones((self.imgsz * 3, self.imgsz * 3), dtype=np.uint8) if has_spatial_mask else None
-            )
+            spatial_mask9 = np.ones((self.imgsz * 3, self.imgsz * 3), dtype=np.uint8) if has_spatial_mask else None
             for item in layout:
                 labels_patch = item["labels_patch"]
                 img = labels_patch["img"]
@@ -1291,9 +1280,9 @@ class RandomPerspective(BaseTransform):
         size = params["size"]
         if (size[0] != img.shape[1] or size[1] != img.shape[0]) or (M != np.eye(3)).any():  # image changed
             if self.perspective:
-                img = cv2.warpPerspective(img, M, dsize=size, borderValue=(114, 114, 114))
+                img = cv2.warpPerspective(img, M, dsize=size, borderValue=(114, 114, 114, 114))
             else:  # affine
-                img = cv2.warpAffine(img, M[:2], dsize=size, borderValue=(114, 114, 114))
+                img = cv2.warpAffine(img, M[:2], dsize=size, borderValue=(114, 114, 114, 114))
             if img.ndim == 2:
                 img = img[..., None]
         labels["img"] = img
@@ -1477,9 +1466,7 @@ class RandomPerspective(BaseTransform):
                         source_mask, M, dsize=size, flags=cv2.INTER_NEAREST, borderValue=1
                     )
                 else:
-                    source_mask = cv2.warpAffine(
-                        source_mask, M[:2], dsize=size, flags=cv2.INTER_NEAREST, borderValue=1
-                    )
+                    source_mask = cv2.warpAffine(source_mask, M[:2], dsize=size, flags=cv2.INTER_NEAREST, borderValue=1)
             labels["cls_loss_spatial_mask"] = source_mask
         return labels
 
@@ -1725,16 +1712,12 @@ class RandomFlip(BaseTransform):
                 if labels.get("semantic_mask") is not None:
                     labels["semantic_mask"] = np.ascontiguousarray(np.flipud(labels["semantic_mask"]))
                 if labels.get("cls_loss_spatial_mask") is not None:
-                    labels["cls_loss_spatial_mask"] = np.ascontiguousarray(
-                        np.flipud(labels["cls_loss_spatial_mask"])
-                    )
+                    labels["cls_loss_spatial_mask"] = np.ascontiguousarray(np.flipud(labels["cls_loss_spatial_mask"]))
             elif params["direction"] == "horizontal":
                 if labels.get("semantic_mask") is not None:
                     labels["semantic_mask"] = np.ascontiguousarray(np.fliplr(labels["semantic_mask"]))
                 if labels.get("cls_loss_spatial_mask") is not None:
-                    labels["cls_loss_spatial_mask"] = np.ascontiguousarray(
-                        np.fliplr(labels["cls_loss_spatial_mask"])
-                    )
+                    labels["cls_loss_spatial_mask"] = np.ascontiguousarray(np.fliplr(labels["cls_loss_spatial_mask"]))
         return labels
 
 

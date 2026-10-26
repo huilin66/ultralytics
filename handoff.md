@@ -10,18 +10,18 @@
 
 ## Implemented Changes
 
-| File | Changes |
-| --- | --- |
-| `ultralytics/utils/loss.py` | Adds `LEAKAGE_ONLY_LIST` loading during training loss initialization, accepts full paths by matching `Path(im_file).name`, validates missing files, empty lists, duplicate basenames, and non-class-2 labels, and logs the matched image count and masked IDs `[0, 1]`. |
-| `ultralytics/utils/loss.py` | Keeps BCE unreduced, applies a broadcastable `batch_size x 1 x num_classes` mask by multiplication, and leaves class weights, Box loss, DFL loss, and TaskAlignedAssigner unchanged. |
-| `ultralytics/utils/loss.py` | Does not load or validate the leakage-only list for evaluation models, so validation keeps the normal three-class loss and metrics. |
-| `ultralytics/utils/leakage.py` | Provides one cached reader for the normalized leakage-only filename set, shared by the training dataset and loss criterion. |
-| `ultralytics/data/base.py` | Caches leakage-only filenames on training datasets and exposes eligible indices for image-mixing sources. |
-| `ultralytics/data/augment.py` | Skips Mosaic, MixUp, CutMix, and CopyPaste for listed primary images and excludes listed images from all multi-image augmentation sources. |
-| `ultralytics/models/yolo/detect/train.py` | Keeps the configured augmentation probabilities and attaches complete training image/class metadata before criterion initialization. |
-| `demo_base.py` | Adds `load_as_model` for direct checkpoint initialization and leaves caller-provided image-mixing probabilities unchanged. |
-| `demo_det_hmt.py` | Sets the leakage-only list path in Python and currently invokes one official-weight run and one v2-weight run sequentially. |
-| `tests/test_leakage_only_loss.py` | Adds tests for normal and leakage-only classification gradients, Box/DFL gradients, mixed batches, full POSIX and Windows-style paths, list validation, single-read behavior, per-image augmentation exclusion, and validation initialization. |
+| File                                      | Changes                                                                                                                                                                                                                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ultralytics/utils/loss.py`               | Adds `LEAKAGE_ONLY_LIST` loading during training loss initialization, accepts full paths by matching `Path(im_file).name`, validates missing files, empty lists, duplicate basenames, and non-class-2 labels, and logs the matched image count and masked IDs `[0, 1]`. |
+| `ultralytics/utils/loss.py`               | Keeps BCE unreduced, applies a broadcastable `batch_size x 1 x num_classes` mask by multiplication, and leaves class weights, Box loss, DFL loss, and TaskAlignedAssigner unchanged.                                                                                    |
+| `ultralytics/utils/loss.py`               | Does not load or validate the leakage-only list for evaluation models, so validation keeps the normal three-class loss and metrics.                                                                                                                                     |
+| `ultralytics/utils/leakage.py`            | Provides one cached reader for the normalized leakage-only filename set, shared by the training dataset and loss criterion.                                                                                                                                             |
+| `ultralytics/data/base.py`                | Caches leakage-only filenames on training datasets and exposes eligible indices for image-mixing sources.                                                                                                                                                               |
+| `ultralytics/data/augment.py`             | Skips Mosaic, MixUp, CutMix, and CopyPaste for listed primary images and excludes listed images from all multi-image augmentation sources.                                                                                                                              |
+| `ultralytics/models/yolo/detect/train.py` | Keeps the configured augmentation probabilities and attaches complete training image/class metadata before criterion initialization.                                                                                                                                    |
+| `demo_base.py`                            | Adds `load_as_model` for direct checkpoint initialization and leaves caller-provided image-mixing probabilities unchanged.                                                                                                                                              |
+| `demo_det_hmt.py`                         | Sets the leakage-only list path in Python and currently invokes one official-weight run and one v2-weight run sequentially.                                                                                                                                             |
+| `tests/test_leakage_only_loss.py`         | Adds tests for normal and leakage-only classification gradients, Box/DFL gradients, mixed batches, full POSIX and Windows-style paths, list validation, single-read behavior, per-image augmentation exclusion, and validation initialization.                          |
 
 ## Configuration
 

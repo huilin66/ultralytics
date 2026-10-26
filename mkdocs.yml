@@ -681,6 +681,7 @@ nav:
           - converter: reference/data/converter.md
           - dataset: reference/data/dataset.md
           - loaders: reference/data/loaders.md
+          - multimodal: reference/data/multimodal.md
           - split: reference/data/split.md
           - split_dota: reference/data/split_dota.md
           - utils: reference/data/utils.md
@@ -706,6 +707,15 @@ nav:
               - predict: reference/models/fastsam/predict.md
               - utils: reference/models/fastsam/utils.md
               - val: reference/models/fastsam/val.md
+          - multimodal:
+              - fusion: reference/models/multimodal/fusion.md
+              - model: reference/models/multimodal/model.md
+              - modules: reference/models/multimodal/modules.md
+              - predict: reference/models/multimodal/predict.md
+              - pretrained: reference/models/multimodal/pretrained.md
+              - tasks: reference/models/multimodal/tasks.md
+              - train: reference/models/multimodal/train.md
+              - val: reference/models/multimodal/val.md
           - nas:
               - model: reference/models/nas/model.md
               - predict: reference/models/nas/predict.md
@@ -805,6 +815,7 @@ nav:
               - block: reference/nn/modules/block.md
               - conv: reference/nn/modules/conv.md
               - head: reference/nn/modules/head.md
+              - registry: reference/nn/modules/registry.md
               - transformer: reference/nn/modules/transformer.md
               - utils: reference/nn/modules/utils.md
           - tasks: reference/nn/tasks.md
@@ -889,6 +900,7 @@ nav:
           - files: reference/utils/files.md
           - git: reference/utils/git.md
           - instance: reference/utils/instance.md
+          - leakage: reference/utils/leakage.md
           - logger: reference/utils/logger.md
           - loss: reference/utils/loss.md
           - metrics: reference/utils/metrics.md

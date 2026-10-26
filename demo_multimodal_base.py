@@ -1,0 +1,193 @@
+"""Reusable train, validation, prediction, tracking and export helpers for MultiModalYOLO."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+import torch
+
+from ultralytics.models.multimodal import MultiModalYOLO
+from ultralytics.utils import LOGGER
+
+DEFAULT_BATCH_SIZE = 16
+DEFAULT_EPOCHS = 100
+DEFAULT_IMGSZ = 640
+DEFAULT_TASK = "detect"
+VAL_CONFIDENCE = 0.001
+PREDICT_CONFIDENCE = 0.25
+
+
+def start_console_log(trainer) -> None:
+    """Capture Ultralytics training logger messages in the run directory."""
+    handler = logging.FileHandler(Path(trainer.save_dir) / "console.log", mode="w", encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    LOGGER.addHandler(handler)
+    trainer._multimodal_log_handler = handler
+
+
+def close_console_log(trainer) -> None:
+    """Detach and close the handler owned by this training run."""
+    handler = getattr(trainer, "_multimodal_log_handler", None)
+    if handler:
+        LOGGER.removeHandler(handler)
+        handler.close()
+        del trainer._multimodal_log_handler
+
+
+def resolve_weights(weight_path: str | Path, task: str, weight_name: bool) -> Path:
+    """Resolve a run name to its best checkpoint, or return an explicit checkpoint path."""
+    path = Path(weight_path)
+    return Path("runs") / task / path / "weights" / "best.pt" if weight_name else path
+
+
+def model_train(
+    cfg_path: str | Path,
+    data: str | Path,
+    pretrain_path: str | Path | None = None,
+    *,
+    task: str = DEFAULT_TASK,
+    batch: int = DEFAULT_BATCH_SIZE,
+    epochs: int = DEFAULT_EPOCHS,
+    imgsz: int = DEFAULT_IMGSZ,
+    device: str | int | torch.device | None = None,
+    auto_optim: bool = True,
+    console_log: bool = True,
+    **kwargs: Any,
+):
+    """Train a multimodal model using a data YAML that declares every aligned modality."""
+    model = MultiModalYOLO(cfg_path, task)
+    if console_log:
+        model.add_callback("on_train_start", start_console_log)
+        model.add_callback("on_train_end", close_console_log)
+
+    train_params = {
+        "data": str(data),
+        "epochs": epochs,
+        "imgsz": imgsz,
+        "batch": batch,
+        "device": device,
+        "val": True,
+        "patience": epochs,
+    }
+    if not auto_optim:
+        train_params.update({"optimizer": "AdamW", "lr0": 1e-4})
+    train_params.update(kwargs)
+    if pretrain_path:
+        train_params["pretrained"] = str(pretrain_path)
+    train_params.setdefault("name", f"{Path(data).stem}-[{Path(cfg_path).stem}]")
+    try:
+        return model.train(**train_params)
+    finally:
+        if console_log:
+            close_console_log(getattr(model, "trainer", None)) if getattr(model, "trainer", None) else None
+
+
+def model_val(
+    weight_path: str | Path,
+    data: str | Path,
+    *,
+    task: str = DEFAULT_TASK,
+    weight_name: bool = True,
+    batch: int = DEFAULT_BATCH_SIZE,
+    device: str | int | torch.device | None = None,
+    save_txt: bool = False,
+    **kwargs: Any,
+):
+    """Validate a checkpoint with the data YAML needed to recreate modality pairing."""
+    weights = resolve_weights(weight_path, task, weight_name)
+    model = MultiModalYOLO(weights, task)
+    params = {
+        "data": str(data),
+        "batch": batch,
+        "conf": VAL_CONFIDENCE,
+        "device": device,
+        "save_txt": save_txt,
+    }
+    params.update(kwargs)
+    return model.val(**params)
+
+
+def model_predict(
+    weight_path: str | Path,
+    source: str | Path,
+    data: str | Path,
+    *,
+    task: str = DEFAULT_TASK,
+    weight_name: bool = True,
+    batch: int = DEFAULT_BATCH_SIZE,
+    device: str | int | torch.device | None = None,
+    save: bool = True,
+    save_txt: bool = True,
+    stream: bool = True,
+    **kwargs: Any,
+) -> None:
+    """Predict from primary-modality files, using the data YAML to map companion modalities."""
+    weights = resolve_weights(weight_path, task, weight_name)
+    model = MultiModalYOLO(weights, task)
+    params = {
+        "source": str(source),
+        "data": str(data),
+        "batch": batch,
+        "conf": PREDICT_CONFIDENCE,
+        "device": device,
+        "save": save,
+        "save_txt": save_txt,
+        "stream": stream,
+    }
+    params.update(kwargs)
+    results = model.predict(**params)
+    for _ in results:
+        pass
+
+
+def model_track(
+    weight_path: str | Path,
+    source: str | Path,
+    data: str | Path,
+    *,
+    task: str = DEFAULT_TASK,
+    weight_name: bool = True,
+    batch: int = DEFAULT_BATCH_SIZE,
+    device: str | int | torch.device | None = None,
+    **kwargs: Any,
+) -> None:
+    """Track primary-modality files while using the data YAML for aligned companion images."""
+    weights = resolve_weights(weight_path, task, weight_name)
+    model = MultiModalYOLO(weights, task)
+    params = {
+        "source": str(source),
+        "data": str(data),
+        "batch": batch,
+        "conf": PREDICT_CONFIDENCE,
+        "device": device,
+        "tracker": "botsort.yaml",
+        "persist": True,
+        "stream": True,
+    }
+    params.update(kwargs)
+    results = model.track(**params)
+    for _ in results:
+        pass
+
+
+def model_export(
+    weight_path: str | Path,
+    *,
+    task: str = DEFAULT_TASK,
+    weight_name: bool = True,
+    format: str = "onnx",
+    device: str | int | torch.device | None = None,
+    **kwargs: Any,
+):
+    """Export a trained multimodal checkpoint through Ultralytics' standard exporter."""
+    weights = resolve_weights(weight_path, task, weight_name)
+    return MultiModalYOLO(weights, task).export(format=format, device=device, **kwargs)
+
+
+def yolov8(cfg_path: str | Path, data: str | Path, pretrain_path: str | Path | None = None, **kwargs: Any):
+    """Train a YOLOv8 multimodal YAML and reject an accidental non-YOLOv8 configuration."""
+    if "yolov8" not in Path(cfg_path).stem:
+        raise ValueError(f"Expected a YOLOv8 configuration, got {cfg_path!s}.")
+    return model_train(cfg_path, data, pretrain_path, **kwargs)

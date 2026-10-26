@@ -33,7 +33,7 @@ def read_yaml_safely(path):
     if not os.path.exists(path):
         return {}
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return yaml.load(f, Loader=yaml.FullLoader) or {}
     except Exception as e:
         print(f"[WARN] failed to read yaml: {path}, error: {e}")
@@ -41,10 +41,7 @@ def read_yaml_safely(path):
 
 
 def append_dict_to_csv(row, csv_path):
-    """
-    Append one dict row to CSV.
-    If new keys appear, rewrite CSV with expanded header.
-    """
+    """Append one dict row to CSV. If new keys appear, rewrite CSV with expanded header."""
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -57,13 +54,13 @@ def append_dict_to_csv(row, csv_path):
             writer.writerow(row)
         return
 
-    with open(csv_path, "r", newline="", encoding="utf-8-sig") as f:
+    with open(csv_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         old_rows = list(reader)
         old_fields = reader.fieldnames or []
 
     new_fields = list(old_fields)
-    for k in row.keys():
+    for k in row:
         if k not in new_fields:
             new_fields.append(k)
 
@@ -75,9 +72,7 @@ def append_dict_to_csv(row, csv_path):
 
 
 def _to_scalar(v):
-    """
-    Make values CSV-safe.
-    """
+    """Make values CSV-safe."""
     if v is None:
         return ""
 
@@ -97,9 +92,7 @@ def _to_scalar(v):
 
 
 def collect_val_metrics(result):
-    """
-    Collect scalar metrics from Ultralytics val result.
-    """
+    """Collect scalar metrics from Ultralytics val result."""
     row = {}
 
     if hasattr(result, "results_dict"):
@@ -206,7 +199,6 @@ def model_train_resume(
     **kwargs,
 ):
     """Resume an interrupted Ultralytics training run."""
-
     last_path = Path(last_path)
     if not last_path.is_file():
         raise FileNotFoundError(f"Resume checkpoint not found: {last_path}")
@@ -254,7 +246,7 @@ def model_val(weight_path, weight_name=True, network=YOLO, save_txt=False, **kwa
 
     args_path = os.path.join(os.path.dirname(os.path.dirname(weight_path)), "args.yaml")
     print("project information:")
-    with open(args_path, "r") as f:
+    with open(args_path) as f:
         data = yaml.load(f, Loader=yaml.FullLoader)
         print(data)
     print("============FINISH=============")

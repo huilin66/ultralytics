@@ -11,11 +11,10 @@ demo_base.IMGSZ = 640
 demo_base.DEVICE = torch.device("cuda:0")
 demo_base.BATCH_SIZE = 16
 demo_base.CONF_VAL = 0.001
-demo_base.DATA="hmt_sua_t_v6.yaml"
+demo_base.DATA = "hmt_sua_t_v6.yaml"
 # os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/train_leakage_loss_mask.txt"
-img_dir=r'/data/huilin/data/bdd_hmt/hmt_t_update_v6/images'
+img_dir = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/images"
 if __name__ == "__main__":
-    pass
     # demo_base.yolo8(
     #     "yolov8x.yaml",
     #     weight_path="yolov8x.pt",

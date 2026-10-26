@@ -16,16 +16,16 @@ tiling.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import json
 import math
 import os
-from pathlib import Path
 import random
 import re
 import shutil
 import sys
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 try:
@@ -281,10 +281,7 @@ def assign_group_splits(records: list[Record], val_ratio: float, test_ratio: flo
             new_images = current_images[split] + group_size
             image_error = ((new_images - target_images[split]) / max(target_images[split], 1.0)) ** 2
             class_error = sum(
-                (
-                    (current_classes[split][cls] + group_count[cls] - target) / max(target, 1.0)
-                )
-                ** 2
+                ((current_classes[split][cls] + group_count[cls] - target) / max(target, 1.0)) ** 2
                 for cls, target in target_classes[split].items()
             )
             empty_penalty = 0.05 if not group_count and split != "train" else 0.0
@@ -302,14 +299,10 @@ def assign_group_splits(records: list[Record], val_ratio: float, test_ratio: flo
         if ratios[split] <= 0:
             continue
         for cls in total_classes:
-            groups_with_class = [
-                name for name, group_records in groups.items() if class_counts(group_records)[cls] > 0
-            ]
+            groups_with_class = [name for name, group_records in groups.items() if class_counts(group_records)[cls] > 0]
             if len(groups_with_class) < 2:
                 continue
-            if any(
-                assignments[name] == split and class_counts(groups[name])[cls] > 0 for name in groups_with_class
-            ):
+            if any(assignments[name] == split and class_counts(groups[name])[cls] > 0 for name in groups_with_class):
                 continue
             candidates = [name for name in groups_with_class if assignments[name] == "train"]
             if candidates:
@@ -350,7 +343,9 @@ def tile_positions(length: int, tile_size: int, stride: int) -> list[int]:
     return positions
 
 
-def labels_to_pixel_boxes(labels: Iterable[tuple[int, float, float, float, float]], width: int, height: int) -> list[tuple[int, float, float, float, float]]:
+def labels_to_pixel_boxes(
+    labels: Iterable[tuple[int, float, float, float, float]], width: int, height: int
+) -> list[tuple[int, float, float, float, float]]:
     return [
         (
             cls,
@@ -439,7 +434,7 @@ def build_balanced_train_list(
     rng = random.Random(seed)
     empty = [entry for entry in entries if not entry[1]]
     positive = [entry for entry in entries if entry[1]]
-    keep_empty_count = min(len(empty), int(math.ceil(len(empty) * empty_ratio)))
+    keep_empty_count = min(len(empty), math.ceil(len(empty) * empty_ratio))
     rng.shuffle(empty)
     selected = positive + empty[:keep_empty_count]
     counts = class_counts([Record(image=Path(name), source_split=None, labels=labels) for name, labels in selected])
@@ -449,7 +444,7 @@ def build_balanced_train_list(
     for name, labels in selected:
         present_counts = [counts[label[0]] for label in labels if label[0] in counts]
         rarest = min(present_counts, default=max_count)
-        repeat = max(1, min(max_repeat, int(math.ceil(math.sqrt(max_count / max(rarest, 1))))))
+        repeat = max(1, min(max_repeat, math.ceil(math.sqrt(max_count / max(rarest, 1)))))
         repeat_counts[name] = repeat
         result.extend([name] * repeat)
     rng.shuffle(result)
@@ -507,7 +502,9 @@ def prepare_dataset(args: argparse.Namespace) -> Path:
         fail(f"source dataset does not exist: {source}")
     if output.exists():
         if not args.force:
-            fail(f"output already exists; refusing to overwrite: {output} (use --force only for a generated _update directory)")
+            fail(
+                f"output already exists; refusing to overwrite: {output} (use --force only for a generated _update directory)"
+            )
         if output.is_file() or output.is_symlink():
             fail(f"output is not a directory: {output}")
         if output.name not in {"sua_t_update", "sua_rgb_update", "bp_cube_update"}:
@@ -525,12 +522,16 @@ def prepare_dataset(args: argparse.Namespace) -> Path:
     records: list[Record] = []
     for image in images:
         labels = read_labels(labels_root / f"{image.stem}.txt", spec.source_to_target)
-        source_split = next((split for split in ("val", "test", "train") if image.name.lower() in source_splits[split]), None)
+        source_split = next(
+            (split for split in ("val", "test", "train") if image.name.lower() in source_splits[split]), None
+        )
         records.append(Record(image=image, source_split=source_split, labels=labels))
 
     group_key_for_records(records, args.dataset, args.sequence_group_size)
-    assignments = source_split_assignments(records, source) if args.split_mode == "source" else assign_group_splits(
-        records, args.val_ratio, args.test_ratio, args.seed
+    assignments = (
+        source_split_assignments(records, source)
+        if args.split_mode == "source"
+        else assign_group_splits(records, args.val_ratio, args.test_ratio, args.seed)
     )
 
     output_images = output / "images"
