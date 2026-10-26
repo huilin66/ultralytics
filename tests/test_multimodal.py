@@ -427,6 +427,23 @@ def test_three_channel_prediction_distinguishes_files_and_arrays(tmp_path, from_
     torch.testing.assert_close(result[0, :, 0, 0], expected)
 
 
+def test_fused_array_predictions_render_primary_sensor(tmp_path):
+    """Five-channel array results can be plotted and saved as ordinary color images."""
+    predictor = MultiModalDetectionPredictor(overrides={"save": False})
+    predictor.model = SimpleNamespace(names={0: "object"})
+    predictor.source_type = SimpleNamespace(from_img=True)
+    predictor.modalities = None
+    predictor.batch = (["array.jpg"], None, None)
+    original = np.full((32, 32, 5), [90, 20, 10, 30, 40], dtype=np.uint8)
+    result = predictor.construct_result(
+        torch.tensor([[4, 4, 20, 20, 0.9, 0]]), torch.zeros(1, 5, 32, 32), original, "array.jpg"
+    )
+    assert result.orig_img[0, 0].tolist() == [10, 20, 90]
+    assert result.plot().shape == (32, 32, 3)
+    result.save(filename=str(tmp_path / "prediction.jpg"))
+    assert cv2.imread(str(tmp_path / "prediction.jpg")).shape == (32, 32, 3)
+
+
 def test_multimodal_prediction_rejects_video_sources(monkeypatch):
     """Image pairing must not try to read a video path as a companion image."""
     from ultralytics.models.yolo.detect.predict import DetectionPredictor
@@ -530,17 +547,21 @@ def test_mm2_transfer_averages_equal_width_auxiliary_input():
     torch.testing.assert_close(target.model[auxiliary].conv.weight, expected)
 
 
-@pytest.mark.parametrize("method", ["write", "flush"])
-def test_multimodal_console_propagates_io_failures(method):
-    """Console capture must report disk errors instead of silently losing logs."""
-    from demo_multimodal_base import Tee
+def test_multimodal_console_captures_training_logger(tmp_path):
+    """Existing Ultralytics logging handlers must not bypass the per-run log."""
+    from demo_multimodal_base import close_console_log, start_console_log
+    from ultralytics.utils import LOGGER
 
-    def fail(*args):
-        raise OSError("disk full")
-
-    tee = Tee(SimpleNamespace(write=fail, flush=fail))
-    with pytest.raises(OSError, match="disk full"):
-        getattr(tee, method)(*(["text"] if method == "write" else []))
+    trainer = SimpleNamespace(save_dir=tmp_path)
+    handlers = list(LOGGER.handlers)
+    start_console_log(trainer)
+    try:
+        LOGGER.info("multimodal training test message")
+    finally:
+        close_console_log(trainer)
+    assert "multimodal training test message" in (tmp_path / "console.log").read_text(encoding="utf-8")
+    assert LOGGER.handlers == handlers
+    close_console_log(trainer)
 
 
 @pytest.mark.parametrize(

@@ -18,6 +18,15 @@ from .fusion import validate_modality_sections
 class MultiModalPredictorMixin:
     """Fuse image-file modalities just before standard predictor preprocessing."""
 
+    def construct_result(self, pred, img, orig_img, *args, **kwargs):
+        """Render array predictions on the primary sensor rather than the fused sensor stack."""
+        if self.source_type.from_img:
+            channels = self.modalities.items[0].channels if self.modalities else min(3, orig_img.shape[-1])
+            primary = orig_img[..., :channels]
+            orig_img = primary[..., :3][..., ::-1] if channels >= 3 else np.repeat(primary[..., :1], 3, axis=-1)
+            orig_img = np.ascontiguousarray(orig_img)
+        return super().construct_result(pred, img, orig_img, *args, **kwargs)
+
     def setup_source(self, source, stride=None):
         """Set up the normal source loader and optional path mapper from ``data=multimodal.yaml``."""
         super().setup_source(source, stride)

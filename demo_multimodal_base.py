@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 from pathlib import Path
 from typing import Any
 
 import torch
 
 from ultralytics.models.multimodal import MultiModalYOLO
+from ultralytics.utils import LOGGER
 
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 100
@@ -18,45 +19,21 @@ VAL_CONFIDENCE = 0.001
 PREDICT_CONFIDENCE = 0.25
 
 
-class Tee:
-    """Write console output to each supplied stream."""
-
-    def __init__(self, *streams):
-        """Initialize a console tee for the supplied writable streams."""
-        self.streams = streams
-
-    def write(self, data: str) -> int:
-        """Write data to every supplied stream, propagating write failures."""
-        for stream in self.streams:
-            stream.write(data)
-        return len(data)
-
-    def flush(self) -> None:
-        """Flush every supplied stream, propagating write failures."""
-        for stream in self.streams:
-            stream.flush()
+def start_console_log(trainer) -> None:
+    """Capture Ultralytics training logger messages in the run directory."""
+    handler = logging.FileHandler(Path(trainer.save_dir) / "console.log", mode="w", encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    LOGGER.addHandler(handler)
+    trainer._multimodal_log_handler = handler
 
 
-def tee_log_to_run_dir(trainer) -> None:
-    """Mirror trainer console output to ``console.log`` in the run directory."""
-    log_path = Path(trainer.save_dir) / "console.log"
-    log_file = log_path.open("w", buffering=1, encoding="utf-8")
-    trainer._multimodal_console_streams = (sys.stdout, sys.stderr)
-    trainer._multimodal_console_log = log_file
-    sys.stdout = Tee(sys.stdout, log_file)
-    sys.stderr = Tee(sys.stderr, log_file)
-
-
-def close_tee_log(trainer) -> None:
-    """Restore console streams and close the trainer console log when training ends."""
-    streams = getattr(trainer, "_multimodal_console_streams", None)
-    if streams:
-        sys.stdout, sys.stderr = streams
-        del trainer._multimodal_console_streams
-    log_file = getattr(trainer, "_multimodal_console_log", None)
-    if log_file:
-        log_file.close()
-        del trainer._multimodal_console_log
+def close_console_log(trainer) -> None:
+    """Detach and close the handler owned by this training run."""
+    handler = getattr(trainer, "_multimodal_log_handler", None)
+    if handler:
+        LOGGER.removeHandler(handler)
+        handler.close()
+        del trainer._multimodal_log_handler
 
 
 def resolve_weights(weight_path: str | Path, task: str, weight_name: bool) -> Path:
@@ -82,8 +59,8 @@ def model_train(
     """Train a multimodal model using a data YAML that declares every aligned modality."""
     model = MultiModalYOLO(cfg_path, task)
     if console_log:
-        model.add_callback("on_train_start", tee_log_to_run_dir)
-        model.add_callback("on_train_end", close_tee_log)
+        model.add_callback("on_train_start", start_console_log)
+        model.add_callback("on_train_end", close_console_log)
 
     train_params = {
         "data": str(data),
@@ -104,7 +81,7 @@ def model_train(
         return model.train(**train_params)
     finally:
         if console_log:
-            close_tee_log(getattr(model, "trainer", None)) if getattr(model, "trainer", None) else None
+            close_console_log(getattr(model, "trainer", None)) if getattr(model, "trainer", None) else None
 
 
 def model_val(
