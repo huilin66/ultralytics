@@ -14,7 +14,7 @@ def parse_args() -> argparse.Namespace:
     """Parse a multimodal detection command without hard-coding dataset or checkpoint paths."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("train", "val", "predict", "track", "export"), default="train")
-    parser.add_argument("--data", required=True, help="Multi-modal data YAML with modality paths and channels.")
+    parser.add_argument("--data", help="Multi-modal data YAML with modality paths and channels (except export).")
     parser.add_argument("--model", default=DEFAULT_MODEL, type=Path, help="Model YAML used for training.")
     parser.add_argument("--weights", type=Path, help="Explicit trained checkpoint for val, predict, track or export.")
     parser.add_argument("--pretrained", type=Path, help="Optional single-modal checkpoint used to initialize training.")
@@ -36,6 +36,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Run one multimodal detect lifecycle operation."""
     args = parse_args()
+    if args.mode != "export" and not args.data:
+        raise SystemExit("--data is required for train, val, predict and track.")
     if args.mode == "train":
         kwargs = {"epochs": args.epochs, "imgsz": args.imgsz, "batch": args.batch, "device": args.device}
         if args.name:
@@ -48,7 +50,7 @@ def main() -> None:
     if args.mode in {"predict", "track"} and not args.source:
         raise SystemExit("--source is required for predict and track.")
 
-    common = {"data": args.data, "weight_name": False, "batch": args.batch, "device": args.device}
+    common = {"data": args.data, "weight_name": False, "batch": args.batch, "device": args.device, "imgsz": args.imgsz}
     if args.mode == "val":
         base.model_val(args.weights, **common)
     elif args.mode == "predict":
@@ -56,7 +58,7 @@ def main() -> None:
     elif args.mode == "track":
         base.model_track(args.weights, args.source, **common)
     else:
-        base.model_export(args.weights, weight_name=False, format=args.format, device=args.device)
+        base.model_export(args.weights, weight_name=False, format=args.format, device=args.device, imgsz=args.imgsz)
 
 
 if __name__ == "__main__":

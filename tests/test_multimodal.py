@@ -564,6 +564,25 @@ def test_multimodal_console_captures_training_logger(tmp_path):
     close_console_log(trainer)
 
 
+@pytest.mark.parametrize("mode", ["val", "predict", "track", "export"])
+def test_multimodal_cli_forwards_image_size(monkeypatch, mode):
+    """Every lifecycle mode honors the requested image size; export needs no dataset."""
+    import sys
+
+    import demo_multimodal_det as demo
+
+    captured = {}
+    argv = ["demo", "--mode", mode, "--weights", "model.pt", "--imgsz", "1280"]
+    if mode != "export":
+        argv += ["--data", "data.yaml"]
+    if mode in {"predict", "track"}:
+        argv += ["--source", "images"]
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(demo.base, f"model_{mode}", lambda *args, **kwargs: captured.update(kwargs))
+    demo.main()
+    assert captured["imgsz"] == 1280
+
+
 @pytest.mark.parametrize(
     "filename",
     [
