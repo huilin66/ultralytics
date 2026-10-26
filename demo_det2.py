@@ -14,7 +14,7 @@ demo_base.BATCH_SIZE = 16
 # demo_base.DATA = "BP_HMT_1216.yaml"
 # demo_base.DATA = "hmt_t.yaml"  # origin/main_demo
 # demo_base.CONF = 0.5
-# os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/train_leakage_loss_mask.txt"
+os.environ["LEAKAGE_ONLY_LIST"] = r"/data/huilin/data/bdd_hmt/hmt_t_update_v6/train_leakage_loss_mask.txt"
 
 if __name__ == "__main__":
     NAME = None
