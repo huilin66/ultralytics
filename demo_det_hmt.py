@@ -196,15 +196,33 @@ if __name__ == "__main__":
     #     name="debug",
     #     data="hmt_sua_rgb_v6.yaml",
     # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v6.yaml",
+    #     cls_pw=0.5,
+    #     imgsz=960,
+    # )
+    # demo_base.yolo8(
+    #     "yolov8x.yaml",
+    #     weight_path="yolov8x.pt",
+    #     load_as_model=False,
+    #     auto_optim=False,
+    #     name="debug",
+    #     data="hmt_sua_rgb_v6.yaml",
+    #     cls_pw=0.5,
+    #     imgsz=1280,
+    # )
     demo_base.yolo8(
         "yolov8x.yaml",
         weight_path="yolov8x.pt",
         load_as_model=False,
         auto_optim=False,
         name="debug",
-        data="hmt_sua_rgb_v6.yaml",
-        cls_pw=0.5,
-        imgsz=960,
+        data="hmt_bp_cube_v2.yaml",
     )
     demo_base.yolo8(
         "yolov8x.yaml",
@@ -212,7 +230,6 @@ if __name__ == "__main__":
         load_as_model=False,
         auto_optim=False,
         name="debug",
-        data="hmt_sua_rgb_v6.yaml",
+        data="hmt_bp_cube_v2.yaml",
         cls_pw=0.5,
-        imgsz=1280,
     )
