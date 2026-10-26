@@ -11,6 +11,7 @@ from ultralytics.models import yolo
 from ultralytics.utils import RANK
 from ultralytics.utils.torch_utils import unwrap_model
 
+from .fusion import validate_modality_sections
 from .pretrained import load_coco_pretrained
 from .tasks import MultiModalDetectionModel, MultiModalSegmentationModel
 from .val import MultiModalDetectionValidator, MultiModalSegmentationValidator
@@ -29,9 +30,7 @@ class MultiModalTrainerMixin:
         model = self.set_model_names_for_load(
             self.model_class(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
         )
-        sections = tuple(item["channels"] for item in self.data["modalities"])
-        if model.fusion_spec and sections != model.fusion_spec.input_sections:
-            raise ValueError(f"Dataset modality sections {sections} do not match {model.fusion_spec.input_sections}.")
+        validate_modality_sections(self.data, model)
         if weights:
             if (
                 isinstance(self.args.pretrained, (str, Path))

@@ -6,9 +6,16 @@ from __future__ import annotations
 from ultralytics.data.multimodal import build_multimodal_dataset
 from ultralytics.models import yolo
 
+from .fusion import validate_modality_sections
+
 
 class MultiModalValidatorMixin:
     """Build the same fused dataset for standalone validation as for training."""
+
+    def init_metrics(self, model):
+        """Validate sensor sections before any validation batches are processed."""
+        validate_modality_sections(self.data, model)
+        return super().init_metrics(model)
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """Build a validation dataset whose modality files remain paired with the primary image path."""

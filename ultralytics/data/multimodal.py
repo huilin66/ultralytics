@@ -241,7 +241,7 @@ class MultiModalDataset(YOLODataset):
                     image = np.load(cache_file, allow_pickle=False)
                     if image.ndim != 3 or image.shape[2] != self.channels:
                         raise ValueError(f"expected {self.channels} channels")
-                except Exception as e:
+                except (OSError, ValueError, EOFError) as e:
                     LOGGER.warning(f"{self.prefix}Removing invalid multi-modal cache {cache_file}: {e}")
                     cache_file.unlink(missing_ok=True)
                     image = None

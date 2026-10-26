@@ -52,7 +52,7 @@ def load_coco_pretrained(
     target_model = _unwrap_model(target)
     plan = plan or getattr(target_model, "yaml", {}).get("multimodal", {}).get("pretrained")
     if not isinstance(plan, dict):
-        raise ValueError("Multi-modal COCO transfer requires a multimodal.pretrained YAML mapping.")
+        raise TypeError("Multi-modal COCO transfer requires a multimodal.pretrained YAML mapping.")
     if plan.get("source") != "yolov8":
         raise ValueError(f"Only a yolov8 source is supported, got {plan.get('source')!r}.")
 

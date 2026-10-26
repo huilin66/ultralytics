@@ -231,8 +231,6 @@ class BaseTrainer:
                 cmd, file = generate_ddp_command(self)
                 LOGGER.info(f"{colorstr('DDP:')} debug command {' '.join(cmd)}")
                 subprocess.run(cmd, check=True)
-            except Exception:
-                raise
             finally:
                 if file is not None:
                     ddp_cleanup(self, str(file))

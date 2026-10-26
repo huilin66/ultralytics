@@ -18,4 +18,8 @@ keywords: Ultralytics, ultralytics.models.multimodal.fusion, API reference, YOLO
 
 ## ::: ultralytics.models.multimodal.fusion.parse_fusion_spec
 
+<br><br><hr><br>
+
+## ::: ultralytics.models.multimodal.fusion.validate_modality_sections
+
 <br><br>

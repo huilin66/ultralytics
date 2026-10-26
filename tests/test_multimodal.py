@@ -504,6 +504,20 @@ def test_multimodal_prediction_rejects_wrong_sensor_sections(tmp_path, monkeypat
         predictor.setup_source("image.jpg")
 
 
+@pytest.mark.parametrize("task", ["detect", "segment"])
+def test_multimodal_validation_rejects_wrong_sensor_sections(tmp_path, task):
+    """Standalone validation must enforce the same sensor contract as training and prediction."""
+    from ultralytics.models.multimodal.val import MultiModalDetectionValidator, MultiModalSegmentationValidator
+
+    cls = MultiModalDetectionValidator if task == "detect" else MultiModalSegmentationValidator
+    validator = object.__new__(cls)
+    validator.data = _data(tmp_path)
+    validator.data["modalities"][:2] = reversed(validator.data["modalities"][:2])
+    model = SimpleNamespace(fusion_spec=SimpleNamespace(input_sections=(3, 1, 1)))
+    with pytest.raises(ValueError, match="modality sections"):
+        validator.init_metrics(model)
+
+
 def test_mm2_transfer_averages_equal_width_auxiliary_input():
     """A three-channel thermal branch must honor mean initialization despite matching RGB width."""
     source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)

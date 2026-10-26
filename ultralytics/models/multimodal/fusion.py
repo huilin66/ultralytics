@@ -8,6 +8,16 @@ from typing import Any
 
 FUSION_MODES = frozenset({"IF", "EF", "NIF", "BF", "NF", "HF"})
 FUSION_OPERATORS = frozenset({"concat", "add"})
+
+
+def validate_modality_sections(data, model):
+    """Check the ordered sensor contract for task models and inference backends."""
+    spec = getattr(model, "fusion_spec", None) or getattr(getattr(model, "model", None), "fusion_spec", None)
+    sections = tuple(item["channels"] for item in data["modalities"])
+    if spec and sections != spec.input_sections:
+        raise ValueError(f"Dataset modality sections {sections} do not match {spec.input_sections}.")
+
+
 STAGES_BEFORE_FUSION = {
     "IF": (),
     "EF": ("encoder",),

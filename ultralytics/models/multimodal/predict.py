@@ -12,6 +12,8 @@ from ultralytics.data.multimodal import Modalities
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.models import yolo
 
+from .fusion import validate_modality_sections
+
 
 class MultiModalPredictorMixin:
     """Fuse image-file modalities just before standard predictor preprocessing."""
@@ -26,10 +28,7 @@ class MultiModalPredictorMixin:
             data = check_det_dataset(self.args.data)
             if "modalities" in data:
                 self.modalities = Modalities(data)
-                spec = getattr(getattr(self.model, "model", None), "fusion_spec", None)
-                sections = tuple(item.channels for item in self.modalities.items)
-                if spec and sections != spec.input_sections:
-                    raise ValueError(f"Dataset modality sections {sections} do not match {spec.input_sections}.")
+                validate_modality_sections(data, self.model)
                 if self.modalities.channels != self.model.channels:
                     raise ValueError(
                         f"data.yaml declares {self.modalities.channels} channels, "
