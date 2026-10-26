@@ -394,14 +394,14 @@ def test_multimodal_rectangular_sort_preserves_cache_pairing(tmp_path):
         ("depth", (20, 12), ".png"),
     ]:
         assert cv2.imwrite(str(tmp_path / f"images/{name}/train/sample_0{suffix}"), np.full(shape, 71, np.uint8))
-    kwargs = dict(
-        img_path=tmp_path / "images/rgb/train",
-        imgsz=32,
-        batch_size=2,
-        augment=False,
-        data=_data(tmp_path),
-        hyp=DEFAULT_CFG,
-    )
+    kwargs = {
+        "img_path": tmp_path / "images/rgb/train",
+        "imgsz": 32,
+        "batch_size": 2,
+        "augment": False,
+        "data": _data(tmp_path),
+        "hyp": DEFAULT_CFG,
+    }
     original = MultiModalDataset(**kwargs)
     for index in range(len(original)):
         original.cache_images_to_disk(index)
