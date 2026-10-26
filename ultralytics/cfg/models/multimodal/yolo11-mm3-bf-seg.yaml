@@ -1,0 +1,85 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# Three-branch YOLO11 instance segmentation model with backbone feature fusion.
+# Input order: RGB (3) + thermal (1) + depth (1). Change input_sections and Index entries for another layout.
+nc: 80
+channels: 5
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: BF
+  operator: concat
+  fusion_points: [P3, P4, P5]
+  share_weight: false
+scales:
+  n: [0.50, 0.25, 1024]
+  s: [0.50, 0.50, 1024]
+  m: [0.50, 1.00, 512]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.50, 512]
+
+backbone:
+  # RGB encoder, P3=6, P4=8, P5=12
+  - [-1, 1, ModalSplit, [[3, 1, 1]]]
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 2, C3k2, [256, false, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 2, C3k2, [512, false, 0.25]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 2, C3k2, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 2, C3k2, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+  - [-1, 2, C2PSA, [1024]]
+
+  # Thermal encoder, P3=18, P4=20, P5=24
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 2, C3k2, [256, false, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 2, C3k2, [512, false, 0.25]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 2, C3k2, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 2, C3k2, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+  - [-1, 2, C2PSA, [1024]]
+
+  # Depth encoder, P3=30, P4=32, P5=36
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 2, C3k2, [256, false, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 2, C3k2, [512, false, 0.25]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 2, C3k2, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 2, C3k2, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+  - [-1, 2, C2PSA, [1024]]
+
+  # Fuse each backbone scale, then use the stock YOLO11 PAN and Segment head.
+  - [[6, 18, 30], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]] # 38: fused P3
+  - [[8, 20, 32], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]] # 40: fused P4
+  - [[12, 24, 36], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [1024, 1, 1]] # 42: fused P5
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 40], 1, Concat, [1]]
+  - [-1, 2, C3k2, [512, false]] # 45: P4
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 38], 1, Concat, [1]]
+  - [-1, 2, C3k2, [256, false]] # 48: P3
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 45], 1, Concat, [1]]
+  - [-1, 2, C3k2, [512, false]] # 51: P4
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 42], 1, Concat, [1]]
+  - [-1, 2, C3k2, [1024, true]] # 54: P5
+  - [[48, 51, 54], 1, Segment, [nc, 32, 256]]

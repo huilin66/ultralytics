@@ -1,0 +1,101 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8x two-modality head-feature fusion: two complete branches fuse their projected P3/P4/P5 head features.
+nc: 80
+channels: 6
+scale: x
+multimodal:
+  input_sections: [3, 3]
+  fusion: HF
+  operator: concat
+  fusion_points: [head_P3, head_P4, head_P5]
+  share_weight: false
+  pretrained:
+    source: yolov8
+    copies:
+    - source:
+      - [0, 9]
+      - [10, 21]
+      target:
+      - [2, 11]
+      - [23, 34]
+      input_init: copy
+    - source:
+      - [0, 9]
+      - [10, 21]
+      target:
+      - [13, 22]
+      - [35, 46]
+      input_init: mean
+    - source: [22, 22]
+      target: [59, 59]
+    identity_projections: [47, 48, 49, 50, 51, 52]
+    fusion_projections: [54, 56, 58]
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.5, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.0, 1.0, 512]
+  x: [1.0, 1.25, 512]
+backbone:
+  - [-1, 1, ModalSplit, [[3, 3]]]
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+  - [0, 1, Index, [3, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+head:
+  - [11, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 8], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 25], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 11], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]]
+  - [22, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 19], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 17], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 37], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 22], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]]
+  - [28, 1, Conv, [256, 1, 1]]
+  - [31, 1, Conv, [512, 1, 1]]
+  - [34, 1, Conv, [1024, 1, 1]]
+  - [40, 1, Conv, [256, 1, 1]]
+  - [43, 1, Conv, [512, 1, 1]]
+  - [46, 1, Conv, [1024, 1, 1]]
+  - [[47, 50], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [256, 1, 1]]
+  - [[48, 51], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]]
+  - [[49, 52], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [1024, 1, 1]]
+  - [[54, 56, 58], 1, Detect, [nc]]

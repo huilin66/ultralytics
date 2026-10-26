@@ -1,0 +1,74 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8x two-modality encoder fusion: encoder P3/P4/P5 features are fused before the shared nape and neck.
+nc: 80
+channels: 6
+scale: x
+multimodal:
+  input_sections: [3, 3]
+  fusion: EF
+  operator: concat
+  fusion_points: [encoder_P3, encoder_P4, encoder_P5]
+  share_weight: false
+  pretrained:
+    source: yolov8
+    copies:
+    - source: [0, 8]
+      target: [2, 10]
+      input_init: copy
+    - source: [0, 8]
+      target: [12, 20]
+      input_init: mean
+    - source: [9, 22]
+      target: [27, 40]
+    fusion_projections: [22, 24, 26]
+    identity_projections: []
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.5, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.0, 1.0, 512]
+  x: [1.0, 1.25, 512]
+backbone:
+  - [-1, 1, ModalSplit, [[3, 3]]]
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [0, 1, Index, [3, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [[6, 16], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [256, 1, 1]]
+  - [[8, 18], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [512, 1, 1]]
+  - [[10, 20], 1, MultiModalFusion, [concat]]
+  - [-1, 1, Conv, [1024, 1, 1]]
+  - [-1, 1, SPPF, [1024, 5]]
+head:
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 24], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]
+  - [[-1, 22], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 30], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 27], 1, Concat, [1]]
+  - [-1, 3, C2f, [1024]]
+  - [[33, 36, 39], 1, Detect, [nc]]
