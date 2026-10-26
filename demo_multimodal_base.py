@@ -72,11 +72,6 @@ def resolve_weights(weight_path: str | Path, task: str, weight_name: bool) -> Pa
     return Path("runs") / task / path / "weights" / "best.pt" if weight_name else path
 
 
-def build_model(model_path: str | Path, task: str = DEFAULT_TASK) -> MultiModalYOLO:
-    """Create the multimodal facade used by every lifecycle helper."""
-    return MultiModalYOLO(model_path, task=task)
-
-
 def model_train(
     cfg_path: str | Path,
     data: str | Path,
@@ -92,7 +87,7 @@ def model_train(
     **kwargs: Any,
 ):
     """Train a multimodal model using a data YAML that declares every aligned modality."""
-    model = build_model(cfg_path, task)
+    model = MultiModalYOLO(cfg_path, task)
     if pretrain_path:
         load_coco_pretrained(model, pretrain_path)
     if console_log:
@@ -132,15 +127,16 @@ def model_val(
 ):
     """Validate a checkpoint with the data YAML needed to recreate modality pairing."""
     weights = resolve_weights(weight_path, task, weight_name)
-    model = build_model(weights, task)
-    return model.val(
-        data=str(data),
-        batch=batch,
-        conf=VAL_CONFIDENCE,
-        device=device,
-        save_txt=save_txt,
-        **kwargs,
-    )
+    model = MultiModalYOLO(weights, task)
+    params = {
+        "data": str(data),
+        "batch": batch,
+        "conf": VAL_CONFIDENCE,
+        "device": device,
+        "save_txt": save_txt,
+    }
+    params.update(kwargs)
+    return model.val(**params)
 
 
 def model_predict(
@@ -159,18 +155,19 @@ def model_predict(
 ) -> None:
     """Predict from primary-modality files, using the data YAML to map companion modalities."""
     weights = resolve_weights(weight_path, task, weight_name)
-    model = build_model(weights, task)
-    results = model.predict(
-        source=str(source),
-        data=str(data),
-        batch=batch,
-        conf=PREDICT_CONFIDENCE,
-        device=device,
-        save=save,
-        save_txt=save_txt,
-        stream=stream,
-        **kwargs,
-    )
+    model = MultiModalYOLO(weights, task)
+    params = {
+        "source": str(source),
+        "data": str(data),
+        "batch": batch,
+        "conf": PREDICT_CONFIDENCE,
+        "device": device,
+        "save": save,
+        "save_txt": save_txt,
+        "stream": stream,
+    }
+    params.update(kwargs)
+    results = model.predict(**params)
     for _ in results:
         pass
 
@@ -188,18 +185,19 @@ def model_track(
 ) -> None:
     """Track primary-modality files while using the data YAML for aligned companion images."""
     weights = resolve_weights(weight_path, task, weight_name)
-    model = build_model(weights, task)
-    results = model.track(
-        source=str(source),
-        data=str(data),
-        batch=batch,
-        conf=PREDICT_CONFIDENCE,
-        device=device,
-        tracker="botsort.yaml",
-        persist=True,
-        stream=True,
-        **kwargs,
-    )
+    model = MultiModalYOLO(weights, task)
+    params = {
+        "source": str(source),
+        "data": str(data),
+        "batch": batch,
+        "conf": PREDICT_CONFIDENCE,
+        "device": device,
+        "tracker": "botsort.yaml",
+        "persist": True,
+        "stream": True,
+    }
+    params.update(kwargs)
+    results = model.track(**params)
     for _ in results:
         pass
 
@@ -215,7 +213,7 @@ def model_export(
 ):
     """Export a trained multimodal checkpoint through Ultralytics' standard exporter."""
     weights = resolve_weights(weight_path, task, weight_name)
-    return build_model(weights, task).export(format=format, device=device, **kwargs)
+    return MultiModalYOLO(weights, task).export(format=format, device=device, **kwargs)
 
 
 def yolov8(cfg_path: str | Path, data: str | Path, pretrain_path: str | Path | None = None, **kwargs: Any):

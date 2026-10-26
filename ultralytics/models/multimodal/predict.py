@@ -19,6 +19,8 @@ class MultiModalPredictorMixin:
     def setup_source(self, source, stride=None):
         """Set up the normal source loader and optional path mapper from ``data=multimodal.yaml``."""
         super().setup_source(source, stride)
+        if self.dataset.mode != "image":
+            raise ValueError("Multi-modal file prediction supports paired images, not video or stream sources.")
         self.modalities = None
         if self.args.data:
             data = check_det_dataset(self.args.data)
@@ -42,7 +44,7 @@ class MultiModalPredictorMixin:
                 raise ValueError(f"Pre-fused arrays must have {self.model.channels} channels.")
             fused = images
         elif self.modalities is not None:
-            fused = [self.modalities.load(Path(path)) for path in self.batch[0]]
+            fused = [self.modalities.to_rgb(self.modalities.load(Path(path))) for path in self.batch[0]]
         else:
             raise ValueError(
                 "A multi-modal file source needs data='path/to/multimodal.yaml'. "

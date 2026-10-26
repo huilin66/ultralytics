@@ -79,7 +79,7 @@ fusion mode, operator and fusion points; `ModalSplit: [[3, 1, 1]]` returns RGB, 
 and `Segment` head. To add modalities, change both `input_sections` and `ModalSplit`, add the corresponding `Index` and
 encoder branch, and include its P3/P4/P5 outputs in each fusion module.
 
-`yolov8x-mm3-pre-sppf.yaml` is the corresponding three-modality YOLOv8x encoder-fusion example. It concatenates the
+`yolov8x-mm3-ef.yaml` is the corresponding three-modality YOLOv8x encoder-fusion example. It concatenates the
 P3/P4/pre-nape-P5 branch outputs, projects them, then runs one shared `SPPF` on P5. This is the configuration to use
 when fusion must happen before SPPF rather than after each branch has its own SPPF.
 

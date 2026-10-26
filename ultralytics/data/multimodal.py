@@ -121,6 +121,13 @@ class Modalities:
             ) from e
         return tuple(item.root / relative.with_suffix(item.suffix or relative.suffix) for item in self.items)
 
+    def to_rgb(self, image: np.ndarray) -> np.ndarray:
+        """Convert declared BGR groups to model RGB order while preserving sensor order."""
+        image = image.copy()
+        for channels in self.bgr_slices:
+            image[..., channels] = image[..., channels][..., ::-1]
+        return image
+
     def load(self, primary_path: str | Path) -> np.ndarray:
         """Read, validate and concatenate the aligned modality images into one HWC array."""
         images = []
@@ -180,6 +187,20 @@ class MultiModalHSV(RandomHSV):
             hsv = cv2.merge((cv2.LUT(h, hue), cv2.LUT(s, saturation), cv2.LUT(v, value)))
             image[..., channels] = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
         return labels
+
+
+class MultiModalFormat(Format):
+    """Format sensor stacks with RGB color groups and unchanged modality ordering."""
+
+    def __init__(self, modalities: Modalities, **kwargs):
+        """Reuse the base annotation formatter with modality-aware color conversion."""
+        super().__init__(**kwargs)
+        self.bgr = 1.0
+        self.modalities = modalities
+
+    def _format_img(self, img):
+        """Convert each declared color sensor before the standard tensor formatting."""
+        return super()._format_img(self.modalities.to_rgb(img))
 
 
 class MultiModalDataset(YOLODataset):
@@ -259,11 +280,7 @@ class MultiModalDataset(YOLODataset):
         """Save the fused, pre-resize image rather than only the primary modality."""
         cache_file = self._cache_files[i]
         if not cache_file.exists():
-            try:
-                np.save(cache_file, self.modalities.load(self.im_files[i]), allow_pickle=False)
-            except Exception as e:
-                cache_file.unlink(missing_ok=True)
-                LOGGER.warning(f"{self.prefix}WARNING ⚠️ Failed to cache multi-modal image {cache_file}: {e}")
+            np.save(cache_file, self.modalities.load(self.im_files[i]), allow_pickle=False)
 
     def cache_images(self) -> None:
         """Cache fused samples in RAM or in the private multi-modal disk-cache namespace."""
@@ -335,9 +352,7 @@ class MultiModalDataset(YOLODataset):
                     bgr_slices=self.modalities.bgr_slices,
                 )
             elif isinstance(transform, Format):
-                # The base formatter reverses a whole three-channel image. A multi-modal channel stack must preserve
-                # its declared ordering, including the uncommon case where all modalities sum to three channels.
-                transform.bgr = 1.0
+                transforms.transforms[i] = MultiModalFormat(self.modalities, **vars(transform))
         return transforms
 
 

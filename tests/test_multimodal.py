@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from ultralytics.data.augment import Mosaic, RandomPerspective
-from ultralytics.data.multimodal import Modalities, MultiModalDataset
+from ultralytics.data.multimodal import Modalities, MultiModalDataset, MultiModalFormat
 from ultralytics.models.multimodal import MultiModalYOLO
 from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
@@ -350,6 +350,12 @@ def test_if_coco_transfer_expands_the_first_convolution(tmp_path, facades):
     assert torch.count_nonzero(target.model[0].conv.weight[:, 3:]) == 0
     assert report.transformed_tensors == 1
     assert report.skipped_tensors == 0
+    raw = np.full((32, 32, 5), [10, 20, 90, 30, 40], dtype=np.uint8)
+    modalities = Modalities(_data(tmp_path))
+    formatted = MultiModalFormat(modalities)._format_img(raw).float().unsqueeze(0)
+    assert formatted[0, :, 0, 0].tolist() == [90, 20, 10, 30, 40]
+    rgb = torch.tensor([90, 20, 10]).float().view(1, 3, 1, 1).expand(1, 3, 32, 32)
+    torch.testing.assert_close(target.model[0].eval()(formatted), source.model[0].eval()(rgb))
 
 
 def test_multimodal_disk_cache_separates_modality_order(tmp_path):
@@ -369,6 +375,15 @@ def test_multimodal_disk_cache_separates_modality_order(tmp_path):
     assert np.all(image[..., 3] == 30)
     assert np.all(image[..., 4] == 20)
 
+    def fail_save(*args, **kwargs):
+        raise OSError("disk write failed")
+
+    monkeypatch = pytest.MonkeyPatch()
+    with monkeypatch.context() as patch:
+        patch.setattr(np, "save", fail_save)
+        with pytest.raises(OSError, match="disk write failed"):
+            second.cache_images_to_disk(0)
+
 
 @pytest.mark.parametrize("from_img", [False, True])
 def test_three_channel_prediction_distinguishes_files_and_arrays(tmp_path, from_img):
@@ -379,12 +394,47 @@ def test_three_channel_prediction_distinguishes_files_and_arrays(tmp_path, from_
     predictor.source_type = SimpleNamespace(from_img=from_img)
     predictor.batch = ([str(tmp_path / "primary.png")], None, None)
     paired = np.full((8, 8, 3), [10, 20, 30], dtype=np.uint8)
-    predictor.modalities = SimpleNamespace(load=lambda path: paired)
+    predictor.modalities = SimpleNamespace(load=lambda path: paired, to_rgb=lambda image: image)
     predictor.pre_transform = lambda images: images
     image = np.full((8, 8, 3), 99, dtype=np.uint8)
     result = predictor.preprocess([image])
     expected = torch.tensor([99, 99, 99] if from_img else [10, 20, 30]) / 255
     torch.testing.assert_close(result[0, :, 0, 0], expected)
+
+
+def test_multimodal_prediction_rejects_video_sources(monkeypatch):
+    """Image pairing must not try to read a video path as a companion image."""
+    from ultralytics.models.yolo.detect.predict import DetectionPredictor
+
+    monkeypatch.setattr(
+        DetectionPredictor, "setup_source", lambda self, *args: setattr(self, "dataset", SimpleNamespace(mode="video"))
+    )
+    predictor = MultiModalDetectionPredictor(overrides={"save": False})
+    with pytest.raises(ValueError, match="paired images"):
+        predictor.setup_source("video.mp4")
+
+
+@pytest.mark.parametrize("method", ["val", "predict", "track"])
+def test_multimodal_demo_inference_accepts_overrides(monkeypatch, method):
+    """Caller confidence and tracker options override demo defaults without duplicate keywords."""
+    import demo_multimodal_base as demo
+
+    captured = {}
+
+    def infer(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(demo, "MultiModalYOLO", lambda *args: SimpleNamespace(**{method: infer}))
+    kwargs = {"conf": 0.5}
+    if method == "track":
+        kwargs["tracker"] = "bytetrack.yaml"
+    if method != "val":
+        kwargs["source"] = "images"
+    getattr(demo, f"model_{method}")("weights.pt", data="data.yaml", weight_name=False, **kwargs)
+    assert captured["conf"] == 0.5
+    if method == "track":
+        assert captured["tracker"] == "bytetrack.yaml"
 
 
 @pytest.mark.parametrize(

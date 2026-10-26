@@ -18,7 +18,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=DEFAULT_MODEL, type=Path, help="Model YAML used for training.")
     parser.add_argument("--weights", type=Path, help="Explicit trained checkpoint for val, predict, track or export.")
     parser.add_argument("--pretrained", type=Path, help="Optional single-modal checkpoint used to initialize training.")
-    parser.add_argument("--source", type=Path, help="Primary-modality image, directory or video for predict or track.")
+    parser.add_argument(
+        "--source", type=Path, help="Primary-modality image or image directory for predict or track (no video)."
+    )
     parser.add_argument("--epochs", default=100, type=int)
     parser.add_argument("--imgsz", default=640, type=int)
     parser.add_argument("--batch", default=16, type=int)
