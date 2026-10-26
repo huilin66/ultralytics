@@ -437,6 +437,35 @@ def test_multimodal_demo_inference_accepts_overrides(monkeypatch, method):
         assert captured["tracker"] == "bytetrack.yaml"
 
 
+def test_multimodal_trainer_initializes_actual_training_weights():
+    """Semantic transfer belongs to the trainer model rather than the temporary YAML facade."""
+    from ultralytics.models.multimodal.train import MultiModalDetectionTrainer
+
+    source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
+    cfg = yaml_model_load("ultralytics/cfg/mmodels/yolov8x-mm3-if.yaml")
+    cfg["scale"] = "n"
+    trainer = object.__new__(MultiModalDetectionTrainer)
+    trainer.args = SimpleNamespace(pretrained="source.pt", cls_remap=False)
+    trainer.data = {"nc": 3, "channels": 5}
+    trainer.resume = False
+    model = trainer.get_model(cfg, weights=source, verbose=False)
+    torch.testing.assert_close(model.model[0].conv.weight[:, :3], source.model[0].conv.weight)
+    assert torch.count_nonzero(model.model[0].conv.weight[:, 3:]) == 0
+
+
+@pytest.mark.parametrize("method", ["write", "flush"])
+def test_multimodal_console_propagates_io_failures(method):
+    """Console capture must report disk errors instead of silently losing logs."""
+    from demo_multimodal_base import Tee
+
+    def fail(*args):
+        raise OSError("disk full")
+
+    tee = Tee(SimpleNamespace(write=fail, flush=fail))
+    with pytest.raises(OSError, match="disk full"):
+        getattr(tee, method)(*(["text"] if method == "write" else []))
+
+
 @pytest.mark.parametrize(
     "filename",
     [

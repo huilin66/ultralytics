@@ -9,7 +9,6 @@ from typing import Any
 import torch
 
 from ultralytics.models.multimodal import MultiModalYOLO
-from ultralytics.models.multimodal.pretrained import load_coco_pretrained
 
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 100
@@ -27,21 +26,15 @@ class Tee:
         self.streams = streams
 
     def write(self, data: str) -> int:
-        """Write data to every healthy stream."""
+        """Write data to every supplied stream, propagating write failures."""
         for stream in self.streams:
-            try:
-                stream.write(data)
-            except OSError:
-                pass
+            stream.write(data)
         return len(data)
 
     def flush(self) -> None:
-        """Flush every healthy stream."""
+        """Flush every supplied stream, propagating write failures."""
         for stream in self.streams:
-            try:
-                stream.flush()
-            except OSError:
-                pass
+            stream.flush()
 
 
 def tee_log_to_run_dir(trainer) -> None:
@@ -88,8 +81,6 @@ def model_train(
 ):
     """Train a multimodal model using a data YAML that declares every aligned modality."""
     model = MultiModalYOLO(cfg_path, task)
-    if pretrain_path:
-        load_coco_pretrained(model, pretrain_path)
     if console_log:
         model.add_callback("on_train_start", tee_log_to_run_dir)
         model.add_callback("on_train_end", close_tee_log)
@@ -106,6 +97,8 @@ def model_train(
     if not auto_optim:
         train_params.update({"optimizer": "AdamW", "lr0": 1e-4})
     train_params.update(kwargs)
+    if pretrain_path:
+        train_params["pretrained"] = str(pretrain_path)
     train_params.setdefault("name", f"{Path(data).stem}-[{Path(cfg_path).stem}]")
     try:
         return model.train(**train_params)

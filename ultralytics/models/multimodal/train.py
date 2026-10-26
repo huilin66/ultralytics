@@ -11,6 +11,7 @@ from ultralytics.models import yolo
 from ultralytics.utils import RANK
 from ultralytics.utils.torch_utils import unwrap_model
 
+from .pretrained import load_coco_pretrained
 from .tasks import MultiModalDetectionModel, MultiModalSegmentationModel
 from .val import MultiModalDetectionValidator, MultiModalSegmentationValidator
 
@@ -33,7 +34,10 @@ class MultiModalDetectionTrainer(MultiModalTrainerMixin, yolo.detect.DetectionTr
             MultiModalDetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
         )
         if weights:
-            model.load(weights)
+            if isinstance(self.args.pretrained, (str, Path)) and not self.resume:
+                load_coco_pretrained(model, weights)
+            else:
+                model.load(weights)
         return model
 
     def get_validator(self):
@@ -55,7 +59,10 @@ class MultiModalSegmentationTrainer(MultiModalTrainerMixin, yolo.segment.Segment
             )
         )
         if weights:
-            model.load(weights)
+            if isinstance(self.args.pretrained, (str, Path)) and not self.resume:
+                load_coco_pretrained(model, weights)
+            else:
+                model.load(weights)
         return model
 
     def get_validator(self):
