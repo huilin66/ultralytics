@@ -1,22 +1,27 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 """Tests for the pixel-aligned multi-modal extension."""
 
-from copy import deepcopy
 import os
+from copy import deepcopy
 
 import cv2
 import numpy as np
 import pytest
 import torch
 
+from ultralytics.data.augment import Mosaic, RandomPerspective
 from ultralytics.data.multimodal import Modalities, MultiModalDataset
 from ultralytics.models.multimodal import MultiModalYOLO
 from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
 from ultralytics.models.multimodal.pretrained import load_coco_pretrained
 from ultralytics.models.multimodal.tasks import MultiModalDetectionModel
+from ultralytics.models.yolo.detect.train import DetectionTrainer
 from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 from ultralytics.utils import DEFAULT_CFG
+from ultralytics.utils.loss import v8DetectionLoss
+from ultralytics.utils.tal import make_anchors
+from ultralytics.utils.torch_utils import init_seeds
 
 
 def _write_dataset(root, depth_shape=(12, 20)):
@@ -130,6 +135,77 @@ def test_multimodal_augmentations_keep_the_channel_stack(tmp_path):
         hyp=hyp,
     )
     assert dataset[0]["img"].shape == (5, 32, 32)
+
+
+@pytest.mark.parametrize("channels", [3, 4, 6])
+@pytest.mark.parametrize("perspective", [0.0, 0.001])
+def test_multichannel_warp_fills_every_channel(channels, perspective):
+    """Affine and perspective padding must use 114 for every sensor channel."""
+    transform = RandomPerspective(perspective=perspective)
+    matrix = np.array([[1, 0, 2], [0, 1, 2], [0, 0, 1]], dtype=np.float32)
+    labels = {"img": np.full((8, 8, channels), 20, dtype=np.uint8)}
+    result = transform.apply_image(labels, {"M": matrix, "size": (8, 8)})["img"]
+    assert result.shape == (8, 8, channels)
+    assert np.all(result[0, 0] == 114)
+    assert np.all(result[4, 4] == 20)
+
+
+@pytest.mark.parametrize("channels", [4, 6])
+@pytest.mark.parametrize("empty", [False, True])
+def test_multimodal_leakage_mosaic_backward(tmp_path, monkeypatch, channels, empty):
+    """Paired Mosaic sources, including empty leakage labels, retain class-specific loss gradients."""
+    init_seeds(0)
+    _write_dataset(tmp_path)
+    data = _data(tmp_path)
+    data["modalities"].pop()
+    data["channels"] = channels
+    data["names"] = {0: "Hollow", 1: "Temperature", 2: "Leakage"}
+    if channels == 6:
+        data["modalities"][1]["channels"] = 3
+        for path in (tmp_path / "images" / "thermal" / "train").glob("*.png"):
+            assert cv2.imwrite(str(path), np.full((12, 20, 3), 20, dtype=np.uint8))
+    (tmp_path / "labels/rgb/train/sample_1.txt").write_text("" if empty else "2 0.5 0.5 0.5 0.5\n")
+    list_path = tmp_path / "leakage.txt"
+    list_path.write_text("/server/images/rgb/train/sample_1.jpg\n")
+    monkeypatch.setenv("LEAKAGE_ONLY_LIST", str(list_path))
+    monkeypatch.setattr(Mosaic, "get_indexes", lambda self: [0, 1, 1])
+    hyp = deepcopy(DEFAULT_CFG)
+    hyp.mosaic = 1.0
+    hyp.mixup = hyp.cutmix = hyp.copy_paste = hyp.degrees = hyp.translate = hyp.scale = hyp.shear = 0.0
+    dataset = MultiModalDataset(
+        img_path=tmp_path / "images/rgb/train", imgsz=32, augment=True, batch_size=2, data=data, hyp=hyp
+    )
+    batch = dataset.collate_fn([dataset[0], dataset[1]])
+    assert batch["img"].shape == (2, channels, 32, 32)
+    if empty:
+        assert not batch["cls"].eq(2).any()
+    assert set(batch["cls_loss_spatial_mask"].unique().tolist()) == {0, 1}
+    model = MultiModalDetectionModel(
+        {
+            "nc": 3,
+            "channels": channels,
+            "backbone": [[-1, 1, "Conv", [16, 3, 2]]],
+            "head": [[[0], 1, "Detect", ["nc"]]],
+        },
+        verbose=False,
+    ).train()
+    model.args = hyp
+    model._leakage_only_dataset_records = DetectionTrainer._leakage_only_dataset_records(dataset)
+    criterion = v8DetectionLoss(model)
+    preds = model(batch["img"].float() / 255)
+    preds["scores"].retain_grad()
+    loss, _ = criterion(preds, batch)
+    assert torch.isfinite(loss).all()
+    loss.sum().backward()
+    anchors, strides = make_anchors(preds["feats"], model.stride, 0.5)
+    mask = criterion._get_leakage_only_spatial_loss_mask(
+        batch["cls_loss_spatial_mask"], anchors, strides, (32, 32), torch.float32
+    ).permute(0, 2, 1)
+    gradients = preds["scores"].grad
+    assert (mask == 0).any()
+    assert gradients[mask == 0].eq(0).all()
+    assert gradients[:, 2].abs().sum() > 0
+    assert model.model[0].conv.weight.grad.abs().sum() > 0
 
 
 def test_modal_split_supports_any_branch_count():

@@ -526,7 +526,7 @@ class Mosaic(BaseMixTransform):
         classes = np.asarray(labels["cls"]).reshape(-1).astype(np.int64)
         leakage_indices = np.flatnonzero(classes == 2)
         if not len(leakage_indices):
-            raise ValueError(f"Leakage-only image has no class-2 box: {labels.get('im_file', '<unknown>')}")
+            return  # Empty-label sources retain the full image and leakage-only classification mask.
 
         instances = labels["instances"]
         instances.convert_bbox(format="xyxy")
@@ -1291,9 +1291,9 @@ class RandomPerspective(BaseTransform):
         size = params["size"]
         if (size[0] != img.shape[1] or size[1] != img.shape[0]) or (M != np.eye(3)).any():  # image changed
             if self.perspective:
-                img = cv2.warpPerspective(img, M, dsize=size, borderValue=(114, 114, 114))
+                img = cv2.warpPerspective(img, M, dsize=size, borderValue=(114, 114, 114, 114))
             else:  # affine
-                img = cv2.warpAffine(img, M[:2], dsize=size, borderValue=(114, 114, 114))
+                img = cv2.warpAffine(img, M[:2], dsize=size, borderValue=(114, 114, 114, 114))
             if img.ndim == 2:
                 img = img[..., None]
         labels["img"] = img
