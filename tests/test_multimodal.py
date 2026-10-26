@@ -3,6 +3,7 @@
 
 import os
 from copy import deepcopy
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -14,11 +15,13 @@ from ultralytics.data.multimodal import Modalities, MultiModalDataset
 from ultralytics.models.multimodal import MultiModalYOLO
 from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
+from ultralytics.models.multimodal.predict import MultiModalDetectionPredictor
 from ultralytics.models.multimodal.pretrained import load_coco_pretrained
 from ultralytics.models.multimodal.tasks import MultiModalDetectionModel
 from ultralytics.models.yolo.detect.train import DetectionTrainer
+from ultralytics.models.yolo.model import YOLO
 from ultralytics.nn.tasks import DetectionModel, yaml_model_load
-from ultralytics.utils import DEFAULT_CFG
+from ultralytics.utils import DEFAULT_CFG, YAML
 from ultralytics.utils.loss import v8DetectionLoss
 from ultralytics.utils.tal import make_anchors
 from ultralytics.utils.torch_utils import init_seeds
@@ -326,18 +329,62 @@ def test_shared_weight_yaml_runs_one_stage_on_folded_modalities():
     assert prediction[0].shape[0] == 1
 
 
-def test_if_coco_transfer_expands_the_first_convolution():
+@pytest.mark.parametrize("facades", [False, True])
+def test_if_coco_transfer_expands_the_first_convolution(tmp_path, facades):
     """IF should retain YOLOv8 weights while copying RGB channels into the expanded first convolution."""
     source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
     cfg = yaml_model_load("ultralytics/cfg/mmodels/yolov8x-mm3-if.yaml")
     cfg["scale"] = "n"
     target = MultiModalDetectionModel(cfg, verbose=False)
-    report = load_coco_pretrained(target, source, verbose=False)
+    if facades:
+        cfg_path = tmp_path / "yolov8n-mm3-if.yaml"
+        YAML.save(cfg_path, cfg)
+        target_facade = MultiModalYOLO(cfg_path, verbose=False)
+        source_facade = YOLO("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
+        target, source = target_facade.model, source_facade.model
+        report = load_coco_pretrained(target_facade, source_facade, verbose=False)
+    else:
+        report = load_coco_pretrained(target, source, verbose=False)
 
     assert torch.equal(target.model[0].conv.weight[:, :3], source.model[0].conv.weight)
     assert torch.count_nonzero(target.model[0].conv.weight[:, 3:]) == 0
     assert report.transformed_tensors == 1
     assert report.skipped_tensors == 0
+
+
+def test_multimodal_disk_cache_separates_modality_order(tmp_path):
+    """A changed sensor layout must not reuse fused images with the old channel order."""
+    _write_dataset(tmp_path)
+    data = _data(tmp_path)
+    first = MultiModalDataset(
+        img_path=tmp_path / "images/rgb/train", imgsz=32, augment=False, data=data, hyp=DEFAULT_CFG
+    )
+    first.cache_images_to_disk(0)
+    data["modalities"][1:] = reversed(data["modalities"][1:])
+    second = MultiModalDataset(
+        img_path=tmp_path / "images/rgb/train", imgsz=32, augment=False, data=data, hyp=DEFAULT_CFG
+    )
+    assert first._cache_files[0] != second._cache_files[0]
+    image = second.load_image(0)[0]
+    assert np.all(image[..., 3] == 30)
+    assert np.all(image[..., 4] == 20)
+
+
+@pytest.mark.parametrize("from_img", [False, True])
+def test_three_channel_prediction_distinguishes_files_and_arrays(tmp_path, from_img):
+    """File inputs load paired sensors even when the primary loader already supplies three channels."""
+    predictor = MultiModalDetectionPredictor(overrides={"save": False})
+    predictor.model = SimpleNamespace(channels=3, fp16=False)
+    predictor.device = torch.device("cpu")
+    predictor.source_type = SimpleNamespace(from_img=from_img)
+    predictor.batch = ([str(tmp_path / "primary.png")], None, None)
+    paired = np.full((8, 8, 3), [10, 20, 30], dtype=np.uint8)
+    predictor.modalities = SimpleNamespace(load=lambda path: paired)
+    predictor.pre_transform = lambda images: images
+    image = np.full((8, 8, 3), 99, dtype=np.uint8)
+    result = predictor.preprocess([image])
+    expected = torch.tensor([99, 99, 99] if from_img else [10, 20, 30]) / 255
+    torch.testing.assert_close(result[0, :, 0, 0], expected)
 
 
 @pytest.mark.parametrize(

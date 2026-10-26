@@ -7,6 +7,7 @@ import math
 import os
 import random
 from dataclasses import dataclass
+from hashlib import sha256
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
 from typing import Any
@@ -194,7 +195,8 @@ class MultiModalDataset(YOLODataset):
     def get_labels(self) -> list[dict]:
         """Load normal YOLO labels and establish a private, fused-image disk-cache namespace."""
         labels = super().get_labels()
-        self._cache_files = [Path(path).with_suffix(f".mm{self.modalities.channels}.npy") for path in self.im_files]
+        layout = sha256(repr(self.modalities.items).encode()).hexdigest()[:16]
+        self._cache_files = [Path(path).with_suffix(f".mm{layout}.npy") for path in self.im_files]
         return labels
 
     def _resize(self, image: np.ndarray, width: int, height: int) -> np.ndarray:

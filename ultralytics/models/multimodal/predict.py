@@ -37,7 +37,9 @@ class MultiModalPredictorMixin:
                 raise ValueError(f"Input tensor has {images.shape[1]} channels, expected {self.model.channels}.")
             return super().preprocess(images)
 
-        if all(image.shape[-1] == self.model.channels for image in images):
+        if self.source_type.from_img:
+            if any(image.ndim != 3 or image.shape[-1] != self.model.channels for image in images):
+                raise ValueError(f"Pre-fused arrays must have {self.model.channels} channels.")
             fused = images
         elif self.modalities is not None:
             fused = [self.modalities.load(Path(path)) for path in self.batch[0]]

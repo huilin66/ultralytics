@@ -9,6 +9,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ultralytics.engine.model import Model
 from ultralytics.models.yolo.model import YOLO
 from ultralytics.utils import LOGGER
 
@@ -101,10 +102,10 @@ def load_coco_pretrained(
 
 def _unwrap_model(model: nn.Module | Any) -> nn.Module:
     """Return a task model from a facade or pass through a task model."""
+    if isinstance(model, Model):
+        return model.model
     if isinstance(model, nn.Module):
         return model
-    if isinstance(getattr(model, "model", None), nn.Module):
-        return model.model
     raise TypeError(f"Expected an Ultralytics model or facade, got {type(model).__name__}.")
 
 
