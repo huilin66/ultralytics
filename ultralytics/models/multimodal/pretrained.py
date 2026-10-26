@@ -177,7 +177,11 @@ def _copy_layer_state(
     updates = {}
     for name, target_tensor in target_state.items():
         source_tensor = source_state.get(name)
-        if source_tensor is not None and source_tensor.shape == target_tensor.shape:
+        if (
+            source_tensor is not None
+            and source_tensor.shape == target_tensor.shape
+            and (name != "conv.weight" or input_init == "copy")
+        ):
             updates[name] = source_tensor
             report.copied_tensors += 1
         elif name == "conv.weight" and source_tensor is not None:

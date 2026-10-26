@@ -451,6 +451,22 @@ def test_multimodal_trainer_initializes_actual_training_weights():
     model = trainer.get_model(cfg, weights=source, verbose=False)
     torch.testing.assert_close(model.model[0].conv.weight[:, :3], source.model[0].conv.weight)
     assert torch.count_nonzero(model.model[0].conv.weight[:, 3:]) == 0
+    with torch.no_grad():
+        model.model[0].conv.weight.fill_(0.75)
+    finetuned = trainer.get_model(cfg, weights=model, verbose=False)
+    torch.testing.assert_close(finetuned.model[0].conv.weight, model.model[0].conv.weight)
+
+
+def test_mm2_transfer_averages_equal_width_auxiliary_input():
+    """A three-channel thermal branch must honor mean initialization despite matching RGB width."""
+    source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
+    cfg = yaml_model_load("ultralytics/cfg/mmodels/yolov8x-mm2-ef.yaml")
+    cfg["scale"] = "n"
+    target = MultiModalDetectionModel(cfg, verbose=False)
+    load_coco_pretrained(target, source, verbose=False)
+    auxiliary = cfg["multimodal"]["pretrained"]["copies"][1]["target"][0]
+    expected = source.model[0].conv.weight.mean(1, keepdim=True).expand(-1, 3, -1, -1)
+    torch.testing.assert_close(target.model[auxiliary].conv.weight, expected)
 
 
 @pytest.mark.parametrize("method", ["write", "flush"])

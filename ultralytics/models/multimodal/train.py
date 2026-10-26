@@ -24,21 +24,27 @@ class MultiModalTrainerMixin:
         stride = max(int(unwrap_model(self.model).stride.max()), 32)
         return build_multimodal_dataset(self.args, img_path, batch, self.data, mode, mode == "val", stride)
 
-
-class MultiModalDetectionTrainer(MultiModalTrainerMixin, yolo.detect.DetectionTrainer):
-    """Detection trainer backed by ``MultiModalDataset``."""
-
     def get_model(self, cfg: str | None = None, weights: str | Path | None = None, verbose: bool = True):
         """Build a detection model with the channel count declared by the paired dataset."""
         model = self.set_model_names_for_load(
-            MultiModalDetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+            self.model_class(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
         )
         if weights:
-            if isinstance(self.args.pretrained, (str, Path)) and not self.resume:
+            if (
+                isinstance(self.args.pretrained, (str, Path))
+                and not self.resume
+                and not isinstance(weights, (MultiModalDetectionModel, MultiModalSegmentationModel))
+            ):
                 load_coco_pretrained(model, weights)
             else:
                 model.load(weights)
         return model
+
+
+class MultiModalDetectionTrainer(MultiModalTrainerMixin, yolo.detect.DetectionTrainer):
+    """Detection trainer backed by ``MultiModalDataset``."""
+
+    model_class = MultiModalDetectionModel
 
     def get_validator(self):
         """Return a validator that preserves multi-modal pairing during training validation."""
@@ -51,19 +57,7 @@ class MultiModalDetectionTrainer(MultiModalTrainerMixin, yolo.detect.DetectionTr
 class MultiModalSegmentationTrainer(MultiModalTrainerMixin, yolo.segment.SegmentationTrainer):
     """Instance-segmentation trainer backed by ``MultiModalDataset``."""
 
-    def get_model(self, cfg: dict | str | None = None, weights: str | Path | None = None, verbose: bool = True):
-        """Build a segmentation model with the channel count declared by the paired dataset."""
-        model = self.set_model_names_for_load(
-            MultiModalSegmentationModel(
-                cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1
-            )
-        )
-        if weights:
-            if isinstance(self.args.pretrained, (str, Path)) and not self.resume:
-                load_coco_pretrained(model, weights)
-            else:
-                model.load(weights)
-        return model
+    model_class = MultiModalSegmentationModel
 
     def get_validator(self):
         """Return a segmentation validator that preserves multi-modal pairing during training validation."""
