@@ -6,57 +6,123 @@ import demo_base
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 demo_base.TASK = "detect"
-demo_base.EPOCHS = 200
+demo_base.EPOCHS = 300
 demo_base.IMGSZ = 640
-demo_base.DEVICE = torch.device("cuda:0")
+demo_base.DEVICE = torch.device("cuda:2")
 demo_base.BATCH_SIZE = 16
-# demo_base.DATA = ".yaml"
+# demo_base.DATA = "road_forniture_v2.yaml"
+# demo_base.DATA = "BP_HMT_1216.yaml"
+# demo_base.DATA = "hmt_t.yaml"  # origin/main_demo
 # demo_base.CONF = 0.5
-demo_base.CONF_VAL = 0.001
 
 if __name__ == "__main__":
-    NAME = "debug"
+    NAME = None
+    demo_base.yolo8(
+        "yolov8x.yaml",
+        weight_path="yolov8x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+    )
+    demo_base.yolo9(
+        "yolov9e.yaml",
+        weight_path="yolov9e.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+    )
+    demo_base.yolo10(
+        "yolov10x.yaml",
+        weight_path="yolov10x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+    )
+    demo_base.yolo11(
+        "yolo11x.yaml",
+        weight_path="yolo11x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+    )
+    demo_base.yolo26(
+        "yolo26x.yaml",
+        weight_path="yolo26x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+    )
+    demo_base.yolo12(
+        "yolo12x.yaml",
+        weight_path="yolo12x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+    )
 
-
-
-
-    # demo_base.model_val("debug-12")
-    # demo_base.model_val("debug-13")
-    # demo_base.model_val("debug-16")
-    # demo_base.model_val("hmt_sua_t_v6-[yolov8x]")
-    # demo_base.model_val("hmt_sua_t_v6-[yolov9e]")
-    # demo_base.model_val("hmt_sua_t_v6-[yolov10x]")
-    # demo_base.model_val("hmt_sua_t_v6-[yolo11x]")
-    # demo_base.model_val("hmt_sua_t_v6-[yolo12x]")
-    # demo_base.model_val("hmt_sua_t_v6-[yolo26x]")
-    # demo_base.model_val("debug-23")
-    # demo_base.model_val("debug-24")
-    # demo_base.model_val("debug-26")
-    # demo_base.model_val("debug-27")
-
-    # demo_base.model_val("debug-18")
-    # demo_base.model_val("debug-19")
-    # demo_base.model_val("debug-20")
-    # demo_base.model_val("debug-21")
-    # demo_base.model_val("debug-22")
-
-    # demo_base.model_val("debug-30")
-    # demo_base.model_val("debug-31")
-    # demo_base.model_val("debug-32")
-    # demo_base.model_val("debug-33")
-    # demo_base.model_val("debug-36")
-    # demo_base.model_val("debug-37")
-    # demo_base.model_val("debug-38")
-    # img_dir=r'/data/huilin/data/bdd_hmt/hmt_rgb_update_v5/images'
-    # demo_base.model_predict("debug-30", img_dir, save_conf=True)
-    # demo_base.model_predict("debug-31", img_dir, save_conf=True)
-
-    demo_base.model_val("debug-41")
-    # demo_base.model_val("debug-41", conf=0.1)
-    # img_dir=r'/data/huilin/data/bdd_hmt/bp_cube/images'
-    # demo_base.model_predict("debug-41", img_dir, save_conf=True)
-    demo_base.model_val("debug-46")
-    demo_base.model_val("debug-47")
-    demo_base.model_val("debug-48")
-    demo_base.model_val("debug-49")
-    demo_base.model_val("debug-50")
+    demo_base.yolo8(
+        "yolov8x.yaml",
+        weight_path="yolov8x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+        imgsz=960,
+        batch=8,
+    )
+    demo_base.yolo9(
+        "yolov9e.yaml",
+        weight_path="yolov9e.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+        imgsz=960,
+        batch=8,
+    )
+    demo_base.yolo10(
+        "yolov10x.yaml",
+        weight_path="yolov10x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+        imgsz=960,
+        batch=8,
+    )
+    demo_base.yolo11(
+        "yolo11x.yaml",
+        weight_path="yolo11x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+        imgsz=960,
+        batch=8,
+    )
+    demo_base.yolo26(
+        "yolo26x.yaml",
+        weight_path="yolo26x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+        imgsz=960,
+        batch=8,
+    )
+    demo_base.yolo12(
+        "yolo12x.yaml",
+        weight_path="yolo12x.pt",
+        load_as_model=False,
+        auto_optim=False,
+        # name="debug",
+        data="hmt_bp_cube_v6.yaml",
+        imgsz=960,
+        batch=8,
+    )
