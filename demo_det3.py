@@ -51,7 +51,12 @@ if __name__ == "__main__":
     # demo_base.model_predict("debug-30", img_dir, save_conf=True)
     # demo_base.model_predict("debug-31", img_dir, save_conf=True)
 
-    demo_base.model_val("debug-39")
-    demo_base.model_val("debug-39", conf=0.1)
-    img_dir=r'/data/huilin/data/bdd_hmt/bp_cube/images'
-    # demo_base.model_predict("debug-39", img_dir, save_conf=True)
+    demo_base.model_val("debug-41")
+    # demo_base.model_val("debug-41", conf=0.1)
+    # img_dir=r'/data/huilin/data/bdd_hmt/bp_cube/images'
+    # demo_base.model_predict("debug-41", img_dir, save_conf=True)
+    demo_base.model_val("debug-46")
+    demo_base.model_val("debug-47")
+    demo_base.model_val("debug-48")
+    demo_base.model_val("debug-49")
+    demo_base.model_val("debug-50")
