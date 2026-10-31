@@ -1,12 +1,12 @@
 # Clean HMT v1 (bdd_hmt_clean_v1) — sua_t thermal dataset.
 # 0-based ids, no background slot. Dataset root can be overridden at runtime
 # with `--data-root` or the HMT_DATA_ROOT environment variable.
-path: /data/huilin/data/bdd_hmt/hmt_t_update_v6
+path: /srv/nas/home/dataset/hmt_t_update_v6
 train: train.txt
 val: val.txt
 test: test.txt
 
 names:
   0: Hollow
-  1: Temperature
+  1: Anomaly
   2: Leakage
