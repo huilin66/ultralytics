@@ -1,0 +1,14 @@
+path: /srv/nas/home/dataset/WHU_Infra2D_cube_yolo_ts7_core # dataset root dir
+train: train.txt # train images (relative to 'path') 4 images
+val: val.txt # val images (relative to 'path') 4 images
+test: test.txt # test images (optional)
+
+# Classes
+names: 
+  0: guide_sign              # 一般道路指路标志
+  1: prohibition_sign        # 禁令标志
+  2: mandatory_sign          # 指示标志
+  3: auxiliary_sign          # 辅助标志
+  4: unknown                 # 无法判断
+  5: warning_sign            # 警告标志
+  6: expressway_guide_sign   # 高速公路、城市快速路指路标志
