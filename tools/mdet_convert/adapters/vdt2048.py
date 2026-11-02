@@ -103,4 +103,5 @@ class Vdt2048Adapter(Adapter):
             samples=samples,
             warnings=warnings,
             source={"raw": str(base), "official_splits": True},
+            reference_camera="V",
         )

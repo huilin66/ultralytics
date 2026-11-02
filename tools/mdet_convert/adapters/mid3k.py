@@ -120,6 +120,7 @@ class Mid3kAdapter(Adapter):
             samples=samples,
             warnings=warnings,
             source={"raw": str(roots["rgb"]), "license": "see https://github.com/kennedyk1/MID-3K"},
+            reference_camera="rgb",
         )
 
     def _read_label(self, path: Path, warnings: list[str], stem: str) -> list[Box]:

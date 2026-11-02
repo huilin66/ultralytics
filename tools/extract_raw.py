@@ -10,8 +10,10 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import time
+import zipfile
 from pathlib import Path
 
 SOURCES: dict[str, list[str]] = {
@@ -28,6 +30,33 @@ OPTIONAL: dict[str, list[str]] = {
     "r_livit": ["R-LiViT/R-LiViT_LiDAR.zip"],
     "infraparis": ["InfraParis/semantic_segmentation_truth_reprojected_IR.zip"],
 }
+
+# Small metadata members that live in a larger archive.  R-LiViT ships the
+# calibration and RGB<->LiDAR sequence mapping inside the 16 GB full archive;
+# extracting the whole archive again just for two files would duplicate the
+# RGB-T and LiDAR trees.
+META_MEMBERS: dict[str, tuple[str, list[str]]] = {
+    "r_livit": (
+        "R-LiViT/R-LiViT.zip",
+        [
+            "R-LiViT/calibration_params.json",
+            "R-LiViT/rgb_to_lidar_sequence_mapping.csv",
+        ],
+    ),
+}
+
+
+def extract_zip_members(archive: Path, members: list[str], dest: Path) -> None:
+    """Extract selected members from a zip archive, preserving their relative paths."""
+    with zipfile.ZipFile(archive) as handle:
+        for member in members:
+            target = dest / Path(member)
+            if target.exists():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with handle.open(member) as source, target.open("wb") as output:
+                shutil.copyfileobj(source, output)
+            print(f"[ok] {member} -> {target}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -69,6 +98,15 @@ def main(argv: list[str] | None = None) -> int:
             continue
         marker.write_text("ok", encoding="utf-8")
         print(f"[ok] {archive.name} in {time.time() - started:.1f}s", flush=True)
+
+    if args.with_lidar and args.dataset in META_MEMBERS:
+        relative, members = META_MEMBERS[args.dataset]
+        archive = raw_root / relative
+        if archive.is_file():
+            print(f"[extract] metadata from {archive.name} -> {dest}", flush=True)
+            extract_zip_members(archive, members, dest)
+        else:
+            print(f"[skip] missing {archive}")
     return 0
 
 

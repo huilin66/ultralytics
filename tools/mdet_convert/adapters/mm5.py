@@ -97,6 +97,11 @@ class MM5Adapter(Adapter):
             warnings.append(f"{unlisted} samples are not part of list_*_{suffix}.txt and were skipped")
         warnings.append(f"instance mask diagnostics: {mask_diagnostics}")
         warnings.append("boxes are the minimal outer rectangle of each instance mask, not official detection boxes")
+        warnings.append(
+            "dataset_meta.csv 'Sequence' is unique per sample, so the same physical scene may recur across "
+            "lighting conditions; the official challenge lists are used as shipped and cannot be checked for "
+            "scene-level leakage from metadata alone"
+        )
 
         return DatasetPlan(
             key=self.key,
@@ -107,6 +112,7 @@ class MM5Adapter(Adapter):
             samples=samples,
             warnings=warnings,
             source={"raw": str(base), "official_splits": f"list_*_{suffix}.txt"},
+            reference_camera="RGB8",
         )
 
     def _split_lists(self, base: Path, suffix: str, warnings: list[str]) -> dict[str, str]:

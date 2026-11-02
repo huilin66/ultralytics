@@ -80,7 +80,17 @@ def _to_single_channel(image: np.ndarray, stats: EncodeStats) -> np.ndarray:
 
 def encode_image(path: Path, spec: EncodeSpec) -> tuple[np.ndarray, EncodeStats]:
     """Load one raw file and return ``(H, W, C)`` ``uint8`` plus diagnostics."""
-    raw = read_raw(path)
+    return encode_array(read_raw(path), spec)
+
+
+def encode_array(raw: np.ndarray, spec: EncodeSpec) -> tuple[np.ndarray, EncodeStats]:
+    """Map an in-memory raw array to ``uint8`` with the same rules as :func:`encode_image`.
+
+    Adapters that derive a modality (for example LiDAR -> depth) can hand the
+    high-precision array to the pipeline without writing a temporary raw file.
+    """
+    if raw.size == 0:
+        raise EncodingError(f"cannot encode an empty array for kind '{spec.kind}'")
     stats = EncodeStats(raw_dtype=str(raw.dtype), raw_shape=tuple(raw.shape))
     stats.raw_min, stats.raw_max = float(raw.min()), float(raw.max())
 

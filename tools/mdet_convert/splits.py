@@ -56,6 +56,28 @@ def assign_grouped_splits(
     return assigned
 
 
+def assign_sample_splits(sample_ids: list[str], ratio: float, seed: str = "mdet") -> set[str]:
+    """Deterministically pick ``ratio`` of the samples for a separate split.
+
+    Used only as a fallback when a release ships a train/test protocol but no
+    scene/sequence metadata (VDT-2048): without group ids a leakage-safe split
+    cannot be built, so the quality report must state that this is sample-level.
+
+    Args:
+        sample_ids: Sample identifiers available for the split.
+        ratio: Fraction of samples to select.
+        seed: Change this to reshuffle deterministically.
+
+    Returns:
+        The selected sample ids.
+    """
+    ordered = sorted(set(sample_ids), key=lambda sample_id: _rank(seed, sample_id))
+    if not ordered or ratio <= 0:
+        return set()
+    count = min(len(ordered), max(1, round(len(ordered) * ratio)))
+    return set(ordered[:count])
+
+
 def summarize_splits(assignments: dict[str, str], group_sizes: dict[str, int]) -> dict[str, dict]:
     """Return per-split group and sample counts for the manifest."""
     summary: dict[str, dict] = {split: {"groups": 0, "samples": 0} for split in SPLIT_ORDER}

@@ -4,6 +4,14 @@
 The infrared folder is **not** pixel-aligned with the RGB camera (288x382 raw
 thermal against 1920x1080 RGB) and the release ships no RGB<->IR homography, so
 thermal stays out of the converted dataset unless a calibration is supplied.
+
+Verified against the downloaded release: the zip payloads (Left, Depth, Infra,
+BBox, semantic masks) contain no calibration, homography or camera model; the
+only RGB/IR correspondence published is the *reprojected* IR semantic mask set.
+Fitting a homography from those masks on the paired frames gives a mean IoU of
+only ~0.10-0.28 with parameters that vary per sequence (the official masks were
+warped per frame using depth, not one fixed transform), so such a fit cannot
+stand in for calibration under the no-fake-alignment rule.
 """
 
 from __future__ import annotations
@@ -54,8 +62,10 @@ class InfraParisAdapter(Adapter):
             )
         elif thermal_root.is_dir():
             warnings.append(
-                "thermal (Infra, 288x382 uint16) is not pixel-aligned with RGB (1920x1080) and has no supplied "
-                "homography: alignment_status=blocked, modality omitted"
+                "thermal (Infra, 288x382 uint16) is not pixel-aligned with RGB (1920x1080) and the release ships "
+                "no calibration/homography (only reprojected IR semantic masks): alignment_status=blocked, "
+                "modality omitted rather than resized; a mask-fitted homography reaches mean IoU ~0.1-0.28 and "
+                "varies by sequence, so it is not used"
             )
 
         samples: list[RawSample] = []
@@ -105,6 +115,7 @@ class InfraParisAdapter(Adapter):
             samples=samples,
             warnings=warnings,
             source={"raw": str(left_root), "license": "CC BY-NC-ND 4.0", "official_splits": True},
+            reference_camera="Left",
         )
 
     def _read_boxes(self, path: Path, warnings: list[str], stem: str) -> list[Box]:

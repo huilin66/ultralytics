@@ -10,6 +10,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -72,10 +73,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ratios", default="0.8,0.1,0.1", help="train,val,test fractions for grouped splits")
     parser.add_argument("--seed", default="mdet", help="seed for deterministic grouped splits")
     parser.add_argument("--previews", type=int, default=6, help="preview panels per split (0 disables)")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=min(4, os.cpu_count() or 1),
+        help="threads used to encode/write samples (output order stays deterministic)",
+    )
     parser.add_argument("--set", action="append", default=[], metavar="K=V", help="adapter option override")
     parser.add_argument("--dry-run", action="store_true", help="report the plan without writing anything")
-    parser.add_argument("--overwrite", action="store_true", help="rebuild an existing <dataset>_mdet folder")
+    parser.add_argument("--overwrite", action="store_true", help="delete and rebuild an existing <dataset>_mdet folder")
     parser.add_argument("--allow-existing", action="store_true", help="write into a non-empty folder without clearing it")
+    parser.add_argument(
+        "--no-sample-level-val",
+        action="store_true",
+        help="refuse to carve val from individual samples when the train part has a single group",
+    )
     return parser
 
 
@@ -88,17 +100,10 @@ def main(argv: list[str] | None = None) -> int:
     adapter = ADAPTERS[args.dataset](raw_root, parse_pairs(args.set))
     started = time.time()
     plan = adapter.plan()
+    initial_warnings = list(plan.warnings)
     print(f"[plan] {plan.display_name}: {len(plan.samples)} samples, {len(plan.modalities)} modalities, {plan.channels} channels")
-    for warning in plan.warnings:
+    for warning in initial_warnings:
         print(f"  ! {warning}")
-
-    if args.overwrite and not args.dry_run:
-        target = out_root / f"{plan.display_name}_mdet"
-        if target.exists():
-            import shutil
-
-            print(f"[clean] removing {target}")
-            shutil.rmtree(target)
 
     dataset_dir = convert(
         plan,
@@ -109,12 +114,19 @@ def main(argv: list[str] | None = None) -> int:
         limit=args.limit,
         only_splits=parse_splits(args.splits),
         dry_run=args.dry_run,
-        overwrite=args.overwrite or args.allow_existing,
+        overwrite=args.overwrite,
+        allow_existing=args.allow_existing,
+        sample_level_val=not args.no_sample_level_val,
+        workers=max(1, args.workers),
         previews=args.previews,
     )
+    for warning in plan.warnings:
+        if warning not in initial_warnings:
+            print(f"  ! {warning}")
 
     elapsed = time.time() - started
     if args.dry_run:
+        print(f"[dry-run] splits: {plan.splits}")
         print(f"[dry-run] would write {dataset_dir} ({elapsed:.1f}s)")
         return 0
 
