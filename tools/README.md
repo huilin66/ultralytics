@@ -148,6 +148,31 @@ is stable serially. `--workers` still parallelises the uint8 encoding step.
 * **VDT-2048 classes** — the dataset has 34 object kinds but no per-instance,
   per-class detection ground truth.
 
+## Classification dataset from cropped images (`build_cls_dataset.py`)
+
+`ydm_vis/crop` is already class-per-directory; Ultralytics classification expects
+`<root>/{train,val,test}/<class>/` and is trained with `data=<root>` (no `data.yaml`):
+
+```bash
+python tools/build_cls_dataset.py \
+  --src 'Y:/dataset/WHU_Infra2D_cube_yolo_shape_core/ydm_vis/crop' \
+  --out 'Y:/dataset/WHU_Infra2D_cube_yolo_shape_core/ydm_vis/crop_split' \
+  --split-dir 'Y:/dataset/WHU_Infra2D_cube_yolo_shape_core' --overwrite
+
+yolo classify train data='Y:/dataset/WHU_Infra2D_cube_yolo_shape_core/ydm_vis/crop_split' model=yolo11n-cls.pt
+```
+
+Crop names are `<source_stem>_<instance>`, so splits are assigned per **source
+image**: when `train.txt`/`val.txt` from the detection release are present they
+are reused, and crops cut from one frame never straddle train/val. Without split
+lists a deterministic hash split over source images is used. Class indices are
+alphabetical (`circle, octagon, polygon, square, triangle`), independent of the
+detection `class.txt` order. Every split must contain every class, because
+Ultralytics derives the class list from `train/` and requires the same count in
+val/test. `--mode symlink|hardlink` avoids duplicating the crop files where the
+filesystem supports it. Provenance, per-split counts and warnings are written to
+`classification_metadata.json` in the output root.
+
 ## Tests
 
 ```bash
