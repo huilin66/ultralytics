@@ -19,5 +19,7 @@ demo_base.DATA = "WHU_Infra2D_cube_yolo_shape_core.yaml"
 
 if __name__ == "__main__":
     NAME = None
-    demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME)
-    demo_base.yolo26("yolo26x.yaml", auto_optim=False, name=NAME)
+    # demo_base.yolo8("yolov8x.yaml", auto_optim=False, name=NAME)
+    # demo_base.yolo26("yolo26x.yaml", auto_optim=False, name=NAME)
+    demo_base.model_val("WHU_Infra2D_cube_yolo_shape_core-[yolov8x]")
+    demo_base.model_val("WHU_Infra2D_cube_yolo_shape_core-[yolo26x]")
