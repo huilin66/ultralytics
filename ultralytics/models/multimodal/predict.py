@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from ultralytics.data.loaders import LoadImagesAndVideos, SourceTypes
 from ultralytics.data.multimodal import Modalities
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.models import yolo
@@ -18,7 +19,7 @@ class MultiModalPredictorMixin:
 
     def setup_source(self, source, stride=None):
         """Set up the normal source loader and optional path mapper from ``data=multimodal.yaml``."""
-        super().setup_source(source, stride)
+        super().setup_source(self._as_file_loader(source), stride)
         self.modalities = None
         if self.args.data:
             data = check_det_dataset(self.args.data)
@@ -30,6 +31,24 @@ class MultiModalPredictorMixin:
                         f"but the model expects {self.model.channels}."
                     )
 
+    def _as_file_loader(self, source):
+        """Keep primary file paths when the caller passes a list of image paths.
+
+        The shared source check treats a list as decoded in-memory images and ``LoadPilAndNumpy`` replaces each
+        source name with ``image<i>.jpg``. Companion modalities are addressed relative to the primary image path, so
+        a path list must go through the file loader instead.
+        """
+        if isinstance(source, (list, tuple)) and source and all(isinstance(item, (str, Path)) for item in source):
+            loader = LoadImagesAndVideos(
+                source,
+                batch=self.args.batch,
+                vid_stride=self.args.vid_stride,
+                channels=getattr(self.model, "channels", 3),
+            )
+            loader.source_type = SourceTypes()  # load_inference_source reads this attribute for loader instances
+            return loader
+        return source
+
     def preprocess(self, images: torch.Tensor | list[np.ndarray]) -> torch.Tensor:
         """Accept a pre-fused array, or load aligned files when the source contains primary-modality paths."""
         if isinstance(images, torch.Tensor):
@@ -40,7 +59,7 @@ class MultiModalPredictorMixin:
         if all(image.shape[-1] == self.model.channels for image in images):
             fused = images
         elif self.modalities is not None:
-            fused = [self.modalities.load(Path(path)) for path in self.batch[0]]
+            fused = [self.modalities.load(path) for path in self._primary_paths()]
         else:
             raise ValueError(
                 "A multi-modal file source needs data='path/to/multimodal.yaml'. "
@@ -51,6 +70,17 @@ class MultiModalPredictorMixin:
         images = torch.from_numpy(np.ascontiguousarray(images)).to(self.device)
         images = images.half() if self.model.fp16 else images.float()
         return images / 255
+
+    def _primary_paths(self) -> list[Path]:
+        """Return the primary image path of every sample in the current batch, or explain why it is unavailable."""
+        paths = [Path(path) for path in self.batch[0]]
+        if not all(path.is_file() for path in paths):
+            raise ValueError(
+                "Multi-modal inference pairs each sample by its primary image path, but this batch has no file "
+                f"paths (for example '{paths[0]}'). Pass image file paths or a directory, or pass pre-fused "
+                f"arrays with {self.model.channels} channels."
+            )
+        return paths
 
 
 class MultiModalDetectionPredictor(MultiModalPredictorMixin, yolo.detect.DetectionPredictor):

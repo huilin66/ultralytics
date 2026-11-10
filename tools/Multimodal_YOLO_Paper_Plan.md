@@ -211,6 +211,8 @@ reports/data_statistics/
 
 候选 YOLO：v8、v9、v10、11、12、13（社区版本须单独检查兼容性）、26。**不要假设当前仓库原生支持所有版本；先输出 compatibility matrix。** 先选 1 个版本（建议 YOLO11s 或仓库中最稳定的 s 规模版本）开发，再验证 2–3 个差异较大的版本，最终扩大覆盖。
 
+**开发验证记录（2026-11-10）：** 人工选定首个架构为 **YOLO26x**（x 规模，优先验证大模型下的工程正确性）。`ultralytics/cfg/mmodels/yolo26x-mm3-bf.yaml` 已通过构建、前向、反向、单 epoch 训练和配对推理验证；并在 **R-LiViT_mdet 与 MID-3K_mdet** 上各完成 1 epoch（10% 数据）的快速连通性训练与验证、checkpoint 重载及配对推理（路径列表与单文件两种 source 均可用）。该快速训练仅证明数据/训练/推理链路可用，不作为基线精度结论。证据与覆盖范围见 [`tools/multimodal_compatibility.md`](multimodal_compatibility.md)。其余融合模式、2 模态模板及 v8/v11 的训练/推理路径待逐项验证。
+
 ### E2. 必须具备的基线
 
 - `B0`: RGB-only YOLO（官方预训练与标准训练）。

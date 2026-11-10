@@ -114,10 +114,16 @@ class Modalities:
         primary_path = _logical_absolute_path(primary_path)
         try:
             relative = primary_path.relative_to(self.primary_root)
-        except ValueError as e:
-            raise ValueError(
-                f"Primary image '{primary_path}' is not under the first modality path '{self.primary_root}'."
-            ) from e
+        except ValueError:
+            # A mapped drive (for example Y:) and its UNC target are the same directory, but the dataset loader
+            # resolves split paths while the YAML root keeps its drive letter. Fall back to comparing resolved
+            # forms only when the logical prefixes differ; this keeps staged symbolic-link layouts working.
+            try:
+                relative = primary_path.resolve().relative_to(self.primary_root.resolve())
+            except ValueError as e:
+                raise ValueError(
+                    f"Primary image '{primary_path}' is not under the first modality path '{self.primary_root}'."
+                ) from e
         return tuple(item.root / relative.with_suffix(item.suffix or relative.suffix) for item in self.items)
 
     def load(self, primary_path: str | Path) -> np.ndarray:

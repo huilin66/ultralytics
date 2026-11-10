@@ -3,16 +3,19 @@
 
 from copy import deepcopy
 import os
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
 import pytest
 import torch
 
+from ultralytics.data.loaders import LoadImagesAndVideos
 from ultralytics.data.multimodal import Modalities, MultiModalDataset
 from ultralytics.models.multimodal import MultiModalYOLO
 from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
+from ultralytics.models.multimodal.predict import MultiModalPredictorMixin
 from ultralytics.models.multimodal.pretrained import load_coco_pretrained
 from ultralytics.models.multimodal.tasks import MultiModalDetectionModel
 from ultralytics.nn.tasks import DetectionModel, yaml_model_load
@@ -286,3 +289,84 @@ def test_multibranch_coco_transfer_uses_explicit_yaml_mappings(filename):
     assert report.transformed_tensors == 2
     assert report.initialized_layers
     assert report.skipped_tensors == 0
+
+
+def test_yolo26x_multimodal_model_keeps_the_native_end2end_head():
+    """A YOLO26x template must build, infer end to end and backpropagate into every modality branch."""
+    cfg = yaml_model_load("ultralytics/cfg/mmodels/yolo26x-mm3-bf.yaml")
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+    assert model.end2end is True
+    assert model.yaml["channels"] == 5
+    assert len(model.model[37].channels) == 3  # one fused P3 tensor per modality
+
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, 5, 64, 64))
+    assert prediction.shape == (1, 84, 6)  # 84 anchors at 64 px, 4 box + 2 class columns
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, 5, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    for layer in (2, 14, 26):  # first convolution of the RGB, thermal and depth backbones
+        gradient = model.model[layer].conv.weight.grad
+        assert gradient is not None and gradient.abs().sum() > 0
+
+
+def test_modalities_pair_resolved_split_paths_with_a_differently_spelled_root(tmp_path):
+    """A split path resolved to another spelling of the same directory must still find its companions."""
+    real = tmp_path / "real"
+    (real / "primary" / "train").mkdir(parents=True)
+    (real / "auxiliary" / "train").mkdir(parents=True)
+    assert cv2.imwrite(str(real / "primary" / "train" / "s.png"), np.full((12, 20, 3), 10, dtype=np.uint8))
+    assert cv2.imwrite(str(real / "auxiliary" / "train" / "s.png"), np.full((12, 20, 3), 20, dtype=np.uint8))
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(real, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"Directory symbolic links are unavailable in this test environment: {error}")
+
+    modalities = Modalities(
+        {
+            "path": alias,
+            "channels": 6,
+            "modalities": [
+                {"name": "primary", "path": "primary", "channels": 3, "suffix": ".png"},
+                {"name": "auxiliary", "path": "auxiliary", "channels": 3, "suffix": ".png"},
+            ],
+        }
+    )
+
+    stacked = modalities.load(real / "primary" / "train" / "s.png")
+    assert stacked.shape == (12, 20, 6)
+    assert stacked[0, 0, 0] == 10
+    assert stacked[0, 0, 3] == 20
+
+
+def test_multimodal_predictor_keeps_primary_paths_for_a_list_source(tmp_path):
+    """A list source must keep real image paths so the predictor can find each sample's companion modalities."""
+    _write_dataset(tmp_path)
+    primary = tmp_path / "images" / "rgb" / "train" / "sample_0.jpg"
+    predictor = MultiModalPredictorMixin()
+    predictor.args = SimpleNamespace(batch=1, vid_stride=1)
+    predictor.model = SimpleNamespace(channels=5)
+
+    loader = predictor._as_file_loader([str(primary)])
+    assert isinstance(loader, LoadImagesAndVideos)  # not LoadPilAndNumpy, which renames samples to image<i>.jpg
+    paths, images, _ = next(iter(loader))
+    assert paths == [str(primary.absolute())]
+
+    predictor.batch = (paths, images, None)
+    predictor.modalities = Modalities(_data(tmp_path))
+    assert [str(path) for path in predictor._primary_paths()] == paths
+    assert predictor.modalities.load(predictor._primary_paths()[0]).shape == (12, 20, 5)
+
+    predictor.batch = (["image0.jpg"], images, None)
+    with pytest.raises(ValueError, match="no file paths"):
+        predictor._primary_paths()
