@@ -1,0 +1,44 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov10s three-modality input fusion: RGB (3) + thermal (1) + depth (1) -> one 5-channel encoder.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+scale: s
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: IF
+  operator: concat
+  fusion_points: []
+  share_weight: false
+scales:
+  s: [0.33, 0.5, 1024]
+
+backbone:
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, SCDown, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, SCDown, [1024, 3, 2]]
+  - [-1, 3, C2fCIB, [1024, true, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+  - [-1, 1, PSA, [1024]]
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 4], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 13], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, SCDown, [512, 3, 2]]
+  - [[-1, 10], 1, Concat, [1]]
+  - [-1, 3, C2fCIB, [1024, true, true]]
+  - [[16, 19, 22], 1, v10Detect, ["nc"]]
+

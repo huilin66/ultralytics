@@ -18,11 +18,29 @@ smoke run proves it. `—` means not implemented or not yet covered.
 
 | Architecture | Templates | Build | Forward | Backward | Train epoch | Predict | Status |
 |---|---|---|---|---|---|---|---|
-| YOLOv8x | `cfg/mmodels/yolov8x-mm{2,3}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | — | — | — | — | build + COCO transfer tested |
-| YOLO11 (seg) | `cfg/models/multimodal/yolo11-mm3-bf-seg.yaml` | ✅ | — | — | — | — | template + task inference tested |
+| YOLOv8x | `cfg/mmodels/yolov8x-mm{2,3}-{if,ef,nif,bf,nf,hf}.yaml` + `cfg/models/multimodal/yolov8x-mm3-pre-sppf.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | build/forward/backward + COCO transfer + R-LiViT smoke |
+| YOLOv8s | `cfg/mmodels/yolov8s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLOv9s | `cfg/mmodels/yolov9s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLOv10s | `cfg/mmodels/yolov10s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | end2end `v10Detect`; R-LiViT smoke 2026-11-10 |
+| YOLO11 (det) | `cfg/mmodels/yolo11s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLO11 (seg) | `cfg/models/multimodal/yolo11-mm3-bf-seg.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested, task inference tested |
+| YOLO12s | `cfg/mmodels/yolo12s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLO26x (det, all modes) | `cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | **development-verified 2026-11-10** |
 | YOLO26x (det, 2 modalities) | `cfg/mmodels/yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested 2026-11-10 |
-| YOLOv9 / v10 / v12 / v13 | none | — | — | — | — | — | no templates yet |
+| YOLOv13 | none | — | — | — | — | — | not shipped by Ultralytics 8.4.91 |
+
+YOLOv8x and YOLO11 evidence: `::test_yolov8x_templates_build_and_backpropagate` covers the 13 YOLOv8
+templates (6 mm3, 6 mm2 with 3+3 channels, 1 pre-SPPF) and
+`::test_yolo11_segmentation_template_builds_and_backpropagates` covers the YOLO11 segmentation template.
+Each case checks the native output shape, three Detect inputs, the fusion-node input count and nonzero
+gradients in every modality stem.
+
+YOLOv8s–YOLOv12s evidence: `::test_other_yolo_templates_build_and_backpropagate` covers the 30 detection
+templates (5 architectures × 6 fusion modes). It checks `channels=5`, `[3, 1, 1]`, three fusion nodes of
+arity 3 (none for IF), one Detect with three inputs, the architecture-native output shape
+(`(1, 6, 84)` for Detect, `(1, 84, 6)` for YOLOv10's end2end `v10Detect`), and nonzero gradients in all
+three modality stems. YOLOv12 has no nape tail after P5, so its EF, NIF and BF files describe the same
+graph and differ only in their `fusion`/`fusion_points` metadata.
 
 YOLO26x evidence (`tests/test_multimodal.py::test_yolo26x_multimodal_model_keeps_the_native_end2end_head`
 and `::test_yolo26x_fusion_modes_build_and_backpropagate`, plus manual smoke runs):
@@ -91,5 +109,5 @@ latency follows it except for the BF row (different batch).
 
 - Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates.
 - Pretrained COCO transfer for YOLO26 (`pretrained.py` currently accepts only `source: yolov8`).
-- Automated train/predict tests for YOLOv8x and YOLO11 templates.
+- Automated 1-epoch train/predict runs for YOLOv8x and YOLO11 templates on the converted datasets.
 - Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B8 baseline matrix.

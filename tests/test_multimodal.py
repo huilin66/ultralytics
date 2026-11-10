@@ -17,7 +17,8 @@ from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
 from ultralytics.models.multimodal.predict import MultiModalPredictorMixin
 from ultralytics.models.multimodal.pretrained import load_coco_pretrained
-from ultralytics.models.multimodal.tasks import MultiModalDetectionModel
+from ultralytics.models.multimodal.tasks import MultiModalDetectionModel, MultiModalSegmentationModel
+from ultralytics.nn.modules import Conv
 from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 from ultralytics.utils import DEFAULT_CFG
 
@@ -418,6 +419,133 @@ def test_yolo26x_mm2_templates_match_the_dataset_modality_split(tag, channels, m
     loss.sum().backward()
     for layer in branch_layers:
         gradient = model.model[layer].conv.weight.grad
+        assert gradient is not None and gradient.abs().sum() > 0
+
+
+@pytest.mark.parametrize(
+    "path, sections, fusion_inputs",
+    [
+        ("ultralytics/cfg/mmodels/yolov8x-mm3-if.yaml", [3, 1, 1], 0),
+        ("ultralytics/cfg/mmodels/yolov8x-mm3-ef.yaml", [3, 1, 1], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm3-nif.yaml", [3, 1, 1], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm3-bf.yaml", [3, 1, 1], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm3-nf.yaml", [3, 1, 1], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm3-hf.yaml", [3, 1, 1], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm2-if.yaml", [3, 3], 0),
+        ("ultralytics/cfg/mmodels/yolov8x-mm2-ef.yaml", [3, 3], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm2-nif.yaml", [3, 3], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm2-bf.yaml", [3, 3], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm2-nf.yaml", [3, 3], 3),
+        ("ultralytics/cfg/mmodels/yolov8x-mm2-hf.yaml", [3, 3], 3),
+        ("ultralytics/cfg/models/multimodal/yolov8x-mm3-pre-sppf.yaml", [3, 1, 1], 3),
+    ],
+)
+def test_yolov8x_templates_build_and_backpropagate(path, sections, fusion_inputs):
+    """Every YOLOv8 template must build, infer and train each modality branch it declares."""
+    cfg = yaml_model_load(path)
+    cfg["scale"] = "n"
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+    channels = sum(sections)
+    assert cfg["channels"] == channels
+    assert list(cfg["multimodal"]["input_sections"]) == sections
+
+    fusions = [layer for layer in model.model if type(layer).__name__ == "MultiModalFusion"]
+    assert len(fusions) == (3 if fusion_inputs else 0)
+    assert all(len(layer.channels) == len(sections) for layer in fusions)
+
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, channels, 64, 64))
+    assert prediction.shape == (1, 4 + 2, 84)  # decoded predictions: 4 box + 2 class channels, 84 anchors
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, channels, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    if fusion_inputs == 0:
+        stems = [model.model[0]]  # single stem over the stacked input
+    else:
+        stems = [layer for layer in model.model if isinstance(layer, Conv) and layer.conv.in_channels in sections]
+        assert len(stems) == len(sections)
+    for stem in stems:
+        gradient = stem.conv.weight.grad
+        assert gradient is not None and gradient.abs().sum() > 0
+
+
+def test_yolo11_segmentation_template_builds_and_backpropagates():
+    """The YOLO11 segmentation template must keep its native (predictions, protos) output on top of fusion."""
+    cfg = yaml_model_load("ultralytics/cfg/models/multimodal/yolo11-mm3-bf-seg.yaml")
+    cfg["scale"] = "n"
+    model = MultiModalSegmentationModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+
+    model.eval()
+    with torch.inference_mode():
+        (prediction, protos), _ = model(torch.zeros(1, 5, 64, 64))
+    assert prediction.shape == (1, 4 + 2 + 32, 84)  # box + class + 32 mask coefficients
+    assert protos.shape == (1, 32, 16, 16)
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, 5, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    stems = [layer for layer in model.model if isinstance(layer, Conv) and layer.conv.in_channels in (3, 1)]
+    assert len(stems) == 3
+    for stem in stems:
+        gradient = stem.conv.weight.grad
+        assert gradient is not None and gradient.abs().sum() > 0
+
+
+@pytest.mark.parametrize("arch", ("yolov8s", "yolov9s", "yolov10s", "yolo11s", "yolo12s"))
+@pytest.mark.parametrize("mode", ("if", "ef", "nif", "bf", "nf", "hf"))
+def test_other_yolo_templates_build_and_backpropagate(arch, mode):
+    """Every YOLOv8-v12 fusion template must keep its architecture's native head output and gradient path."""
+    cfg = yaml_model_load(f"ultralytics/cfg/mmodels/{arch}-mm3-{mode}.yaml")
+    assert cfg["channels"] == 5
+    assert cfg["multimodal"]["fusion"] == mode.upper()
+    assert list(cfg["multimodal"]["input_sections"]) == [3, 1, 1]
+
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+    fusions = [layer for layer in model.model if type(layer).__name__ == "MultiModalFusion"]
+    assert len(fusions) == (0 if mode == "if" else 3)
+    assert all(len(layer.channels) == 3 for layer in fusions)
+    detect = next(layer for layer in model.model if type(layer).__name__ in ("Detect", "v10Detect"))
+    assert len(detect.f) == 3
+
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, 5, 64, 64))
+    expected = (1, 84, 6) if getattr(detect, "end2end", False) else (1, 6, 84)
+    assert prediction.shape == expected
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, 5, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    if mode == "if":
+        stems = [model.model[0]]
+    else:
+        stems = [layer for layer in model.model if isinstance(layer, Conv) and layer.conv.in_channels in (3, 1)]
+        assert len(stems) == 3
+    for stem in stems:
+        gradient = stem.conv.weight.grad
         assert gradient is not None and gradient.abs().sum() > 0
 
 
