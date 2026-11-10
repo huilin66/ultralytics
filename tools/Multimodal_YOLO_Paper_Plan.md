@@ -4,7 +4,7 @@
 
 **研究目标：** 基于 Ultralytics 构建可复用、尽量不依赖特定 YOLO 版本的 RGB–Thermal–Depth (RGB-T-D) 多模态二维目标检测框架，研究融合位置、模态可靠性与 Mixture-of-Experts (MoE) 路由对检测精度、鲁棒性及效率的影响。以高质量 SCI 研究论文为目标，但不预先承诺精度提升或期刊分区。
 
-**当前优先级：** 五个候选数据集的审计与转换已完成；**最终入选数据集已确认为 R-LiViT 与 MID-3K**，可以进入正式基线训练。不要为了跑实验而跳过数据审计。
+**当前优先级：** Phase 0–2 已完成并通过人工关口；**最终入选数据集为 R-LiViT 与 MID-3K**，下一步进入 Phase 3（Ultralytics 通用多模态基线）。
 
 **最终数据集决策（2026-11-10 人工确认）：** 选用 **R-LiViT、MID-3K**；**InfraParis、MM5、VDT-2048 不进入正式基准**，仅保留 Phase 0 的审计记录、适配器与转换产物以备追溯，不用于训练、消融或论文主表。
 
@@ -163,6 +163,8 @@ reports/data_statistics/
 
 ## D. Phase 2 — 数据统计与人工最终选择（强制人工关口）
 
+**状态：已通过（2026-11-10）。** 统计与选择报告已生成在 `reports/data_statistics/`；研究者已显式批准最终组合 **R-LiViT + MID-3K**，可进入 Phase 3。近重复/感知哈希检测按人工决定不实现，泄漏风险以 group / 序列 / 时间邻近检测为准；box 几何与存储估算、图表类交付不阻塞本关口。
+
 ### D1. Codex 自动输出统计与可视化
 
 对每个数据集分 Train/Val/Test 和整体输出：
@@ -192,9 +194,9 @@ reports/data_statistics/
 | 预期角色 | main_benchmark / auxiliary / robustness_only / exclude |
 | 人工最终选择 | selected / hold / rejected |
 
-正式主结果表只接纳**可靠、完整、许可合适**的检测标注和测试协议。不要因为样本量大就放松评估标签要求。人工确认：最终数据集、任务类别、统一参考坐标、划分策略、正式指标及实验资源上限，并写入 `configs/paper/dataset_selection.yaml`。
+正式主结果表只接纳**可靠、完整、许可合适**的检测标注和测试协议。不要因为样本量大就放松评估标签要求。人工确认：最终数据集、任务类别、统一参考坐标、划分策略、正式指标及实验资源上限，并记录在案（本次决策：2026-11-10，R-LiViT + MID-3K，见本文档顶部；转换参数见 `configs/datasets/`）。
 
-**Phase 2 验收：** 产生可复核数据报告；等待研究者显式批准最终数据集组合。**未经批准不要进入正式训练。**
+**Phase 2 验收：** ✅ 已通过（2026-11-10）：可复核数据报告已产生，研究者已批准最终数据集组合。最终选择为 **R-LiViT + MID-3K**，其余三个数据集排除；下一阶段为 Phase 3 基线。
 
 ---
 
@@ -315,22 +317,24 @@ experiments/
 
 | 顺序 | 工作 | 必须提交的结果 | 人工批准后才能进入下一阶段？ |
 |---|---|---|---|
-| 0 | 原始数据与仓库审计 | Inventory + Profiles | 遇到标注/许可异常时是 |
-| 1 | 五个 Adapter 与统一转换 | Processed 数据 + Tests + Previews | 是（标注与几何质量） |
-| 2 | 数据统计与选择 | Statistics + Selection Report | **必须** |
+| 0 | 原始数据与仓库审计 | Inventory + Profiles | ✅ 已完成 |
+| 1 | 五个 Adapter 与统一转换 | Processed 数据 + Tests + Previews | ✅ 已完成 |
+| 2 | 数据统计与选择 | Statistics + Selection Report | ✅ 已通过（2026-11-10，选定 R-LiViT + MID-3K） |
 | 3 | 可复现 YOLO 基线 | RGB/T/D + 简单融合主表 | 是（确定 MoE 必要性） |
 | 4 | MoE 与 Reliability 逐步研发 | 完整消融 + 容量对照 | 是（确认实际贡献） |
 | 5 | 扩展数据集/跨 YOLO 版本/鲁棒性 | 完整论文结果矩阵 | 是（确定投稿定位） |
 | 6 | 论文与复现包 | Tables, Figures, Methods, Limits | 最终检查 |
 
-### 立即执行的 Codex 任务（本轮只执行 Phase 0–2 的工程准备）
+### 首轮 Codex 任务记录（Phase 0–2，已完成）
+
+以下为已完成的第一轮工程任务，保留作为执行记录；其「停止等待人工决定」的要求已由 2026-11-10 的人工选择解除。
 
 1. 仔细阅读现有仓库；输出 `docs/repo_audit.md`，说明可复用组件与修改点，不直接修改上游 Submodule。
 2. 新建本计划中的统一 schema、dataset registry、5 个 Adapter 文件和可复用 CLI。**先以实际原始文件为准完成调查，再补各 Adapter；未下载的数据保留 pending 状态。**
 3. 实现严格的 YOLO 标注转换、实例 Mask→Box、LiDAR→Depth 可选模块、数据合法性检查及统计；转换失败样本要产生诊断日志。
 4. 在真实可获取的小样本上跑通 `inspect → convert → validate → summarize → preview`，进行端到端 Smoke Test；如无原始数据，使用合成 fixture 测试并明确其非真实统计。
 5. 输出数据集对比报告，自动包含类别、实例数、模态完整性、标签可信度、分布、数据划分风险、代表性可视化及需人工决定的事项。
-6. **此时停止，不做数据集最终取舍，不进行正式 YOLO 训练，不臆造缺失的标定/标签，不开始实现 MoE。**
+6. ~~此时停止，不做数据集最终取舍~~ 已解除：人工选择已于 2026-11-10 完成（R-LiViT + MID-3K），可进入 Phase 3；仍不臆造缺失的标定/标签，Phase 3 之后再开始 MoE。
 
 ### 交给 Codex 的首次任务指令
 
