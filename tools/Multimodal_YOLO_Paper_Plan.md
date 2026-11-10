@@ -209,7 +209,7 @@ reports/data_statistics/
 - 保持各 YOLO 检测头/损失/后处理的原生行为，在指定特征层插入跨模态融合；无法复用官方 Trainer 的地方只做最小适配，并给出可复现说明。
 - “兼容多个版本”必须由自动构建、前向、反向、训练及推理测试来证明，而非仅靠 model 名称映射。
 
-候选 YOLO：v8、v9、v10、11、12、13（社区版本须单独检查兼容性）、26。**不要假设当前仓库原生支持所有版本；先输出 compatibility matrix。** 先选 1 个版本（建议 YOLO11s 或仓库中最稳定的 s 规模版本）开发，再验证 2–3 个差异较大的版本，最终扩大覆盖。
+候选 YOLO：v8、v9、v10、11、12、13（社区版本须单独检查兼容性）、26。**不要假设当前仓库原生支持所有版本；先输出 compatibility matrix。** 先选 1 个版本（建议 YOLO11s 或仓库中最稳定的 s 规模版本）开发，再验证 2–3 个差异较大的版本，最终扩大覆盖。**2026-11-10 人工决定：本实验不纳入 YOLOv13**（当前 Ultralytics 8.4.91 亦未提供其模型配置）。
 
 **开发验证记录（2026-11-10）：** 人工选定首个架构为 **YOLO26x**（x 规模，优先验证大模型下的工程正确性）。`ultralytics/cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` 六个融合模式均已通过构建、前向、反向测试（`tests/test_multimodal.py::test_yolo26x_fusion_modes_build_and_backpropagate`），并在 **R-LiViT_mdet** 上各完成 1 epoch（10% 数据）的训练、验证、checkpoint 重载与配对推理；其中 BF 另在 **MID-3K_mdet** 上完成同样流程。该快速训练仅证明数据/训练/推理链路可用，不作为基线精度结论。2 模态模板 `yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` 已补齐：3+1（4 通道，RGB + 单通道 T 或 D）与 1+1（2 通道，T + D）两种布局，六个融合模式均通过构建/前向/反向测试（`tests/test_multimodal.py::test_yolo26x_mm2_templates_match_the_dataset_modality_split`），对应 B3–B5 的两类输入布局；两种模态组合的 `data.yaml` 子集与真实数据训练尚未执行。v8/v11 现有模板（v8 mm3 六种、mm2 六种、pre-SPPF，YOLO11 seg BF）已通过构建/前向/反向测试，其训练与推理路径仍待逐项验证。证据与覆盖范围见 [`tools/multimodal_compatibility.md`](multimodal_compatibility.md)。
 
