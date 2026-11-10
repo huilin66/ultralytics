@@ -368,6 +368,59 @@ def test_yolo26x_fusion_modes_build_and_backpropagate(mode, branch_layers):
         assert len(model.model[layer].channels) == 3
 
 
+@pytest.mark.parametrize(
+    "tag, channels",
+    [("31", 4), ("11", 2)],
+)
+@pytest.mark.parametrize(
+    "mode, branch_layers, fusion_count",
+    [
+        ("if", (0,), 0),
+        ("ef", (2, 12), 3),
+        ("nif", (2, 12), 3),
+        ("bf", (2, 14), 3),
+        ("nf", (2, 14), 3),
+        ("hf", (2, 14), 3),
+    ],
+)
+def test_yolo26x_mm2_templates_match_the_dataset_modality_split(tag, channels, mode, branch_layers, fusion_count):
+    """Each two-modality template must build, infer and train both branches for its declared channel split."""
+    cfg = yaml_model_load(f"ultralytics/cfg/mmodels/yolo26x-mm2-{tag}-{mode}.yaml")
+    cfg["scale"] = "n"
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+    assert model.end2end is True
+    assert model.yaml["channels"] == channels
+    sections = cfg["multimodal"]["input_sections"]
+    assert sections == ([3, 1] if tag == "31" else [1, 1])
+    if mode == "if":
+        assert model.model[0].conv.weight.shape[1] == channels  # one stem over the stacked input
+    else:
+        assert [model.model[layer].conv.weight.shape[1] for layer in branch_layers] == sections
+
+    fusions = [(index, layer) for index, layer in enumerate(model.model) if type(layer).__name__ == "MultiModalFusion"]
+    assert len(fusions) == fusion_count
+    assert all(len(layer.channels) == 2 for _, layer in fusions)  # two modalities per fusion node
+
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, channels, 64, 64))
+    assert prediction.shape == (1, 84, 6)
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, channels, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    for layer in branch_layers:
+        gradient = model.model[layer].conv.weight.grad
+        assert gradient is not None and gradient.abs().sum() > 0
+
+
 def test_modalities_pair_resolved_split_paths_with_a_differently_spelled_root(tmp_path):
     """A split path resolved to another spelling of the same directory must still find its companions."""
     real = tmp_path / "real"

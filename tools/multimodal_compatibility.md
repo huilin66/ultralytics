@@ -21,6 +21,7 @@ smoke run proves it. `—` means not implemented or not yet covered.
 | YOLOv8x | `cfg/mmodels/yolov8x-mm{2,3}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | — | — | — | — | build + COCO transfer tested |
 | YOLO11 (seg) | `cfg/models/multimodal/yolo11-mm3-bf-seg.yaml` | ✅ | — | — | — | — | template + task inference tested |
 | YOLO26x (det, all modes) | `cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | **development-verified 2026-11-10** |
+| YOLO26x (det, 2 modalities) | `cfg/mmodels/yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested 2026-11-10 |
 | YOLOv9 / v10 / v12 / v13 | none | — | — | — | — | — | no templates yet |
 
 YOLO26x evidence (`tests/test_multimodal.py::test_yolo26x_multimodal_model_keeps_the_native_end2end_head`
@@ -39,6 +40,10 @@ and `::test_yolo26x_fusion_modes_build_and_backpropagate`, plus manual smoke run
   | HF | head P3/P4/P5 (1×1 per-modality projections) | 3 | 171,892,548 |
 
 - end-to-end inference output `(1, 84, 6)` for `nc=2` at 64 px (84 anchors, 4 box + 2 class) in all modes;
+- two-modality layouts `[3, 1]` (4 channels: RGB + thermal or depth) and `[1, 1]` (2 channels: thermal + depth)
+  build, infer and backpropagate in all six modes
+  (`::test_yolo26x_mm2_templates_match_the_dataset_modality_split`); the same mm2 file serves RGB-T and RGB-D,
+  because both are 3+1;
 - loss/backward reaches the first convolution of every modality branch (IF: the single 5-channel stem);
 - one epoch on a 4-image synthetic RGB-T-D dataset trains, validates, saves `best.pt`, and
   reloads it for a posed validation pass;
@@ -84,7 +89,7 @@ latency follows it except for the BF row (different batch).
 
 ## Not yet covered
 
-- YOLO26x 2-modality (`mm2`) templates.
+- Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates.
 - Pretrained COCO transfer for YOLO26 (`pretrained.py` currently accepts only `source: yolov8`).
 - Automated train/predict tests for YOLOv8x and YOLO11 templates.
 - Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B8 baseline matrix.
