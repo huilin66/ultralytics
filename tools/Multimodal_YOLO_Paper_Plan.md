@@ -211,7 +211,29 @@ reports/data_statistics/
 
 候选 YOLO：v8、v9、v10、11、12、13（社区版本须单独检查兼容性）、26。**不要假设当前仓库原生支持所有版本；先输出 compatibility matrix。** 先选 1 个版本（建议 YOLO11s 或仓库中最稳定的 s 规模版本）开发，再验证 2–3 个差异较大的版本，最终扩大覆盖。
 
-**开发验证记录（2026-11-10）：** 人工选定首个架构为 **YOLO26x**（x 规模，优先验证大模型下的工程正确性）。`ultralytics/cfg/mmodels/yolo26x-mm3-bf.yaml` 已通过构建、前向、反向、单 epoch 训练和配对推理验证；并在 **R-LiViT_mdet 与 MID-3K_mdet** 上各完成 1 epoch（10% 数据）的快速连通性训练与验证、checkpoint 重载及配对推理（路径列表与单文件两种 source 均可用）。该快速训练仅证明数据/训练/推理链路可用，不作为基线精度结论。证据与覆盖范围见 [`tools/multimodal_compatibility.md`](multimodal_compatibility.md)。其余融合模式、2 模态模板及 v8/v11 的训练/推理路径待逐项验证。
+**开发验证记录（2026-11-10）：** 人工选定首个架构为 **YOLO26x**（x 规模，优先验证大模型下的工程正确性）。`ultralytics/cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` 六个融合模式均已通过构建、前向、反向测试（`tests/test_multimodal.py::test_yolo26x_fusion_modes_build_and_backpropagate`），并在 **R-LiViT_mdet** 上各完成 1 epoch（10% 数据）的训练、验证、checkpoint 重载与配对推理；其中 BF 另在 **MID-3K_mdet** 上完成同样流程。该快速训练仅证明数据/训练/推理链路可用，不作为基线精度结论。2 模态（`mm2`）模板及 v8/v11 的训练/推理路径待逐项验证。证据与覆盖范围见 [`tools/multimodal_compatibility.md`](multimodal_compatibility.md)。
+
+连通性 smoke 结果（YOLO26x BF，1 epoch、fraction=0.1、640 px、batch 8、`pretrained=False`，RTX 5090）：
+
+| 数据集 | Train box/cls/dfl | Val box/cls | P | R | mAP50-95 | 推理 |
+|---|---|---|---|---|---|---|
+| MID-3K_mdet | 4.016 / 9.519 / 0.029 | 4.146 / 8.602 | 0.0005 | 0.0343 | 0.0000 | 5.49 ms/img |
+| R-LiViT_mdet | 4.368 / 5.659 / 0.016 | 4.393 / 5.587 | 0.0000 | 0.0038 | 0.0000 | 3.97 ms/img |
+
+推理阶段两个数据集各用 4 张 val 主模态图（路径列表）+ 1 张（单文件）验证配对加载，均成功；置信度贴近 `conf=0.001` 下限（MID-3K 0.0119、R-LiViT 0.0016），符合 10% 训练量的预期。**这些数字只用于验证链路，不得作为基线或论文结果引用。**
+
+融合模式横向对比（R-LiViT_mdet，1 epoch、fraction=0.1、640 px、batch 4、`pretrained=False`，RTX 5090；batch 与上表不同，推理耗时不可直接比较）：
+
+| 模式 | 融合位置 | 参数量 | Train box/cls/dfl | Val box/cls | P | R | mAP50-95 | 推理 |
+|---|---|---|---|---|---|---|---|---|
+| IF | 输入端拼接 | 58,814,916 | 4.483 / 5.620 / 0.016 | 4.411 / 5.581 | 0.0000 | 0.0240 | 0.0000 | 2.03 ms/img |
+| EF | encoder P3/P4/P5 | 112,334,148 | 4.414 / 5.498 / 0.016 | 4.405 / 5.586 | 0.0001 | 0.0114 | 0.0000 | 4.11 ms/img |
+| NIF | encoder P3/P4 + nape P5 | 115,287,876 | 4.311 / 5.397 / 0.015 | 4.393 / 5.588 | 0.0000 | 0.0000 | 0.0000 | 4.26 ms/img |
+| BF | backbone P3/P4/P5 | 121,817,412 | 4.368 / 5.659 / 0.016 | 4.393 / 5.587 | 0.0000 | 0.0038 | 0.0000 | 3.97 ms/img |
+| NF | neck P3/P4/P5 | 167,899,716 | 4.379 / 5.438 / 0.015 | 4.412 / 5.589 | 0.0000 | 0.0057 | 0.0000 | 5.44 ms/img |
+| HF | head P3/P4/P5 | 171,892,548 | 4.303 / 5.387 / 0.015 | 4.391 / 5.566 | 0.0000 | 0.0000 | 0.0000 | 5.50 ms/img |
+
+BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直接横向比较。每个模式均重载各自 `best.pt`，对 4 张 val 主模态图（路径列表）推理，`conf=0.001` 下均输出 300 个框（`max_det` 上限），最高置信度 0.0016–0.0017，与 1 epoch/10% 数据量一致。**同样只用于链路验证。**
 
 ### E2. 必须具备的基线
 

@@ -319,6 +319,55 @@ def test_yolo26x_multimodal_model_keeps_the_native_end2end_head():
         assert gradient is not None and gradient.abs().sum() > 0
 
 
+@pytest.mark.parametrize(
+    "mode, branch_layers",
+    [
+        ("if", (0,)),
+        ("ef", (2, 12, 22)),
+        ("nif", (2, 12, 22)),
+        ("bf", (2, 14, 26)),
+        ("nf", (2, 14, 26)),
+        ("hf", (2, 14, 26)),
+    ],
+)
+def test_yolo26x_fusion_modes_build_and_backpropagate(mode, branch_layers):
+    """Every YOLO26x fusion template must build, infer end to end and train all input paths."""
+    cfg = yaml_model_load(f"ultralytics/cfg/mmodels/yolo26x-mm3-{mode}.yaml")
+    cfg["scale"] = "n"
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+    assert model.end2end is True
+
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, 5, 64, 64))
+    assert prediction.shape == (1, 84, 6)
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, 5, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    for layer in branch_layers:
+        gradient = model.model[layer].conv.weight.grad
+        assert gradient is not None and gradient.abs().sum() > 0
+
+    fusion_layers = {
+        "if": (),
+        "ef": (31, 33, 35),
+        "nif": (31, 33, 38),
+        "bf": (37, 39, 41),
+        "nf": (73, 75, 77),
+        "hf": (82, 84, 86),
+    }[mode]
+    for layer in fusion_layers:
+        assert len(model.model[layer].channels) == 3
+
+
 def test_modalities_pair_resolved_split_paths_with_a_differently_spelled_root(tmp_path):
     """A split path resolved to another spelling of the same directory must still find its companions."""
     real = tmp_path / "real"
