@@ -18,7 +18,7 @@ smoke run proves it. `—` means not implemented or not yet covered.
 
 | Architecture | Templates | Build | Forward | Backward | Train epoch | Predict | Status |
 |---|---|---|---|---|---|---|---|
-| YOLOv8x | `cfg/mmodels/yolov8x-mm{2,3}-{if,ef,nif,bf,nf,hf}.yaml` + `cfg/models/multimodal/yolov8x-mm3-pre-sppf.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | build/forward/backward + COCO transfer + R-LiViT smoke |
+| YOLOv8x | `cfg/mmodels/yolov8x-mm{2,3}-{if,ef,nif,bf,nf,hf}.yaml` + `cfg/models/multimodal/yolov8x-mm3-pre-sppf.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward + COCO transfer tested |
 | YOLOv8s | `cfg/mmodels/yolov8s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLOv9s | `cfg/mmodels/yolov9s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLOv10s | `cfg/mmodels/yolov10s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | end2end `v10Detect`; R-LiViT smoke 2026-11-10 |
@@ -105,9 +105,31 @@ At `conf=0.001` each prediction returned `max_det` boxes (300) with a top confid
 again a 10%-epoch artefact, not a quality signal. Parameter count rises monotonically from IF to HF, and
 latency follows it except for the BF row (different batch).
 
+### Architecture sweep (R-LiViT_mdet, v8–v12)
+
+Same protocol as above: 1 epoch, `fraction=0.1` (170 train images), 640 px, batch 4,
+`pretrained=False`, RTX 5090, template scale `s`. All 30 runs trained, validated (216 val images) and
+reloaded `best.pt` for prediction on four val images. Precision, recall and mAP are `0` for every run —
+expected from one epoch on random initialisation, not a quality signal. Inference is ms/image from the
+validation pass.
+
+| Architecture | Params IF→HF (M) | IF | EF | NIF | BF | NF | HF |
+|---|---|---|---|---|---|---|---|
+| YOLOv8s | 11.1 → 31.2 | 0.66 | 1.28 | 1.27 | 1.13 | 1.53 | 1.52 |
+| YOLOv9s | 7.3 → 19.5 | 1.69 | 2.80 | 3.11 | 2.96 | 4.27 | 4.32 |
+| YOLOv10s | 8.1 → 23.0 | 0.82 | 1.57 | 1.68 | 1.93 | 2.22 | 2.37 |
+| YOLO11s | 9.4 → 29.3 | 1.06 | 1.69 | 1.75 | 1.92 | 2.54 | 2.63 |
+| YOLO12s | 9.3 → 28.8 | 1.44 | 2.98 | 3.08 | 3.14 | 3.95 | 4.01 |
+
+Training losses stayed in the same narrow band across modes (box 5.1–5.6, dfl 4.1–4.6; YOLOv10's
+end2end classification loss is on a different scale, ~17–20). YOLOv8s and YOLOv9s NIF/BF have identical
+parameter counts because their nape tail is a single layer; YOLO12s EF/NIF/BF are the same graph because
+it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxes, while YOLOv10's end2end
+`v10Detect` returns the 300-box `max_det` cap; all confidences are ≈0.0016–0.0017.
+
 ## Not yet covered
 
 - Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates.
 - Pretrained COCO transfer for YOLO26 (`pretrained.py` currently accepts only `source: yolov8`).
-- Automated 1-epoch train/predict runs for YOLOv8x and YOLO11 templates on the converted datasets.
+- Real-data train/predict for the x-scale YOLOv8x templates and the YOLO11 segmentation template.
 - Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B8 baseline matrix.

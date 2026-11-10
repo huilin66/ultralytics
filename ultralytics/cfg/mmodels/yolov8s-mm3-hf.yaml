@@ -1,6 +1,6 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-# yolov8s three-modality head fusion: modality-specific backbones/necks and per-scale head projections fuse before one Detect.
+# yolov8s three-modality head fusion: per-modality head projections fuse P3/P4/P5 before one Detect.
 # Input order: RGB (3) + thermal (1) + depth (1).
 nc: 80
 channels: 5
