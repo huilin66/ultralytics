@@ -1,0 +1,130 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov9e three-modality nape-in fusion: P3/P4 fuse at encoder exits; P5 fuses inside the expanded nape.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: NIF
+  operator: concat
+  fusion_points: ["encoder_P3", "encoder_P4", "nape_P5"]
+  share_weight: false
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, nn.Identity, []]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [3, 1, CBLinear, [[64]]]
+  - [5, 1, CBLinear, [[64, 128]]]
+  - [7, 1, CBLinear, [[64, 128, 256]]]
+  - [9, 1, CBLinear, [[64, 128, 256, 512]]]
+  - [11, 1, CBLinear, [[64, 128, 256, 512, 1024]]]
+  - [2, 1, Conv, [64, 3, 2]]
+  - [[12, 13, 14, 15, 16, -1], 1, CBFuse, [[0, 0, 0, 0, 0]]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [[13, 14, 15, 16, -1], 1, CBFuse, [[1, 1, 1, 1]]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [[14, 15, 16, -1], 1, CBFuse, [[2, 2, 2]]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [[15, 16, -1], 1, CBFuse, [[3, 3]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [[16, -1], 1, CBFuse, [[4]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, nn.Identity, []]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [33, 1, CBLinear, [[64]]]
+  - [35, 1, CBLinear, [[64, 128]]]
+  - [37, 1, CBLinear, [[64, 128, 256]]]
+  - [39, 1, CBLinear, [[64, 128, 256, 512]]]
+  - [41, 1, CBLinear, [[64, 128, 256, 512, 1024]]]
+  - [32, 1, Conv, [64, 3, 2]]
+  - [[42, 43, 44, 45, 46, -1], 1, CBFuse, [[0, 0, 0, 0, 0]]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [[43, 44, 45, 46, -1], 1, CBFuse, [[1, 1, 1, 1]]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [[44, 45, 46, -1], 1, CBFuse, [[2, 2, 2]]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [[45, 46, -1], 1, CBFuse, [[3, 3]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [[46, -1], 1, CBFuse, [[4]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, nn.Identity, []]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [63, 1, CBLinear, [[64]]]
+  - [65, 1, CBLinear, [[64, 128]]]
+  - [67, 1, CBLinear, [[64, 128, 256]]]
+  - [69, 1, CBLinear, [[64, 128, 256, 512]]]
+  - [71, 1, CBLinear, [[64, 128, 256, 512, 1024]]]
+  - [62, 1, Conv, [64, 3, 2]]
+  - [[72, 73, 74, 75, 76, -1], 1, CBFuse, [[0, 0, 0, 0, 0]]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [[73, 74, 75, 76, -1], 1, CBFuse, [[1, 1, 1, 1]]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [[74, 75, 76, -1], 1, CBFuse, [[2, 2, 2]]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [[75, 76, -1], 1, CBFuse, [[3, 3]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [[76, -1], 1, CBFuse, [[4]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [[24, 54, 84], 1, MultiModalFusion, ["concat"]] # fuse P3
+  - [-1, 1, Conv, [512, 1, 1]] # P3-fused
+  - [[27, 57, 87], 1, MultiModalFusion, ["concat"]] # fuse P4
+  - [-1, 1, Conv, [1024, 1, 1]] # P4-fused
+  - [30, 1, SPPELAN, [512, 256]] # RGB nape
+  - [60, 1, SPPELAN, [512, 256]] # thermal nape
+  - [90, 1, SPPELAN, [512, 256]] # depth nape
+  - [[95, 96, 97], 1, MultiModalFusion, ["concat"]] # fuse nape P5
+  - [-1, 1, Conv, [1024, 1, 1]] # fused nape P5
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 94], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 92], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]
+  - [-1, 1, ADown, [256]]
+  - [[-1, 102], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]
+  - [-1, 1, ADown, [512]]
+  - [[-1, 99], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 1024, 512, 2]]
+  - [[105, 108, 111], 1, Detect, ["nc"]]
+

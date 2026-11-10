@@ -549,6 +549,62 @@ def test_other_yolo_templates_build_and_backpropagate(arch, mode):
         assert gradient is not None and gradient.abs().sum() > 0
 
 
+SCALE_SETS = {
+    "yolov8": "nsmlx",
+    "yolov9": "tsmce",
+    "yolov10": "nsmblx",
+    "yolo11": "nsmlx",
+    "yolo12": "nsmlx",
+}
+
+
+@pytest.mark.parametrize("arch", tuple(SCALE_SETS))
+@pytest.mark.parametrize("mode", ("if", "bf"))
+def test_every_template_scale_builds_and_grows_with_the_scale(arch, mode):
+    """Each architecture must ship every upstream scale, and a bigger scale must mean more parameters."""
+    counts = {}
+    for scale in SCALE_SETS[arch]:
+        cfg = yaml_model_load(f"ultralytics/cfg/mmodels/{arch}{scale}-mm3-{mode}.yaml")
+        assert cfg["channels"] == 5
+        assert cfg["multimodal"]["fusion"] == mode.upper()
+        assert list(cfg["multimodal"]["input_sections"]) == [3, 1, 1]
+        if cfg.get("scales"):
+            expected_scale = scale if scale in "nsmlx" else next(iter(cfg["scales"]))
+            assert expected_scale in cfg["scales"]
+        model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+        model.args = DEFAULT_CFG
+        detect = next(layer for layer in model.model if type(layer).__name__ in ("Detect", "v10Detect"))
+        assert len(detect.f) == 3
+        model.eval()
+        with torch.inference_mode():
+            prediction, _ = model(torch.zeros(1, 5, 64, 64))
+        expected = (1, 84, 6) if getattr(detect, "end2end", False) else (1, 6, 84)
+        assert prediction.shape == expected
+        counts[scale] = sum(parameter.numel() for parameter in model.parameters())
+
+        model.train()
+        batch = {
+            "img": torch.rand(2, 5, 64, 64),
+            "cls": torch.zeros(2, 1, 1),
+            "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+            "batch_idx": torch.tensor([0, 1]),
+        }
+        loss, _ = model(batch)
+        loss.sum().backward()
+        if mode == "if":
+            stems = [layer for layer in model.model if isinstance(layer, Conv) and layer.conv.in_channels == 5]
+            assert stems
+        else:
+            stems = [layer for layer in model.model if isinstance(layer, Conv) and layer.conv.in_channels in (3, 1)]
+            assert stems and len(stems) % 3 == 0
+        for stem in stems:
+            gradient = stem.conv.weight.grad
+            assert gradient is not None and gradient.abs().sum() > 0
+    ordered = [counts[scale] for scale in SCALE_SETS[arch]]
+    assert ordered == sorted(ordered), counts
+    assert len(set(ordered)) == len(ordered), counts
+
+
 def test_modalities_pair_resolved_split_paths_with_a_differently_spelled_root(tmp_path):
     """A split path resolved to another spelling of the same directory must still find its companions."""
     real = tmp_path / "real"

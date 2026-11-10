@@ -1,0 +1,103 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov9c three-modality head fusion: per-modality head projections fuse P3/P4/P5 before one Detect.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: HF
+  operator: concat
+  fusion_points: ["head_P3", "head_P4", "head_P5"]
+  share_weight: false
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 1]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 1]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, SPPELAN, [512, 256]]
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 8], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 1]]
+  - [-1, 1, ADown, [256]]
+  - [[-1, 14], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, ADown, [512]]
+  - [[-1, 11], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 1]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 1]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, SPPELAN, [512, 256]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 31], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 29], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 1]]
+  - [-1, 1, ADown, [256]]
+  - [[-1, 37], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, ADown, [512]]
+  - [[-1, 34], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 1]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 1]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, SPPELAN, [512, 256]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 54], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 52], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 1]]
+  - [-1, 1, ADown, [256]]
+  - [[-1, 60], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [-1, 1, ADown, [512]]
+  - [[-1, 57], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
+  - [17, 1, Conv, [512, 1, 1]] # head projection
+  - [20, 1, Conv, [512, 1, 1]] # head projection
+  - [23, 1, Conv, [512, 1, 1]] # head projection
+  - [40, 1, Conv, [512, 1, 1]] # head projection
+  - [43, 1, Conv, [512, 1, 1]] # head projection
+  - [46, 1, Conv, [512, 1, 1]] # head projection
+  - [63, 1, Conv, [512, 1, 1]] # head projection
+  - [66, 1, Conv, [512, 1, 1]] # head projection
+  - [69, 1, Conv, [512, 1, 1]] # head projection
+  - [[70, 73, 76], 1, MultiModalFusion, ["concat"]] # fuse neck P0
+  - [-1, 1, Conv, [512, 1, 1]] # neck-P0-fused
+  - [[71, 74, 77], 1, MultiModalFusion, ["concat"]] # fuse neck P1
+  - [-1, 1, Conv, [512, 1, 1]] # neck-P1-fused
+  - [[72, 75, 78], 1, MultiModalFusion, ["concat"]] # fuse neck P2
+  - [-1, 1, Conv, [512, 1, 1]] # neck-P2-fused
+  - [[80, 82, 84], 1, Detect, ["nc"]] # Detect(P3, P4, P5)
+

@@ -1,0 +1,74 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov10x three-modality nape-in fusion: P3/P4 fuse at encoder exits; P5 fuses inside the expanded nape.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+scale: x
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: NIF
+  operator: concat
+  fusion_points: ["encoder_P3", "encoder_P4", "nape_P5"]
+  share_weight: false
+scales:
+  x: [1.0, 1.25, 512]
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, SCDown, [512, 3, 2]]
+  - [-1, 6, C2fCIB, [512, true]]
+  - [-1, 1, SCDown, [1024, 3, 2]]
+  - [-1, 3, C2fCIB, [1024, true]]
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, SCDown, [512, 3, 2]]
+  - [-1, 6, C2fCIB, [512, true]]
+  - [-1, 1, SCDown, [1024, 3, 2]]
+  - [-1, 3, C2fCIB, [1024, true]]
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, SCDown, [512, 3, 2]]
+  - [-1, 6, C2fCIB, [512, true]]
+  - [-1, 1, SCDown, [1024, 3, 2]]
+  - [-1, 3, C2fCIB, [1024, true]]
+  - [[6, 16, 26], 1, MultiModalFusion, ["concat"]] # fuse P3
+  - [-1, 1, Conv, [256, 1, 1]] # P3-fused
+  - [[8, 18, 28], 1, MultiModalFusion, ["concat"]] # fuse P4
+  - [-1, 1, Conv, [512, 1, 1]] # P4-fused
+  - [10, 1, SPPF, [1024, 5]] # RGB nape
+  - [20, 1, SPPF, [1024, 5]] # thermal nape
+  - [30, 1, SPPF, [1024, 5]] # depth nape
+  - [[35, 36, 37], 1, MultiModalFusion, ["concat"]] # fuse nape P5
+  - [-1, 1, Conv, [1024, 1, 1]] # fused nape P5
+  - [-1, 1, PSA, [1024]] # shared nape tail
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 34], 1, Concat, [1]]
+  - [-1, 3, C2fCIB, [512, true]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 32], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 43], 1, Concat, [1]]
+  - [-1, 3, C2fCIB, [512, true]]
+  - [-1, 1, SCDown, [512, 3, 2]]
+  - [[-1, 40], 1, Concat, [1]]
+  - [-1, 3, C2fCIB, [1024, true]]
+  - [[46, 49, 52], 1, v10Detect, ["nc"]]
+

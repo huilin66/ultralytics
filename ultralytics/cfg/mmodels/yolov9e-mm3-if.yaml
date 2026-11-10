@@ -1,0 +1,60 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov9e three-modality input fusion: RGB (3) + thermal (1) + depth (1) -> one 5-channel encoder.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: IF
+  operator: concat
+  fusion_points: []
+  share_weight: false
+
+backbone:
+  - [-1, 1, nn.Identity, []]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [1, 1, CBLinear, [[64]]]
+  - [3, 1, CBLinear, [[64, 128]]]
+  - [5, 1, CBLinear, [[64, 128, 256]]]
+  - [7, 1, CBLinear, [[64, 128, 256, 512]]]
+  - [9, 1, CBLinear, [[64, 128, 256, 512, 1024]]]
+  - [0, 1, Conv, [64, 3, 2]]
+  - [[10, 11, 12, 13, 14, -1], 1, CBFuse, [[0, 0, 0, 0, 0]]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [[11, 12, 13, 14, -1], 1, CBFuse, [[1, 1, 1, 1]]]
+  - [-1, 1, RepNCSPELAN4, [256, 128, 64, 2]]
+  - [-1, 1, ADown, [256]]
+  - [[12, 13, 14, -1], 1, CBFuse, [[2, 2, 2]]]
+  - [-1, 1, RepNCSPELAN4, [512, 256, 128, 2]]
+  - [-1, 1, ADown, [512]]
+  - [[13, 14, -1], 1, CBFuse, [[3, 3]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, ADown, [1024]]
+  - [[14, -1], 1, CBFuse, [[4]]]
+  - [-1, 1, RepNCSPELAN4, [1024, 512, 256, 2]]
+  - [-1, 1, SPPELAN, [512, 256]]
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 25], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 22], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 2]]
+  - [-1, 1, ADown, [256]]
+  - [[-1, 32], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 512, 256, 2]]
+  - [-1, 1, ADown, [512]]
+  - [[-1, 29], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [512, 1024, 512, 2]]
+  - [[35, 38, 41], 1, Detect, ["nc"]]
+

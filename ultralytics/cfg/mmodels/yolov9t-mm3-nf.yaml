@@ -1,0 +1,94 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov9t three-modality neck fusion: modality-specific backbones and necks fuse P3/P4/P5 before one Detect.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: NF
+  operator: concat
+  fusion_points: ["neck_P3", "neck_P4", "neck_P5"]
+  share_weight: false
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [16, 3, 2]]
+  - [-1, 1, Conv, [32, 3, 2]]
+  - [-1, 1, ELAN1, [32, 32, 16]]
+  - [-1, 1, AConv, [64]]
+  - [-1, 1, RepNCSPELAN4, [64, 64, 32, 3]]
+  - [-1, 1, AConv, [96]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, AConv, [128]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]
+  - [-1, 1, SPPELAN, [128, 64]]
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 8], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [64, 64, 32, 3]]
+  - [-1, 1, AConv, [48]]
+  - [[-1, 14], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, AConv, [64]]
+  - [[-1, 11], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [16, 3, 2]]
+  - [-1, 1, Conv, [32, 3, 2]]
+  - [-1, 1, ELAN1, [32, 32, 16]]
+  - [-1, 1, AConv, [64]]
+  - [-1, 1, RepNCSPELAN4, [64, 64, 32, 3]]
+  - [-1, 1, AConv, [96]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, AConv, [128]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]
+  - [-1, 1, SPPELAN, [128, 64]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 31], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 29], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [64, 64, 32, 3]]
+  - [-1, 1, AConv, [48]]
+  - [[-1, 37], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, AConv, [64]]
+  - [[-1, 34], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [16, 3, 2]]
+  - [-1, 1, Conv, [32, 3, 2]]
+  - [-1, 1, ELAN1, [32, 32, 16]]
+  - [-1, 1, AConv, [64]]
+  - [-1, 1, RepNCSPELAN4, [64, 64, 32, 3]]
+  - [-1, 1, AConv, [96]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, AConv, [128]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]
+  - [-1, 1, SPPELAN, [128, 64]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 54], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 52], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [64, 64, 32, 3]]
+  - [-1, 1, AConv, [48]]
+  - [[-1, 60], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [96, 96, 48, 3]]
+  - [-1, 1, AConv, [64]]
+  - [[-1, 57], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]
+  - [[17, 40, 63], 1, MultiModalFusion, ["concat"]] # fuse neck P0
+  - [-1, 1, Conv, [64, 1, 1]] # neck-P0-fused
+  - [[20, 43, 66], 1, MultiModalFusion, ["concat"]] # fuse neck P1
+  - [-1, 1, Conv, [96, 1, 1]] # neck-P1-fused
+  - [[23, 46, 69], 1, MultiModalFusion, ["concat"]] # fuse neck P2
+  - [-1, 1, Conv, [128, 1, 1]] # neck-P2-fused
+  - [[71, 73, 75], 1, Detect, ["nc"]] # Detect(P3, P4, P5)
+

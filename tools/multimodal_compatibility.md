@@ -19,12 +19,12 @@ smoke run proves it. `—` means not implemented or not yet covered.
 | Architecture | Templates | Build | Forward | Backward | Train epoch | Predict | Status |
 |---|---|---|---|---|---|---|---|
 | YOLOv8x | `cfg/mmodels/yolov8x-mm{2,3}-{if,ef,nif,bf,nf,hf}.yaml` + `cfg/models/multimodal/yolov8x-mm3-pre-sppf.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward + COCO transfer tested |
-| YOLOv8s | `cfg/mmodels/yolov8s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
-| YOLOv9s | `cfg/mmodels/yolov9s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
-| YOLOv10s | `cfg/mmodels/yolov10s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | end2end `v10Detect`; R-LiViT smoke 2026-11-10 |
-| YOLO11 (det) | `cfg/mmodels/yolo11s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLOv8s | `cfg/mmodels/yolov8{nsmlx}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLOv9s | `cfg/mmodels/yolov9{tsmce}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLOv10s | `cfg/mmodels/yolov10{nsmblx}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | end2end `v10Detect`; R-LiViT smoke 2026-11-10 |
+| YOLO11 (det) | `cfg/mmodels/yolo11{nsmlx}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLO11 (seg) | `cfg/models/multimodal/yolo11-mm3-bf-seg.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested, task inference tested |
-| YOLO12s | `cfg/mmodels/yolo12s-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
+| YOLO12s | `cfg/mmodels/yolo12{nsmlx}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLO26x (det, all modes) | `cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | **development-verified 2026-11-10** |
 | YOLO26x (det, 2 modalities) | `cfg/mmodels/yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested 2026-11-10 |
 | YOLOv13 | none | — | — | — | — | — | not shipped by Ultralytics 8.4.91 |
@@ -41,6 +41,23 @@ arity 3 (none for IF), one Detect with three inputs, the architecture-native out
 (`(1, 6, 84)` for Detect, `(1, 84, 6)` for YOLOv10's end2end `v10Detect`), and nonzero gradients in all
 three modality stems. YOLOv12 has no nape tail after P5, so its EF, NIF and BF files describe the same
 graph and differ only in their `fusion`/`fusion_points` metadata.
+
+Scale coverage: every upstream scale now has its own six templates — `cfg/mmodels/<arch><scale>-mm3-<mode>.yaml`
+with `yolov8` n/s/m/l/x, `yolov9` t/s/m/c/e, `yolov10` n/s/m/b/l/x, `yolo11` n/s/m/l/x and `yolo12` n/s/m/l/x
+(156 files). YOLOv8/11/12 keep the upstream `scales:` block and get their scale from the filename
+(`yaml_model_load` → `guess_model_scale`), so the header `scale:` line is documentation only. YOLOv9 files are
+fixed-width per-scale configs with no `scales:` block, and YOLOv10 ships one file per scale whose `scales:`
+block declares only that scale — `yolov10b` therefore falls back to the single declared key with an
+"assuming scale='b'" warning. `::test_every_template_scale_builds_and_grows_with_the_scale` builds IF and BF
+at every scale for all five architectures and asserts the parameter count strictly increases along the scale
+order. Real-data smoke runs remain at `s` scale only.
+
+YOLOv9e is the only covered backbone with multi-input layers: its auxiliary branch splits features with
+`CBLinear` and merges them with `CBFuse`, so the generator keeps those layer sources instead of flattening
+them to `-1`. That gives each modality branch two input convolutions (5-channel for IF, 3/1-channel for the
+other modes), which is why the gradient checks accept any positive multiple of three stems instead of exactly
+three. `::test_every_template_scale_builds_and_grows_with_the_scale` also runs a train-mode backward pass at
+every scale.
 
 YOLO26x evidence (`tests/test_multimodal.py::test_yolo26x_multimodal_model_keeps_the_native_end2end_head`
 and `::test_yolo26x_fusion_modes_build_and_backpropagate`, plus manual smoke runs):
@@ -131,5 +148,7 @@ it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxe
 
 - Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates.
 - Pretrained COCO transfer for YOLO26 (`pretrained.py` currently accepts only `source: yolov8`).
+- Real-data train/predict for scales other than `s` in v8–v12 (build, forward, backward and parameter growth
+  are covered for every scale).
 - Real-data train/predict for the x-scale YOLOv8x templates and the YOLO11 segmentation template.
 - Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B8 baseline matrix.

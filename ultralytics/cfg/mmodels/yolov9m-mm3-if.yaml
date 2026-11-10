@@ -1,0 +1,40 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# yolov9m three-modality input fusion: RGB (3) + thermal (1) + depth (1) -> one 5-channel encoder.
+# Input order: RGB (3) + thermal (1) + depth (1).
+nc: 80
+channels: 5
+multimodal:
+  input_sections: [3, 1, 1]
+  fusion: IF
+  operator: concat
+  fusion_points: []
+  share_weight: false
+
+backbone:
+  - [-1, 1, Conv, [32, 3, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 1]]
+  - [-1, 1, AConv, [240]]
+  - [-1, 1, RepNCSPELAN4, [240, 240, 120, 1]]
+  - [-1, 1, AConv, [360]]
+  - [-1, 1, RepNCSPELAN4, [360, 360, 180, 1]]
+  - [-1, 1, AConv, [480]]
+  - [-1, 1, RepNCSPELAN4, [480, 480, 240, 1]]
+  - [-1, 1, SPPELAN, [480, 240]]
+
+head:
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [360, 360, 180, 1]]
+  - [-1, 1, nn.Upsample, ["None", 2, "nearest"]]
+  - [[-1, 4], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [240, 240, 120, 1]]
+  - [-1, 1, AConv, [180]]
+  - [[-1, 12], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [360, 360, 180, 1]]
+  - [-1, 1, AConv, [240]]
+  - [[-1, 9], 1, Concat, [1]]
+  - [-1, 1, RepNCSPELAN4, [480, 480, 240, 1]]
+  - [[15, 18, 21], 1, Detect, ["nc"]]
+
