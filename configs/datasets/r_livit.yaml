@@ -1,0 +1,26 @@
+# R-LiViT -> R-LiViT_mdet
+# Loaded automatically by tools/convert_dataset.py --dataset r_livit.
+# Precedence: built-in defaults < this file < CLI flags < --set options.
+dataset: r_livit
+display_name: R-LiViT
+
+raw_root: Y:/dataset
+out_root: Y:/dataset
+
+# The release has train/test sequences only; val is carved from train groups.
+ratios: "0.8,0.1,0.1"
+seed: mdet
+previews: 6
+workers: 4
+
+options:
+  extract_root: Y:/dataset/_extracted
+  # Project LiDAR scans to RGB with calibration_params.json. Images are shipped
+  # undistorted, so the pinhole K is used without distortion coefficients.
+  include_lidar_depth: true
+  depth_min_m: 0.5
+  depth_max_m: 100.0
+  # uint16 millimetres are affine-mapped to uint8 over [0, 50] m; 0 = no return.
+  # Keep this <= 65.535 m so the uint16 intermediate never saturates.
+  depth_encode_max_m: 50.0
+  lidar_timestamp_tolerance_ms: 100.0

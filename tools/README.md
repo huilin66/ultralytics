@@ -1,7 +1,10 @@
 # Dataset conversion (`tools/`)
 
-Converts the five candidate multi-modal datasets into the layout consumed by
+Converts the candidate multi-modal datasets into the layout consumed by
 `ultralytics.data.multimodal` — one folder per dataset, named `<dataset>_mdet`.
+**The final benchmark uses R-LiViT and MID-3K**; the adapters for InfraParis, MM5
+and VDT-2048 are kept only as Phase 0 audit evidence and are not used for training
+or evaluation.
 
 Nothing here imports `ultralytics`; the only shared contract is the generated
 `data.yaml`. Upstream source stays untouched.
@@ -57,7 +60,7 @@ cross-frame radiometric comparability.
 ```bash
 # 1. extract the zipped downloads into <raw-root>/_extracted
 python tools/extract_raw.py --dataset mid3k
-python tools/extract_raw.py --dataset infraparis --only BBox Depth Infra   # skips the 60 GB Right archive
+python tools/extract_raw.py --dataset infraparis --only BBox Depth Infra   # audit only, not in the benchmark
 python tools/extract_raw.py --dataset r_livit --with-lidar   # RGB-T + LiDAR scans + calibration/mapping
 
 # 2. inspect the plan without writing anything
@@ -70,15 +73,34 @@ python tools/convert_dataset.py --dataset r_livit --limit 200 --out-root 'Y:\dat
 # 4. verify the result with the real Ultralytics loader
 python tools/validate_mdet.py --data 'Y:/dataset/MID-3K_mdet/data.yaml'
 
-# 5. write cross-dataset review tables
-python tools/summarize_datasets.py --root 'Y:/dataset' --out reports/data_statistics
+# 5. write cross-dataset review tables (benchmark datasets only)
+python tools/summarize_datasets.py --root 'Y:/dataset' --out reports/data_statistics \
+  --datasets MID-3K_mdet R-LiViT_mdet
 ```
 
-Useful flags: `--splits train,val`, `--ratios 0.8,0.1,0.1`, `--seed`, `--previews 0`,
-`--workers 4` (threaded encoding, deterministic output order), `--set key=value`
-(adapter options such as `group_bucket_minutes` or `split_suffix`), `--overwrite`
-(delete and rebuild), `--allow-existing` (write into a folder without clearing it),
-`--no-sample-level-val` (refuse the sample-level val fallback).
+Per-dataset defaults live in [`configs/datasets/`](../configs/datasets/). They are
+picked up automatically from `--dataset`, so `--dataset mid3k` and `--dataset r_livit`
+run with the paths, ratios, seed and adapter options recorded there. Precedence is
+built-in defaults < config file < CLI flags < `--set`:
+
+```bash
+python tools/convert_dataset.py --config configs/datasets/r_livit.yaml --dry-run
+python tools/convert_dataset.py --dataset mid3k --set group_bucket_minutes=7   # config + override
+python tools/convert_dataset.py --dataset mid3k --out-root 'Y:\dataset\_smoke' --limit 100 --strict
+```
+
+Useful flags: `--config PATH`, `--splits train,val`, `--ratios 0.8,0.1,0.1`, `--seed`,
+`--previews 0`, `--workers 4` (threaded encoding, deterministic output order),
+`--set key=value` (adapter options such as `group_bucket_minutes` or `split_suffix`),
+`--overwrite` (delete and rebuild), `--allow-existing` (write into a folder without
+clearing it), `--no-sample-level-val` (refuse the sample-level val fallback).
+
+`--strict` makes the command exit `1` when any warning is reported, so an unattended
+run cannot silently accept a degraded dataset. Warnings carry no severity level, so
+expected informational caveats (no official split, calibration loaded, reference
+size) also trip it; exempt them by substring with repeatable `--strict-allow`
+(e.g. `--strict-allow "no official split"`) or with `strict_allow: [...]` in the
+config file. `strict: true` in a config enables the same behaviour without the flag.
 
 `metadata/samples.jsonl` records, per sample and modality, the `dtype`, `shape`,
 `units`, `scale`, `invalid_value`, `encoding`, `source_path`, `reference_camera`,
@@ -88,10 +110,12 @@ invalid/saturated pixel fractions observed during encoding.
 `summarize_datasets.py` writes `dataset_summary.csv`, `class_distribution.csv`,
 `modality_quality.csv`, `split_leakage_report.csv` and
 `dataset_selection_report.md`. The leakage report flags any group id that appears
-in more than one split; file-hash and perceptual-hash checks are still required
-before the formal benchmark decision.
+in more than one split.
 
 ## Adapters
+
+Only `mid3k` and `r_livit` are in the final benchmark. The other three are retained
+as reference adapters; do not convert or train on them without a new decision.
 
 | key | source layout | annotations | splits |
 |---|---|---|---|

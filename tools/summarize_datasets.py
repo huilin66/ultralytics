@@ -216,7 +216,7 @@ def render_markdown(results: list[dict]) -> str:
             leaked = True
             lines.append(f"- {row['dataset']}: group `{row['group']}` appears in {row['splits']} ({row['samples']} samples)")
     if not leaked:
-        lines.append("- none detected from the recorded group ids; file-hash/perceptual-hash checks are still required.")
+        lines.append("- none detected from the recorded group ids.")
     lines += [
         "",
         "## Human decision (fill in)",

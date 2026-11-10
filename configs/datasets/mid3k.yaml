@@ -1,0 +1,20 @@
+# MID-3K -> MID-3K_mdet
+# Loaded automatically by tools/convert_dataset.py --dataset mid3k.
+# Precedence: built-in defaults < this file < CLI flags < --set options.
+dataset: mid3k
+display_name: MID-3K
+
+raw_root: Y:/dataset
+out_root: Y:/dataset
+
+# MID-3K ships no official split; samples are grouped by collection time so
+# consecutive frames of one walk stay in the same split.
+ratios: "0.8,0.1,0.1"
+seed: mdet
+previews: 6
+workers: 4
+
+options:
+  extract_root: Y:/dataset/_extracted
+  # 5-minute buckets reproduce the 54 collection groups used for the split.
+  group_bucket_minutes: 5
