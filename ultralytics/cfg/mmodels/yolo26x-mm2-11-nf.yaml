@@ -10,9 +10,8 @@ reg_max: 1
 multimodal:
   input_sections: [1, 1]
   fusion: NF
-  operator: concat
   fusion_points: [neck_P3, neck_P4, neck_P5]
-  share_weight: false
+  pretrained: false
 scales: # model compound scaling constants, i.e. 'model=yolo26n.yaml' will call yolo26.yaml with scale 'n'
   # [depth, width, max_channels]
   n: [0.50, 0.25, 1024]

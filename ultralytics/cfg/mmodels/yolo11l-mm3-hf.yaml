@@ -3,14 +3,11 @@
 # yolo11l three-modality head fusion: per-modality head projections fuse P3/P4/P5 before one Detect.
 # Input order: RGB (3) + thermal (1) + depth (1).
 nc: 80
-channels: 5
 scale: l
 multimodal:
-  input_sections: [3, 1, 1]
   fusion: HF
-  operator: concat
   fusion_points: ["head_P3", "head_P4", "head_P5"]
-  share_weight: false
+  pretrained: false
 scales:
   n: [0.5, 0.25, 1024]
   s: [0.5, 0.5, 1024]

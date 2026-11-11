@@ -3,6 +3,7 @@
 
 from copy import deepcopy
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import cv2
@@ -13,6 +14,7 @@ import torch
 from ultralytics.data.loaders import LoadImagesAndVideos
 from ultralytics.data.multimodal import Modalities, MultiModalDataset
 from ultralytics.models.multimodal import MultiModalYOLO
+from ultralytics.models.multimodal.config import load_multimodal_config
 from ultralytics.models.multimodal.fusion import parse_fusion_spec
 from ultralytics.models.multimodal.modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
 from ultralytics.models.multimodal.predict import MultiModalPredictorMixin
@@ -278,8 +280,8 @@ def test_if_coco_transfer_expands_the_first_convolution():
         "yolov8x-mm3-hf.yaml",
     ],
 )
-def test_multibranch_coco_transfer_uses_explicit_yaml_mappings(filename):
-    """Every non-IF template should copy only declared layers and initialize its new fusion projections."""
+def test_multibranch_coco_transfer_derives_the_yaml_mappings(filename):
+    """Every non-IF template should copy the donor graph derived from its own layer declarations."""
     source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
     cfg = yaml_model_load(f"ultralytics/cfg/mmodels/{filename}")
     cfg["scale"] = "n"
@@ -290,6 +292,23 @@ def test_multibranch_coco_transfer_uses_explicit_yaml_mappings(filename):
     assert report.transformed_tensors == 2
     assert report.initialized_layers
     assert report.skipped_tensors == 0
+
+
+def test_every_template_inherits_the_shared_contract():
+    """Every template must resolve base.yaml and declare only its own transfer policy."""
+    for path in sorted(Path("ultralytics/cfg/mmodels").glob("*.yaml")):
+        if path.name == "base.yaml":
+            continue
+        config = load_multimodal_config(path)
+        multimodal = config["multimodal"]
+        assert config["channels"] == sum(multimodal["input_sections"]), path.name
+        assert multimodal["operator"] == "concat", path.name
+        assert multimodal["share_weight"] is False, path.name
+        if path.name.startswith("yolov8"):
+            assert multimodal["pretrained"] == {"source": "yolov8"}, path.name
+            assert load_multimodal_config(config) == config, path.name
+        else:
+            assert multimodal["pretrained"] is False, path.name
 
 
 def test_yolo26x_multimodal_model_keeps_the_native_end2end_head():
@@ -447,8 +466,8 @@ def test_yolov8x_templates_build_and_backpropagate(path, sections, fusion_inputs
     model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
     model.args = DEFAULT_CFG
     channels = sum(sections)
-    assert cfg["channels"] == channels
-    assert list(cfg["multimodal"]["input_sections"]) == sections
+    assert model.yaml["channels"] == channels
+    assert list(model.yaml["multimodal"]["input_sections"]) == sections
 
     fusions = [layer for layer in model.model if type(layer).__name__ == "MultiModalFusion"]
     assert len(fusions) == (3 if fusion_inputs else 0)
@@ -512,9 +531,10 @@ def test_yolo11_segmentation_template_builds_and_backpropagates():
 def test_other_yolo_templates_build_and_backpropagate(arch, mode):
     """Every YOLOv8-v12 fusion template must keep its architecture's native head output and gradient path."""
     cfg = yaml_model_load(f"ultralytics/cfg/mmodels/{arch}-mm3-{mode}.yaml")
-    assert cfg["channels"] == 5
-    assert cfg["multimodal"]["fusion"] == mode.upper()
-    assert list(cfg["multimodal"]["input_sections"]) == [3, 1, 1]
+    config = load_multimodal_config(cfg)
+    assert config["channels"] == 5
+    assert config["multimodal"]["fusion"] == mode.upper()
+    assert list(config["multimodal"]["input_sections"]) == [3, 1, 1]
 
     model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
     model.args = DEFAULT_CFG
@@ -565,9 +585,10 @@ def test_every_template_scale_builds_and_grows_with_the_scale(arch, mode):
     counts = {}
     for scale in SCALE_SETS[arch]:
         cfg = yaml_model_load(f"ultralytics/cfg/mmodels/{arch}{scale}-mm3-{mode}.yaml")
-        assert cfg["channels"] == 5
-        assert cfg["multimodal"]["fusion"] == mode.upper()
-        assert list(cfg["multimodal"]["input_sections"]) == [3, 1, 1]
+        config = load_multimodal_config(cfg)
+        assert config["channels"] == 5
+        assert config["multimodal"]["fusion"] == mode.upper()
+        assert list(config["multimodal"]["input_sections"]) == [3, 1, 1]
         if cfg.get("scales"):
             expected_scale = scale if scale in "nsmlx" else next(iter(cfg["scales"]))
             assert expected_scale in cfg["scales"]

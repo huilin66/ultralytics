@@ -7,30 +7,7 @@ scale: x
 multimodal:
   input_sections: [3, 3]
   fusion: HF
-  operator: concat
   fusion_points: [head_P3, head_P4, head_P5]
-  share_weight: false
-  pretrained:
-    source: yolov8
-    copies:
-    - source:
-      - [0, 9]
-      - [10, 21]
-      target:
-      - [2, 11]
-      - [23, 34]
-      input_init: copy
-    - source:
-      - [0, 9]
-      - [10, 21]
-      target:
-      - [13, 22]
-      - [35, 46]
-      input_init: mean
-    - source: [22, 22]
-      target: [59, 59]
-    identity_projections: [47, 48, 49, 50, 51, 52]
-    fusion_projections: [54, 56, 58]
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.5, 1024]

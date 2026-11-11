@@ -3,13 +3,10 @@
 # yolov9t three-modality neck fusion: modality-specific backbones and necks fuse P3/P4/P5 before one Detect.
 # Input order: RGB (3) + thermal (1) + depth (1).
 nc: 80
-channels: 5
 multimodal:
-  input_sections: [3, 1, 1]
   fusion: NF
-  operator: concat
   fusion_points: ["neck_P3", "neck_P4", "neck_P5"]
-  share_weight: false
+  pretrained: false
 
 backbone:
   - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities

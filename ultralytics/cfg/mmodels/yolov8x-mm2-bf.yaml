@@ -7,22 +7,7 @@ scale: x
 multimodal:
   input_sections: [3, 3]
   fusion: BF
-  operator: concat
   fusion_points: [backbone_P3, backbone_P4, backbone_P5]
-  share_weight: false
-  pretrained:
-    source: yolov8
-    copies:
-    - source: [0, 9]
-      target: [2, 11]
-      input_init: copy
-    - source: [0, 9]
-      target: [13, 22]
-      input_init: mean
-    - source: [10, 22]
-      target: [29, 41]
-    fusion_projections: [24, 26, 28]
-    identity_projections: []
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.5, 1024]

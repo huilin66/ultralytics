@@ -7,26 +7,7 @@ scale: x
 multimodal:
   input_sections: [3, 3]
   fusion: NIF
-  operator: concat
   fusion_points: [encoder_P3, encoder_P4, nape_P5]
-  share_weight: false
-  pretrained:
-    source: yolov8
-    copies:
-    - source: [0, 8]
-      target: [2, 10]
-      input_init: copy
-    - source: [0, 8]
-      target: [12, 20]
-      input_init: mean
-    - source: [9, 9]
-      target: [25, 25]
-    - source: [9, 9]
-      target: [26, 26]
-    - source: [10, 22]
-      target: [30, 42]
-    fusion_projections: [22, 24, 28]
-    identity_projections: []
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.5, 1024]

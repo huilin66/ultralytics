@@ -3,16 +3,13 @@
 # YOLO26x head-feature fusion: modality-specific backbones/necks and per-scale head projections fuse before one Detect.
 # This is differentiable feature fusion, not deployment-time score fusion or independent decoded-box fusion.
 nc: 80
-channels: 5
 scale: x
 end2end: True
 reg_max: 1
 multimodal:
-  input_sections: [3, 1, 1]
   fusion: HF
-  operator: concat
   fusion_points: [head_P3, head_P4, head_P5]
-  share_weight: false
+  pretrained: false
 scales: # model compound scaling constants, i.e. 'model=yolo26n.yaml' will call yolo26.yaml with scale 'n'
   # [depth, width, max_channels]
   n: [0.50, 0.25, 1024]

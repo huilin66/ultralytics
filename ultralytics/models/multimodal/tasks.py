@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
-from ultralytics.nn.tasks import DetectionModel, SegmentationModel, yaml_model_load
+from ultralytics.nn.tasks import DetectionModel, SegmentationModel
 
+from .config import load_multimodal_config
 from .fusion import parse_fusion_spec
 from .modules import ModalFold, ModalUnfold, register_multimodal_modules
 
@@ -16,7 +17,7 @@ class MultiModalModelMixin:
 
     def __init__(self, cfg, ch=None, nc=None, verbose=True):
         """Use the YAML channel count by default and reject mismatches supplied by a data YAML."""
-        config = cfg if isinstance(cfg, dict) else yaml_model_load(cfg)
+        config = load_multimodal_config(cfg)
         configured_channels = config.get("channels")
         if not isinstance(configured_channels, int) or configured_channels < 2:
             raise ValueError("A multi-modal model YAML needs an integer 'channels' value of at least 2.")
@@ -25,7 +26,7 @@ class MultiModalModelMixin:
         elif ch != configured_channels:
             raise ValueError(f"Model YAML declares {configured_channels} channels, but received {ch}.")
         self.fusion_spec = parse_fusion_spec(config)
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=config, ch=ch, nc=nc, verbose=verbose)
         if self.fusion_spec and self.fusion_spec.share_weight:
             modules = tuple(self.model.modules())
             if not any(isinstance(module, ModalFold) for module in modules) or not any(

@@ -3,14 +3,11 @@
 # yolov10m three-modality encoder fusion: modality-specific encoders fuse P3/P4/P5, then one shared nape/neck/head.
 # Input order: RGB (3) + thermal (1) + depth (1).
 nc: 80
-channels: 5
 scale: m
 multimodal:
-  input_sections: [3, 1, 1]
   fusion: EF
-  operator: concat
   fusion_points: ["encoder_P3", "encoder_P4", "encoder_P5"]
-  share_weight: false
+  pretrained: false
 scales:
   m: [0.67, 0.75, 768]
 

@@ -3,14 +3,11 @@
 # yolo11x three-modality input fusion: RGB (3) + thermal (1) + depth (1) -> one 5-channel encoder.
 # Input order: RGB (3) + thermal (1) + depth (1).
 nc: 80
-channels: 5
 scale: x
 multimodal:
-  input_sections: [3, 1, 1]
   fusion: IF
-  operator: concat
   fusion_points: []
-  share_weight: false
+  pretrained: false
 scales:
   n: [0.5, 0.25, 1024]
   s: [0.5, 0.5, 1024]

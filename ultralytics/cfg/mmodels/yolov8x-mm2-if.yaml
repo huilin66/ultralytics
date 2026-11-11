@@ -7,15 +7,7 @@ scale: x
 multimodal:
   input_sections: [3, 3]
   fusion: IF
-  operator: concat
   fusion_points: []
-  share_weight: false
-  pretrained:
-    source: yolov8
-    copies:
-    - source: [0, 22]
-      target: [0, 22]
-      input_init: copy
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.5, 1024]

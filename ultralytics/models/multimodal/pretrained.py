@@ -10,7 +10,12 @@ import torch
 import torch.nn as nn
 
 from ultralytics.models.yolo.model import YOLO
+from ultralytics.nn.modules import Index
 from ultralytics.utils import LOGGER
+
+from .modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
+
+STRUCTURAL_MODULES = (ModalSplit, MultiModalFusion, ModalFold, ModalUnfold)
 
 
 @dataclass
@@ -50,12 +55,16 @@ def load_coco_pretrained(
     """
     target_model = _unwrap_model(target)
     plan = plan or getattr(target_model, "yaml", {}).get("multimodal", {}).get("pretrained")
+    if plan is False:
+        raise ValueError("multimodal.pretrained is disabled for this model YAML.")
     if not isinstance(plan, dict):
         raise ValueError("Multi-modal COCO transfer requires a multimodal.pretrained YAML mapping.")
     if plan.get("source") != "yolov8":
         raise ValueError(f"Only a yolov8 source is supported, got {plan.get('source')!r}.")
 
     source_model = _load_source_model(weights)
+    if "copies" not in plan:
+        plan = {**plan, **derive_copy_plan(target_model, source_model)}
     source_layers = _model_layers(source_model, "source")
     target_layers = _model_layers(target_model, "target")
     report = PretrainedTransferReport()
@@ -77,12 +86,19 @@ def load_coco_pretrained(
         for offset, (source_index, target_index) in enumerate(zip(source_indices, target_indices)):
             source_layer = _get_layer(source_layers, source_index, "source")
             target_layer = _get_layer(target_layers, target_index, "target")
+            copied_before = report.copied_tensors + report.transformed_tensors
+            has_parameters = any(parameter.numel() for parameter in target_layer.parameters())
             _copy_layer_state(
                 source_layer,
                 target_layer,
                 input_init=input_init if offset == 0 else "copy",
                 report=report,
             )
+            if has_parameters and report.copied_tensors + report.transformed_tensors == copied_before:
+                raise ValueError(
+                    f"Copy mapping {source_index}->{target_index} copied no tensors: the donor checkpoint "
+                    "does not match the target widths; pass a matching-scale checkpoint."
+                )
             report.mappings.append(f"{source_index}->{target_index}")
 
     for target_index in _layer_indices(plan.get("identity_projections", []), "identity_projections"):
@@ -97,6 +113,148 @@ def load_coco_pretrained(
     if verbose:
         LOGGER.info(f"Multi-modal COCO transfer: {report.summary()}")
     return report
+
+
+def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[str, Any]:
+    """Derive a copy plan by walking the donor and target YAML layer declarations.
+
+    The walk keeps a pointer into the donor layer list. Every ``Index`` layer starts a modality branch and
+    rewinds the pointer to the first donor layer. Two rules cover stages that are reused by several
+    modalities: a layer that repeats the declaration of the layer just copied is a replica of that donor
+    layer (YOLOv8's SPPF in the nape-in layout), and a layer that matches the first donor head layer
+    restarts the donor neck template (modality-specific necks in the nape-fusion layouts). The modality
+    whose section index is zero is the RGB branch and copies its stem exactly; every other branch averages
+    the stem input channels.
+
+    Args:
+        target (nn.Module | Any): The multi-modal task model or facade to fill.
+        source (nn.Module | Any): The donor YOLO task model or facade.
+
+    Returns:
+        (dict): ``copies``, ``identity_projections`` and ``fusion_projections`` entries for the YAML plan.
+
+    Raises:
+        ValueError: If the donor backbone cannot be mapped completely onto the target graph.
+    """
+    target_model = _unwrap_model(target)
+    source_model = _unwrap_model(source)
+    target_entries = _yaml_layer_entries(target_model, "target")
+    source_entries = _yaml_layer_entries(source_model, "source")
+    target_graph = _model_layers(target_model, "target")
+    if len(target_graph) != len(target_entries):
+        raise ValueError("The target model graph does not match its YAML layer count.")
+    backbone_length = len(source_model.yaml.get("backbone") or [])
+    if not backbone_length:
+        raise ValueError("The donor model YAML does not declare a backbone.")
+
+    copies: list[tuple[int, int, str]] = []
+    pointer = 0
+    section = 0
+    branch_start = 0
+    last_donor = None
+    last_declaration = None
+    neck_start = backbone_length if backbone_length < len(source_entries) else None
+    for index, module in enumerate(target_graph):
+        if isinstance(module, STRUCTURAL_MODULES):
+            continue
+        if isinstance(module, Index):
+            pointer, section, branch_start = 0, int(module.index), index + 1
+            last_donor = last_declaration = None
+            continue
+        entry = target_entries[index]
+        match = pointer if pointer < len(source_entries) and _same_layer(entry, source_entries[pointer]) else None
+        if match is None and last_declaration is not None and _same_layer(entry, last_declaration):
+            match = last_donor
+        if (
+            match is None
+            and neck_start is not None
+            and pointer != neck_start
+            and _same_layer(entry, source_entries[neck_start])
+        ):
+            match = neck_start
+        if match is None:
+            continue
+        copies.append((match, index, "mean" if section and index == branch_start else "copy"))
+        pointer = match + 1
+        last_donor, last_declaration = match, entry
+
+    mapped_sources = {source_index for source_index, _, _ in copies}
+    missing = [index for index in range(backbone_length) if index not in mapped_sources]
+    if not copies or missing:
+        raise ValueError(
+            "The donor backbone does not match this model graph"
+            + (f"; unmapped donor layers: {missing}" if missing else "")
+            + ". Declare multimodal.pretrained: false when a model has no matching donor."
+        )
+
+    copied_targets = {target_index for _, target_index, _ in copies}
+    identity_projections, fusion_projections = [], []
+    for index, module in enumerate(target_graph):
+        conv = None if index in copied_targets else getattr(module, "conv", None)
+        if not isinstance(conv, nn.Conv2d) or tuple(conv.kernel_size) != (1, 1) or conv.groups != 1:
+            continue
+        if conv.in_channels == conv.out_channels:
+            identity_projections.append(index)
+        elif conv.in_channels > conv.out_channels and conv.in_channels % conv.out_channels == 0:
+            fusion_projections.append(index)
+
+    return {
+        "copies": _group_copy_pairs(copies),
+        "identity_projections": identity_projections,
+        "fusion_projections": fusion_projections,
+    }
+
+
+def _yaml_layer_entries(model: nn.Module, role: str) -> list[list]:
+    """Return the YAML layer declarations of a built model in graph order."""
+    config = getattr(model, "yaml", None)
+    if not isinstance(config, dict):
+        raise TypeError(f"The {role} model does not expose a YAML config.")
+    backbone, head = config.get("backbone"), config.get("head")
+    if not isinstance(backbone, list) or not isinstance(head, list):
+        raise TypeError(f"The {role} model YAML needs backbone and head layer lists.")
+    return [*backbone, *head]
+
+
+def _same_layer(target_entry: list, source_entry: list) -> bool:
+    """Return whether two YAML entries declare the same module, repeat count and arguments."""
+    if len(target_entry) < 4 or len(source_entry) < 4:
+        return False
+    return (
+        target_entry[1] == source_entry[1]
+        and target_entry[2] == source_entry[2]
+        and target_entry[3] == source_entry[3]
+    )
+
+
+def _group_copy_pairs(copies: list[tuple[int, int, str]]) -> list[dict[str, Any]]:
+    """Group consecutive layer pairs that share one input initialization into YAML copy mappings."""
+    groups: list[dict[str, Any]] = []
+    for source_index, target_index, input_init in copies:
+        group = groups[-1] if groups else None
+        if (
+            group is not None
+            and group["input_init"] == input_init
+            and group["source"][-1] + 1 == source_index
+            and group["target"][-1] + 1 == target_index
+        ):
+            group["source"].append(source_index)
+            group["target"].append(target_index)
+        else:
+            groups.append({"source": [source_index], "target": [target_index], "input_init": input_init})
+    return [
+        {
+            "source": _inclusive_range(group["source"]),
+            "target": _inclusive_range(group["target"]),
+            "input_init": group["input_init"],
+        }
+        for group in groups
+    ]
+
+
+def _inclusive_range(indices: list[int]) -> list[int]:
+    """Return a single index or an inclusive ``[start, end]`` range accepted by the plan loader."""
+    return [indices[0], indices[-1]] if len(indices) > 1 else [indices[0]]
 
 
 def _unwrap_model(model: nn.Module | Any) -> nn.Module:
