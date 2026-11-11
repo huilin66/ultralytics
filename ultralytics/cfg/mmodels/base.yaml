@@ -8,8 +8,9 @@ multimodal:
   input_sections: [3, 1, 1]
   operator: concat
   share_weight: false
-  # Donor family only. The layer mapping is derived from the donor and target graphs by
-  # ultralytics/models/multimodal/pretrained.py; a template that has no matching donor
-  # overrides this with `pretrained: false`.
+  # Any COCO checkpoint of the template's own family and scale is accepted (`auto`); the layer
+  # mapping is derived from the donor and target graphs by
+  # ultralytics/models/multimodal/pretrained.py. Pin a family (e.g. `source: yolo11`) to reject
+  # mismatched checkpoints, or set `pretrained: false` to disable the transfer.
   pretrained:
-    source: yolov8
+    source: auto

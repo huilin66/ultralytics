@@ -7,7 +7,6 @@ scale: s
 multimodal:
   fusion: BF
   fusion_points: ["backbone_P3", "backbone_P4", "backbone_P5"]
-  pretrained: false
 scales:
   s: [0.33, 0.5, 1024]
 

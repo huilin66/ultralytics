@@ -6,7 +6,6 @@ nc: 80
 multimodal:
   fusion: HF
   fusion_points: ["head_P3", "head_P4", "head_P5"]
-  pretrained: false
 
 backbone:
   - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities
@@ -81,17 +80,17 @@ head:
   - [-1, 1, ADown, [512]]
   - [[-1, 57], 1, Concat, [1]]
   - [-1, 1, RepNCSPELAN4, [512, 512, 256, 1]]
-  - [17, 1, Conv, [512, 1, 1]] # head projection
+  - [17, 1, Conv, [256, 1, 1]] # head projection
   - [20, 1, Conv, [512, 1, 1]] # head projection
   - [23, 1, Conv, [512, 1, 1]] # head projection
-  - [40, 1, Conv, [512, 1, 1]] # head projection
+  - [40, 1, Conv, [256, 1, 1]] # head projection
   - [43, 1, Conv, [512, 1, 1]] # head projection
   - [46, 1, Conv, [512, 1, 1]] # head projection
-  - [63, 1, Conv, [512, 1, 1]] # head projection
+  - [63, 1, Conv, [256, 1, 1]] # head projection
   - [66, 1, Conv, [512, 1, 1]] # head projection
   - [69, 1, Conv, [512, 1, 1]] # head projection
   - [[70, 73, 76], 1, MultiModalFusion, ["concat"]] # fuse neck P0
-  - [-1, 1, Conv, [512, 1, 1]] # neck-P0-fused
+  - [-1, 1, Conv, [256, 1, 1]] # neck-P0-fused
   - [[71, 74, 77], 1, MultiModalFusion, ["concat"]] # fuse neck P1
   - [-1, 1, Conv, [512, 1, 1]] # neck-P1-fused
   - [[72, 75, 78], 1, MultiModalFusion, ["concat"]] # fuse neck P2

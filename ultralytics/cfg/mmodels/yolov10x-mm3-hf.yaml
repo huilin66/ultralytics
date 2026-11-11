@@ -7,7 +7,6 @@ scale: x
 multimodal:
   fusion: HF
   fusion_points: ["head_P3", "head_P4", "head_P5"]
-  pretrained: false
 scales:
   x: [1.0, 1.25, 512]
 

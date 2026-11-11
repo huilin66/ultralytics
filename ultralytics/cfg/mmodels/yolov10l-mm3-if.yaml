@@ -7,7 +7,6 @@ scale: l
 multimodal:
   fusion: IF
   fusion_points: []
-  pretrained: false
 scales:
   l: [1.0, 1.0, 512]
 

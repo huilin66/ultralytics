@@ -7,7 +7,6 @@ scale: x
 multimodal:
   fusion: HF
   fusion_points: ["head_P3", "head_P4", "head_P5"]
-  pretrained: false
 scales:
   n: [0.5, 0.25, 1024]
   s: [0.5, 0.5, 1024]
@@ -85,17 +84,17 @@ head:
   - [-1, 1, Conv, [512, 3, 2]]
   - [[-1, 54], 1, Concat, [1]]
   - [-1, 2, C3k2, [1024, true]]
-  - [16, 1, Conv, [512, 1, 1]] # head projection
+  - [16, 1, Conv, [256, 1, 1]] # head projection
   - [19, 1, Conv, [512, 1, 1]] # head projection
   - [22, 1, Conv, [1024, 1, 1]] # head projection
-  - [38, 1, Conv, [512, 1, 1]] # head projection
+  - [38, 1, Conv, [256, 1, 1]] # head projection
   - [41, 1, Conv, [512, 1, 1]] # head projection
   - [44, 1, Conv, [1024, 1, 1]] # head projection
-  - [60, 1, Conv, [512, 1, 1]] # head projection
+  - [60, 1, Conv, [256, 1, 1]] # head projection
   - [63, 1, Conv, [512, 1, 1]] # head projection
   - [66, 1, Conv, [1024, 1, 1]] # head projection
   - [[67, 70, 73], 1, MultiModalFusion, ["concat"]] # fuse neck P0
-  - [-1, 1, Conv, [512, 1, 1]] # neck-P0-fused
+  - [-1, 1, Conv, [256, 1, 1]] # neck-P0-fused
   - [[68, 71, 74], 1, MultiModalFusion, ["concat"]] # fuse neck P1
   - [-1, 1, Conv, [512, 1, 1]] # neck-P1-fused
   - [[69, 72, 75], 1, MultiModalFusion, ["concat"]] # fuse neck P2

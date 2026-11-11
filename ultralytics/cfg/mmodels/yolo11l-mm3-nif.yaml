@@ -7,7 +7,6 @@ scale: l
 multimodal:
   fusion: NIF
   fusion_points: ["encoder_P3", "encoder_P4", "nape_P5"]
-  pretrained: false
 scales:
   n: [0.5, 0.25, 1024]
   s: [0.5, 0.5, 1024]

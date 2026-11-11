@@ -7,7 +7,6 @@ scale: b
 multimodal:
   fusion: NF
   fusion_points: ["neck_P3", "neck_P4", "neck_P5"]
-  pretrained: false
 scales:
   b: [0.67, 1.0, 512]
 

@@ -6,7 +6,6 @@ nc: 80
 multimodal:
   fusion: IF
   fusion_points: []
-  pretrained: false
 
 backbone:
   - [-1, 1, Conv, [32, 3, 2]]

@@ -9,7 +9,6 @@ reg_max: 1
 multimodal:
   fusion: HF
   fusion_points: [head_P3, head_P4, head_P5]
-  pretrained: false
 scales: # model compound scaling constants, i.e. 'model=yolo26n.yaml' will call yolo26.yaml with scale 'n'
   # [depth, width, max_channels]
   n: [0.50, 0.25, 1024]

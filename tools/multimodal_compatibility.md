@@ -20,19 +20,27 @@ Ultralytics YAML has no cross-file inheritance (`yaml_model_load` only loads, gu
 records `yaml_file`), so the shared contract lives in `cfg/mmodels/base.yaml` and is merged by our own
 loader: `MultiModalModelMixin.__init__` calls `load_multimodal_config` → `deep_merge`, and a key declared
 by the model file always wins. `base.yaml` declares `channels: 5`, `multimodal.input_sections: [3, 1, 1]`,
-`multimodal.operator: concat`, `multimodal.share_weight: false` and `multimodal.pretrained: {source: yolov8}`.
+`multimodal.operator: concat`, `multimodal.share_weight: false` and `multimodal.pretrained: {source: auto}`.
 Every template therefore keeps only what makes it different:
 
 - the `mm2` files override `channels`/`input_sections` (`[1, 1]` → 2, `[3, 1]` → 4, `[3, 3]` → 6);
-- the 36 `yolov8*` templates inherit `pretrained: {source: yolov8}` and no longer spell out `copies`;
+- every template inherits `pretrained: {source: auto}` and no longer spells out `copies`;
   `load_coco_pretrained` derives the copy plan from the donor and target graphs via
   `derive_copy_plan` (the mapping is not written into the YAML);
-- the other 144 templates (`yolov9/10/11/12`, `yolo26x`) set `pretrained: false`, because a yolov8 donor
-  has no matching graph for them; `load_coco_pretrained` raises a clear error if called anyway.
+- a template can pin its donor family (`source: yolo11`) to reject a mismatched checkpoint, or set
+  `pretrained: false` to disable the transfer.
 
-`tests/test_multimodal.py::test_every_template_inherits_the_shared_contract` checks this for all 180
-files, including that re-merging an already-merged config is idempotent. Overriding any shared default is
-still possible per file, for example `multimodal: {fusion: BF, pretrained: false}`.
+All 180 templates accept a COCO checkpoint of their own architecture family and scale — `yolov8`,
+`yolov9`, `yolov10`, `yolo11`, `yolo12` and `yolo26`. The plan is derived from layer declarations, so
+the donor must use the same modules (a yolov8 `C2f` donor cannot map onto a yolo11 `C3k2` target); the
+per-pair guard rejects a checkpoint whose widths do not match. `source: auto` therefore means "use the
+checkpoint I give you if its graph maps, otherwise fail loudly".
+
+`tests/test_multimodal.py::test_every_template_inherits_the_shared_contract` checks the config contract
+for all 180 files (including that re-merging an already-merged config is idempotent), and
+`::test_every_template_loads_its_family_coco_checkpoint` builds a donor for every family/scale pair
+(27 combinations) and transfers it into every template, asserting that no target tensor is left
+untouched.
 
 ## Architectures
 
@@ -167,8 +175,8 @@ it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxe
 ## Not yet covered
 
 - Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates.
-- Pretrained COCO transfer for YOLO26 and the v9/v10/v11/v12 families (`pretrained.py` accepts only
-  `source: yolov8`, so those templates declare `pretrained: false`).
+- Real-data fine-tuning from COCO weights for v9/v10/v11/v12/YOLO26 (the transfer itself is covered by
+  `::test_every_template_loads_its_family_coco_checkpoint`; only the training run is missing).
 - Real-data train/predict for scales other than `s` in v8–v12 (build, forward, backward and parameter growth
   are covered for every scale).
 - Real-data train/predict for the x-scale YOLOv8x templates and the YOLO11 segmentation template.

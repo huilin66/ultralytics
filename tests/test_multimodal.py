@@ -304,11 +304,55 @@ def test_every_template_inherits_the_shared_contract():
         assert config["channels"] == sum(multimodal["input_sections"]), path.name
         assert multimodal["operator"] == "concat", path.name
         assert multimodal["share_weight"] is False, path.name
-        if path.name.startswith("yolov8"):
-            assert multimodal["pretrained"] == {"source": "yolov8"}, path.name
-            assert load_multimodal_config(config) == config, path.name
-        else:
-            assert multimodal["pretrained"] is False, path.name
+        assert multimodal["pretrained"] == {"source": "auto"}, path.name
+        assert load_multimodal_config(config) == config, path.name
+
+
+DONOR_CONFIGS = {
+    "yolov8": "ultralytics/cfg/models/v8/yolov8.yaml",
+    "yolov9": "ultralytics/cfg/models/v9/yolov9{scale}.yaml",
+    "yolov10": "ultralytics/cfg/models/v10/yolov10{scale}.yaml",
+    "yolo11": "ultralytics/cfg/models/11/yolo11.yaml",
+    "yolo12": "ultralytics/cfg/models/12/yolo12.yaml",
+    "yolo26": "ultralytics/cfg/models/26/yolo26.yaml",
+}
+
+
+def _template_family_and_scale(stem):
+    """Return the donor family and scale encoded in a template file stem."""
+    family = next((name for name in sorted(DONOR_CONFIGS, key=len, reverse=True) if stem.startswith(name)), None)
+    if family is None:
+        raise AssertionError(f"{stem} does not name a supported architecture family.")
+    scale = next(char for char in stem[len(family) :] if char in "nsmlxtceb")
+    return family, scale
+
+
+def _build_donor(family, scale):
+    """Build the COCO donor graph of one family and scale from the upstream YAML."""
+    cfg = yaml_model_load(DONOR_CONFIGS[family].format(scale=scale))
+    if "scales" in cfg:
+        cfg["scale"] = scale
+    return DetectionModel(cfg, verbose=False)
+
+
+def test_every_template_loads_its_family_coco_checkpoint():
+    """Every template must accept a COCO checkpoint of its own architecture family and scale."""
+    groups = {}
+    for path in sorted(Path("ultralytics/cfg/mmodels").glob("*.yaml")):
+        if path.name != "base.yaml":
+            groups.setdefault(_template_family_and_scale(path.stem), []).append(path)
+    assert len(groups) == 27, "expected one donor per family and scale"
+    for (family, scale), paths in groups.items():
+        donor = _build_donor(family, scale)
+        for path in paths:
+            cfg = yaml_model_load(path)
+            if "scales" in cfg:
+                cfg["scale"] = scale
+            target = MultiModalDetectionModel(cfg, verbose=False)
+            report = load_coco_pretrained(target, donor, verbose=False)
+            assert report.copied_tensors > 0, path.name
+            assert report.skipped_tensors == 0, path.name
+        del donor
 
 
 def test_yolo26x_multimodal_model_keeps_the_native_end2end_head():

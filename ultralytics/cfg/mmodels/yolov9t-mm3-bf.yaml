@@ -6,7 +6,6 @@ nc: 80
 multimodal:
   fusion: BF
   fusion_points: ["backbone_P3", "backbone_P4", "backbone_P5"]
-  pretrained: false
 
 backbone:
   - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities

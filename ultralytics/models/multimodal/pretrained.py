@@ -16,6 +16,7 @@ from ultralytics.utils import LOGGER
 from .modules import ModalFold, ModalSplit, ModalUnfold, MultiModalFusion
 
 STRUCTURAL_MODULES = (ModalSplit, MultiModalFusion, ModalFold, ModalUnfold)
+DONOR_FAMILIES = ("yolov8", "yolov9", "yolov10", "yolo11", "yolo12", "yolo26")
 
 
 @dataclass
@@ -42,11 +43,11 @@ def load_coco_pretrained(
     plan: dict[str, Any] | None = None,
     verbose: bool = True,
 ) -> PretrainedTransferReport:
-    """Transfer a YOLOv8 COCO checkpoint according to a model YAML semantic mapping.
+    """Transfer a YOLO COCO checkpoint according to a model YAML semantic mapping.
 
     Args:
         target (nn.Module | Any): A ``MultiModalYOLO`` facade or its underlying task model.
-        weights (str | Path | nn.Module | Any): YOLOv8 checkpoint, facade, or task model used as the source.
+        weights (str | Path | nn.Module | Any): COCO checkpoint, facade, or task model used as the source.
         plan (dict[str, Any] | None): Optional mapping. Defaults to ``target.yaml['multimodal']['pretrained']``.
         verbose (bool): Whether to log the resulting transfer report.
 
@@ -57,12 +58,20 @@ def load_coco_pretrained(
     plan = plan or getattr(target_model, "yaml", {}).get("multimodal", {}).get("pretrained")
     if plan is False:
         raise ValueError("multimodal.pretrained is disabled for this model YAML.")
+    if plan is True:
+        plan = {}
     if not isinstance(plan, dict):
         raise ValueError("Multi-modal COCO transfer requires a multimodal.pretrained YAML mapping.")
-    if plan.get("source") != "yolov8":
-        raise ValueError(f"Only a yolov8 source is supported, got {plan.get('source')!r}.")
 
     source_model = _load_source_model(weights)
+    source_family = plan.get("source", "auto")
+    if source_family not in (*DONOR_FAMILIES, "auto"):
+        raise ValueError(f"Unsupported pretrained source {source_family!r}; use one of {DONOR_FAMILIES} or 'auto'.")
+    if source_family != "auto" and _model_family(source_model) not in (None, source_family):
+        raise ValueError(
+            f"multimodal.pretrained.source is {source_family!r}, but the checkpoint belongs to "
+            f"{_model_family(source_model)!r}."
+        )
     if "copies" not in plan:
         plan = {**plan, **derive_copy_plan(target_model, source_model)}
     source_layers = _model_layers(source_model, "source")
@@ -124,7 +133,8 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
     layer (YOLOv8's SPPF in the nape-in layout), and a layer that matches the first donor head layer
     restarts the donor neck template (modality-specific necks in the nape-fusion layouts). The modality
     whose section index is zero is the RGB branch and copies its stem exactly; every other branch averages
-    the stem input channels.
+    the input channels of its first parameterized layer (stateless layers such as ``nn.Identity`` are
+    skipped).
 
     Args:
         target (nn.Module | Any): The multi-modal task model or facade to fill.
@@ -158,7 +168,7 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
         if isinstance(module, STRUCTURAL_MODULES):
             continue
         if isinstance(module, Index):
-            pointer, section, branch_start = 0, int(module.index), index + 1
+            pointer, section, branch_start = 0, int(module.index), None
             last_donor = last_declaration = None
             continue
         entry = target_entries[index]
@@ -174,7 +184,12 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
             match = neck_start
         if match is None:
             continue
-        copies.append((match, index, "mean" if section and index == branch_start else "copy"))
+        input_init = "copy"
+        if section and branch_start is None and any(parameter.numel() for parameter in module.parameters()):
+            branch_start = index
+        if section and index == branch_start:
+            input_init = "mean"
+        copies.append((match, index, input_init))
         pointer = match + 1
         last_donor, last_declaration = match, entry
 
@@ -184,7 +199,7 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
         raise ValueError(
             "The donor backbone does not match this model graph"
             + (f"; unmapped donor layers: {missing}" if missing else "")
-            + ". Declare multimodal.pretrained: false when a model has no matching donor."
+            + ". Pass a COCO checkpoint from the same architecture family and scale."
         )
 
     copied_targets = {target_index for _, target_index, _ in copies}
@@ -255,6 +270,21 @@ def _group_copy_pairs(copies: list[tuple[int, int, str]]) -> list[dict[str, Any]
 def _inclusive_range(indices: list[int]) -> list[int]:
     """Return a single index or an inclusive ``[start, end]`` range accepted by the plan loader."""
     return [indices[0], indices[-1]] if len(indices) > 1 else [indices[0]]
+
+
+def _model_family(model: nn.Module) -> str | None:
+    """Return the architecture family recorded in a model YAML path, or ``None`` when unknown."""
+    config = getattr(model, "yaml", None)
+    yaml_file = str(config.get("yaml_file", "")) if isinstance(config, dict) else ""
+    if not yaml_file:
+        return None
+    path = Path(yaml_file)
+    name = path.name.lower()
+    family = next((item for item in DONOR_FAMILIES if name.startswith(item)), None)
+    if family is not None:
+        return family
+    directories = {"v8": "yolov8", "v9": "yolov9", "v10": "yolov10", "11": "yolo11", "12": "yolo12", "26": "yolo26"}
+    return next((family for part in path.parts for key, family in directories.items() if part.lower() == key), None)
 
 
 def _unwrap_model(model: nn.Module | Any) -> nn.Module:

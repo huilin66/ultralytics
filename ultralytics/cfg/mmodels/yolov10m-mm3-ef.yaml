@@ -7,7 +7,6 @@ scale: m
 multimodal:
   fusion: EF
   fusion_points: ["encoder_P3", "encoder_P4", "encoder_P5"]
-  pretrained: false
 scales:
   m: [0.67, 0.75, 768]
 

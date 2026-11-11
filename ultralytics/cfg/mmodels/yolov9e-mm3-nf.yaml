@@ -6,7 +6,6 @@ nc: 80
 multimodal:
   fusion: NF
   fusion_points: ["neck_P3", "neck_P4", "neck_P5"]
-  pretrained: false
 
 backbone:
   - [-1, 1, ModalSplit, [[3, 1, 1]]] # split the channel-stacked modalities
@@ -142,10 +141,10 @@ head:
   - [[-1, 117], 1, Concat, [1]]
   - [-1, 1, RepNCSPELAN4, [512, 1024, 512, 2]]
   - [[37, 80, 123], 1, MultiModalFusion, ["concat"]] # fuse neck P0
-  - [-1, 1, Conv, [512, 1, 1]] # neck-P0-fused
+  - [-1, 1, Conv, [256, 1, 1]] # neck-P0-fused
   - [[40, 83, 126], 1, MultiModalFusion, ["concat"]] # fuse neck P1
-  - [-1, 1, Conv, [1024, 1, 1]] # neck-P1-fused
+  - [-1, 1, Conv, [512, 1, 1]] # neck-P1-fused
   - [[43, 86, 129], 1, MultiModalFusion, ["concat"]] # fuse neck P2
-  - [-1, 1, Conv, [1024, 1, 1]] # neck-P2-fused
+  - [-1, 1, Conv, [512, 1, 1]] # neck-P2-fused
   - [[131, 133, 135], 1, Detect, ["nc"]] # Detect(P3, P4, P5)
 
