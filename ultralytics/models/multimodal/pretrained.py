@@ -9,6 +9,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
+from ultralytics.engine.model import Model
 from ultralytics.models.yolo.model import YOLO
 from ultralytics.nn.modules import Index
 from ultralytics.utils import LOGGER
@@ -289,6 +290,8 @@ def _model_family(model: nn.Module) -> str | None:
 
 def _unwrap_model(model: nn.Module | Any) -> nn.Module:
     """Return a task model from a facade or pass through a task model."""
+    if isinstance(model, Model):  # the facade is an nn.Module itself, so it must be checked first
+        return model.model
     if isinstance(model, nn.Module):
         return model
     if isinstance(getattr(model, "model", None), nn.Module):

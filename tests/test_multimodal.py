@@ -270,6 +270,16 @@ def test_if_coco_transfer_expands_the_first_convolution():
     assert report.skipped_tensors == 0
 
 
+def test_coco_transfer_accepts_the_multimodal_facade():
+    """The public facade must be accepted directly, since it is an nn.Module without a nested ``.model``."""
+    source = DetectionModel("ultralytics/cfg/models/v8/yolov8.yaml", verbose=False)
+    facade = MultiModalYOLO("ultralytics/cfg/mmodels/yolov8n-mm3-if.yaml", task="detect")
+    report = load_coco_pretrained(facade, source, verbose=False)
+
+    assert report.copied_tensors > 300
+    assert report.transformed_tensors == 1
+
+
 @pytest.mark.parametrize(
     "filename",
     [

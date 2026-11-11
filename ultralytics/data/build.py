@@ -356,7 +356,9 @@ def build_dataloader(
     # persistent DataLoader worker pools that add overhead and can stall tiny datasets while holding CUDA context.
     nw = min(os.cpu_count() // max(nd, 1), workers, 0 if batches <= 1 else batches)  # number of workers
     generator = torch.Generator()
-    generator.manual_seed(6148914691236517205 + RANK)
+    # Derive from the seed set by init_seeds() so the `seed` argument controls shuffle order and worker-side
+    # augmentation; a constant here made every seed consume an identical data stream.
+    generator.manual_seed(torch.initial_seed() + RANK)
     return InfiniteDataLoader(
         dataset=dataset,
         batch_size=batch,

@@ -803,8 +803,8 @@ class Model(torch.nn.Module):
                     args["resume"] = False
 
         self.trainer = (trainer or self._smart_load("trainer"))(overrides=args, _callbacks=self.callbacks)
-        if not args.get("resume") and self.ckpt:
-            # Reuse the already-loaded checkpoint model to avoid re-resolving remote weight sources during trainer setup.
+        if not args.get("resume"):
+            # Reuse the already-built model (checkpoint or YAML plus any weight transfer) instead of rebuilding it.
             weights = None if pretrained is False else self.model
             if isinstance(pretrained, (str, Path)):
                 weights, _ = load_checkpoint(pretrained)

@@ -42,7 +42,7 @@ from ultralytics.utils import (
     is_github_action_running,
 )
 from ultralytics.utils.downloads import download, safe_download
-from ultralytics.utils.torch_utils import TORCH_1_11, TORCH_1_13
+from ultralytics.utils.torch_utils import TORCH_1_11, TORCH_1_13, init_seeds
 
 
 def test_dataloader_caps_workers_to_batches():
@@ -80,6 +80,21 @@ def test_dataloader_empty_dataset_uses_dataloader_validation():
     """Test empty datasets fail through DataLoader validation instead of worker-cap math."""
     with pytest.raises(ValueError, match="positive integer"):
         build_dataloader([], batch=4, workers=2)
+
+
+def test_dataloader_shuffle_follows_the_seed():
+    """Test the shuffle stream comes from the seeded generator, so different seeds see different batches."""
+
+    def first_batch(seed):
+        init_seeds(seed)
+        loader = build_dataloader(range(64), batch=8, workers=0)
+        try:
+            return next(iter(loader))
+        finally:
+            loader.close()
+
+    assert torch.equal(first_batch(0), first_batch(0))  # same seed stays reproducible
+    assert not torch.equal(first_batch(0), first_batch(1))  # a different seed must not replay the same order
 
 
 def test_cfg_rejects_fuzzed_scalars():
@@ -521,6 +536,26 @@ def test_train_scratch():
     model = YOLO(CFG)
     model.train(data="coco12-formats.yaml", epochs=2, imgsz=32, cache="disk", batch=-1, close_mosaic=1, name="model")
     model(SOURCE)
+
+
+@pytest.mark.skipif(not ONLINE, reason="environment is offline")
+@pytest.mark.skipif(IS_RASPBERRYPI, reason="Edge devices not intended for training")
+def test_train_reuses_the_built_yaml_model():
+    """Test train() hands the YAML-built model to the trainer instead of rebuilding it with random weights."""
+    model = YOLO(CFG)
+    weight = model.model.state_dict()["model.0.conv.weight"]
+    weight.fill_(0.25)  # a value no random initialization would reproduce
+    expected = weight.clone()
+    seen = {}
+
+    def on_train_start(trainer):
+        seen["weight"] = trainer.model.state_dict()["model.0.conv.weight"].clone()
+
+    model.add_callback("on_train_start", on_train_start)
+    model.train(
+        data="coco8.yaml", epochs=1, imgsz=32, batch=4, device="cpu", workers=0, val=False, plots=False, name="reuse"
+    )
+    assert torch.equal(seen["weight"], expected)
 
 
 @pytest.mark.skipif(not ONLINE, reason="environment is offline")
