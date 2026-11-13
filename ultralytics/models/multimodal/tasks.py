@@ -19,8 +19,8 @@ class MultiModalModelMixin:
         """Use the YAML channel count by default and reject mismatches supplied by a data YAML."""
         config = load_multimodal_config(cfg)
         configured_channels = config.get("channels")
-        if not isinstance(configured_channels, int) or configured_channels < 2:
-            raise ValueError("A multi-modal model YAML needs an integer 'channels' value of at least 2.")
+        if not isinstance(configured_channels, int) or configured_channels < 1:
+            raise ValueError("A multi-modal model YAML needs a positive integer 'channels' value.")
         if ch is None:
             ch = configured_channels
         elif ch != configured_channels:

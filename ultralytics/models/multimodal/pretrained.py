@@ -135,7 +135,8 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
     restarts the donor neck template (modality-specific necks in the nape-fusion layouts). The modality
     whose section index is zero is the RGB branch and copies its stem exactly; every other branch averages
     the input channels of its first parameterized layer (stateless layers such as ``nn.Identity`` are
-    skipped).
+    skipped). A single-section target is treated as a non-RGB branch, so its first parameterized layer
+    averages the donor's input channels instead of truncating them to channel zero.
 
     Args:
         target (nn.Module | Any): The multi-modal task model or facade to fill.
@@ -149,6 +150,8 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
     """
     target_model = _unwrap_model(target)
     source_model = _unwrap_model(source)
+    multimodal = (getattr(target_model, "yaml", None) or {}).get("multimodal") or {}
+    single_section = len(multimodal.get("input_sections") or []) == 1
     target_entries = _yaml_layer_entries(target_model, "target")
     source_entries = _yaml_layer_entries(source_model, "source")
     target_graph = _model_layers(target_model, "target")
@@ -160,8 +163,8 @@ def derive_copy_plan(target: nn.Module | Any, source: nn.Module | Any) -> dict[s
 
     copies: list[tuple[int, int, str]] = []
     pointer = 0
-    section = 0
-    branch_start = 0
+    section = int(single_section)
+    branch_start = None if single_section else 0
     last_donor = None
     last_declaration = None
     neck_start = backbone_length if backbone_length < len(source_entries) else None

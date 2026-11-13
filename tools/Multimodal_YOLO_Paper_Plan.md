@@ -209,7 +209,7 @@ reports/data_statistics/
 
 ## E. Phase 3 — Ultralytics 通用多模态基线
 
-- [ ] **状态：** 进行中（E1、E1.5 已完成；E2、E3 未开始）
+- [ ] **状态：** 进行中（E1、E1.5 已完成；E2 进行中，E3 未开始）
 
 ### E1. 工程目标
 
@@ -302,7 +302,7 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 
 ### E2. 必须具备的基线
 
-- [ ] **状态：** 未开始
+- [ ] **状态：** 进行中（2026-11-13 开始工程准备；B6/B7 复用 E1.5）
 
 - `B0`: RGB-only YOLO（官方预训练与标准训练）。
 - `B1`: Thermal-only，`B2`: Depth-only（输入适配与预训练策略固定）。
@@ -312,6 +312,35 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 - `B8`: RGB-T-D Gated Fusion（普通可学习门控）。
 
 比较时对模型规模、预训练初始化、输入分辨率、Epoch/更新步数、数据增强、Batch/有效 Batch、优化器、验证频率、选优规则进行控制。另增加同参数量/同 FLOPs 容量对照，避免把大模型优势归因于融合设计。
+
+#### E2 执行方案（2026-11-13 确定）
+
+**数据顺序：** 先 R-LiViT_mdet（E1.5 链路已就绪），完成后按同一矩阵铺开 MID-3K_mdet。
+
+**统一训练配方（与 E1.5 完全一致）：** COCO 预训练初始化；AdamW lr0=1e-3、lrf=0.01、cos_lr、warmup_epochs=0.5（warmup_bias_lr=0.1、warmup_momentum=0.8）、momentum=0.937、weight_decay=5e-4；batch=4 × accumulate=16（nbs=64）；imgsz=640；200 epochs；close_mosaic=10；deterministic；patience=100；seeds 0/1/2。所有 run 共用同一 split、增强与更新步预算。
+
+| ID | 输入 | 数据 YAML（R-LiViT_mdet） | 模型模板 | 来源 |
+| --- | --- | --- | --- | --- |
+| B0 | RGB (3ch) | `data-rgb.yaml` | 官方 `yolo26x.yaml`（标准 `DetectionModel`） | 新训练 ×3 |
+| B1 | Thermal (1ch) | `data-thermal.yaml` | `yolo26x-mm1-if.yaml` | 新训练 ×3 |
+| B2 | Depth (1ch) | `data-depth.yaml` | `yolo26x-mm1-if.yaml` | 新训练 ×3 |
+| B3 | RGB-T (4ch) | `data-rgb-t.yaml` | `yolo26x-mm2-31-if.yaml` | 新训练 ×3 |
+| B4 | RGB-D (4ch) | `data-rgb-d.yaml` | `yolo26x-mm2-31-if.yaml` | 新训练 ×3 |
+| B5 | T-D (2ch) | `data-t-d.yaml` | `yolo26x-mm2-11-if.yaml` | 新训练 ×3 |
+| B6 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-if.yaml` | 复用 E1.5 IF ×3 |
+| B7 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf.yaml` | 复用 E1.5 BF ×3 |
+| B8 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf-gated.yaml` | 新实现 + 新训练 ×3 |
+| C1 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf-conv.yaml` | 新实现 + 新训练 ×3 |
+
+**已定决策：**
+
+- B1/B2 采用**单通道 mm1 模板**（不复制成三通道）：`channels: 1`、`input_sections: [1]`、`fusion: IF`；COCO RGB 首层权重按输入通道均值适配（`input_init="mean"`），与 mm3 非 RGB 分支逻辑一致。已用 thermal/depth 各 1 epoch 真实数据冒烟验证（`copied=1091, transformed=1, skipped=0`）。
+- B6/B7 直接复用 E1.5 的 IF/BF 三个 seed（同数据、同配方），不重复训练。
+- B8 用普通可学习门控在 backbone P3/P4/P5 逐通道加权三模态特征后 concat（保持与 BF 相同的融合图，仅加门控），`yolo26x-mm3-bf-gated.yaml`；每模态先过恒等初始化 1×1 投影，再乘 `2*sigmoid(gate(x))`（gate 零初始化 → 初始为 1，训练起点与 BF 完全一致）；参数量与 BF 同量级；不引入 MoE 或可靠性路由（留给 Phase 4）。
+- C1 用与 B8 同位置、同参数量级的普通卷积（无门控）融合，`yolo26x-mm3-bf-conv.yaml`：恒等投影 + 零初始化残差卷积，同样精确起步于 BF；B8 与 C1 参数量逐位相同（x scale、nc=2：132,448,068 vs BF 121,817,412，各 +10,630,656），二者之差只来自门控。
+- B0 使用官方 `yolo26x.pt`；B1–B5、B8、C1 均由 COCO 权重迁移初始化。B3/B4 共用同一个 3+1 模板，仅数据 YAML 不同。
+- 新增 run 约 24 个（B0–B5 18 个、B8 3 个、C1 3 个）；按 E1.5 实测约 106 GPU·h，3×RTX 3090 约 35 h wall；复用 B6/B7 约节省 30 GPU·h。MID-3K 在 R-LiViT 完成后执行。
+- 工程状态（2026-11-13）：B8/C1 模板与 `MultiModalFusion` 的 `gated`/`conv` 算子已实现，单测覆盖初始等价、参数量相等与三处融合点的反向传播；`tools/run_e2_baselines.py` 已对 B0–B5/B8/C1 全部 8 个条件完成 1-epoch 冒烟（训练/验证/保存/重载/predict 均通过），待启动正式 200 epoch 训练。
 
 ### E3. 训练记录与评测协议
 

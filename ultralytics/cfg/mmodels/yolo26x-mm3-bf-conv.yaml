@@ -1,0 +1,94 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLO26x C1: capacity-matched plain-convolution control for the B8 gated fusion.
+# Every modality feature passes through the same two 1x1 Convs as B8, but the second is a
+# plain zero-initialized residual instead of a multiplicative gate: x -> identity_conv(x) + residual_conv(x).
+# The projection is identity-initialized and the residual is zero-initialized, so the model starts
+# exactly at BF with the same parameter count as B8.
+# The detection head, loss and post-processing stay the stock YOLO26 end-to-end path.
+nc: 80
+scale: x
+end2end: True
+reg_max: 1
+multimodal:
+  fusion: BF
+  fusion_points: [backbone_P3, backbone_P4, backbone_P5]
+scales: # model compound scaling constants, i.e. 'model=yolo26n.yaml' will call yolo26.yaml with scale 'n'
+  # [depth, width, max_channels]
+  n: [0.50, 0.25, 1024]
+  s: [0.50, 0.50, 1024]
+  m: [0.50, 1.00, 512]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.50, 512]
+
+backbone:
+  - [-1, 1, ModalSplit, [[3, 1, 1]]]
+
+  # RGB backbone: P3=6, P4=8, P5=12.
+  - [0, 1, Index, [3, 0]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 2, C3k2, [256, False, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 2, C3k2, [512, False, 0.25]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 2, C3k2, [512, True]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 2, C3k2, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5, 3, True]]
+  - [-1, 2, C2PSA, [1024]]
+
+  # Thermal backbone: P3=18, P4=20, P5=24.
+  - [0, 1, Index, [1, 1]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 2, C3k2, [256, False, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 2, C3k2, [512, False, 0.25]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 2, C3k2, [512, True]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 2, C3k2, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5, 3, True]]
+  - [-1, 2, C2PSA, [1024]]
+
+  # Depth backbone: P3=30, P4=32, P5=36.
+  - [0, 1, Index, [1, 2]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 2, C3k2, [256, False, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 2, C3k2, [512, False, 0.25]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 2, C3k2, [512, True]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 2, C3k2, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5, 3, True]]
+  - [-1, 2, C2PSA, [1024]]
+
+  # Project and add a plain per-modality residual, concatenate, then use the stock YOLO26 PAN and head.
+  - [[6, 18, 30], 1, MultiModalFusion, [conv]]
+  - [-1, 1, Conv, [512, 1, 1]] # 38: fused P3
+  - [[8, 20, 32], 1, MultiModalFusion, [conv]]
+  - [-1, 1, Conv, [512, 1, 1]] # 40: fused P4
+  - [[12, 24, 36], 1, MultiModalFusion, [conv]]
+  - [-1, 1, Conv, [1024, 1, 1]] # 42: fused P5
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 40], 1, Concat, [1]] # cat backbone P4
+  - [-1, 2, C3k2, [512, True]] # 45
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 38], 1, Concat, [1]] # cat backbone P3
+  - [-1, 2, C3k2, [256, True]] # 48 (P3/8-small)
+
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 45], 1, Concat, [1]] # cat head P4
+  - [-1, 2, C3k2, [512, True]] # 51 (P4/16-medium)
+
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 42], 1, Concat, [1]] # cat head P5
+  - [-1, 1, C3k2, [1024, True, 0.5, True]] # 54 (P5/32-large)
+
+  - [[48, 51, 54], 1, Detect, [nc]] # Detect(P3, P4, P5)

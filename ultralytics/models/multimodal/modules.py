@@ -31,18 +31,43 @@ class ModalSplit(nn.Module):
 
 
 class MultiModalFusion(nn.Module):
-    """Fuse same-stride modality features with channel concatenation or elementwise addition."""
+    """Fuse same-stride modality features with concatenation, addition, or learned per-input projections."""
 
     multi_input = True
+    OPERATORS = frozenset({"concat", "add", "conv", "gated"})
 
     def __init__(self, channels: list[int] | tuple[int, ...], operator: str = "concat"):
         """Initialize a fusion operation whose output channels are inferred by the YAML parser."""
         super().__init__()
         self.channels = tuple(channels)
-        if not isinstance(operator, str):
-            raise ValueError("MultiModalFusion operator must be 'concat' or 'add'.")
+        if not isinstance(operator, str) or operator.lower() not in self.OPERATORS:
+            raise ValueError(f"MultiModalFusion operator must be one of {sorted(self.OPERATORS)}.")
         self.operator = operator.lower()
         self._validate_channels(self.channels, self.operator)
+        self.projections = None
+        self.residuals = None
+        self.gates = None
+        if self.operator in {"conv", "gated"}:
+            self.projections = nn.ModuleList(nn.Conv2d(channels, channels, 1) for channels in self.channels)
+            for projection in self.projections:
+                identity = torch.eye(
+                    projection.out_channels, device=projection.weight.device, dtype=projection.weight.dtype
+                )
+                with torch.no_grad():
+                    projection.weight.copy_(identity.view(*identity.shape, 1, 1))
+                    projection.bias.zero_()
+            if self.operator == "conv":
+                self.residuals = nn.ModuleList(nn.Conv2d(channels, channels, 1) for channels in self.channels)
+                for residual in self.residuals:
+                    with torch.no_grad():
+                        residual.weight.zero_()
+                        residual.bias.zero_()
+            else:
+                self.gates = nn.ModuleList(nn.Conv2d(channels, channels, 1) for channels in self.channels)
+                for gate in self.gates:
+                    with torch.no_grad():
+                        gate.weight.zero_()
+                        gate.bias.zero_()
 
     @classmethod
     def output_channels(cls, channels: list[int], args: list) -> int:
@@ -50,16 +75,16 @@ class MultiModalFusion(nn.Module):
         operator = args[0] if args else "concat"
         operator = operator.lower() if isinstance(operator, str) else operator
         cls._validate_channels(channels, operator)
-        return sum(channels) if operator == "concat" else channels[0]
+        return channels[0] if operator == "add" else sum(channels)
 
     @staticmethod
     def _validate_channels(channels: list[int] | tuple[int, ...], operator: str) -> None:
         """Validate the static channel contract for a requested fusion operator."""
-        if not isinstance(operator, str) or operator not in {"concat", "add"}:
-            raise ValueError("MultiModalFusion operator must be 'concat' or 'add'.")
+        if not isinstance(operator, str) or operator.lower() not in MultiModalFusion.OPERATORS:
+            raise ValueError(f"MultiModalFusion operator must be one of {sorted(MultiModalFusion.OPERATORS)}.")
         if len(channels) < 2 or any(not isinstance(channel, int) or channel < 1 for channel in channels):
             raise ValueError("MultiModalFusion requires at least two positive channel inputs.")
-        if operator == "add" and len(set(channels)) != 1:
+        if operator.lower() == "add" and len(set(channels)) != 1:
             raise ValueError("MultiModalFusion add requires equal input channel counts; use adapters before fusion.")
 
     def forward(self, features: list[torch.Tensor] | tuple[torch.Tensor, ...]) -> torch.Tensor:
@@ -74,7 +99,13 @@ class MultiModalFusion(nn.Module):
                 )
             if feature.shape[0] != reference_shape[0] or feature.shape[2:] != reference_shape[2:]:
                 raise ValueError("MultiModalFusion requires matching batch and spatial dimensions.")
-        return torch.cat(features, dim=1) if self.operator == "concat" else torch.stack(features).sum(0)
+        if self.projections is not None:
+            features = [projection(feature) for projection, feature in zip(self.projections, features)]
+        if self.residuals is not None:
+            features = [feature + residual(feature) for residual, feature in zip(self.residuals, features)]
+        if self.gates is not None:
+            features = [feature * 2 * torch.sigmoid(gate(feature)) for gate, feature in zip(self.gates, features)]
+        return torch.cat(features, dim=1) if self.operator != "add" else torch.stack(features).sum(0)
 
 
 class ModalFold(nn.Module):

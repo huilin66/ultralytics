@@ -24,20 +24,22 @@ by the model file always wins. `base.yaml` declares `channels: 5`, `multimodal.i
 Every template therefore keeps only what makes it different:
 
 - the `mm2` files override `channels`/`input_sections` (`[1, 1]` → 2, `[3, 1]` → 4, `[3, 3]` → 6);
+- the `mm1` file declares `channels: 1`, `input_sections: [1]` and must use `fusion: IF` — a
+  single section has no fusion node (`parse_fusion_spec` rejects any other mode);
 - every template inherits `pretrained: {source: auto}` and no longer spells out `copies`;
   `load_coco_pretrained` derives the copy plan from the donor and target graphs via
   `derive_copy_plan` (the mapping is not written into the YAML);
 - a template can pin its donor family (`source: yolo11`) to reject a mismatched checkpoint, or set
   `pretrained: false` to disable the transfer.
 
-All 180 templates accept a COCO checkpoint of their own architecture family and scale — `yolov8`,
+All 183 templates accept a COCO checkpoint of their own architecture family and scale — `yolov8`,
 `yolov9`, `yolov10`, `yolo11`, `yolo12` and `yolo26`. The plan is derived from layer declarations, so
 the donor must use the same modules (a yolov8 `C2f` donor cannot map onto a yolo11 `C3k2` target); the
 per-pair guard rejects a checkpoint whose widths do not match. `source: auto` therefore means "use the
 checkpoint I give you if its graph maps, otherwise fail loudly".
 
 `tests/test_multimodal.py::test_every_template_inherits_the_shared_contract` checks the config contract
-for all 180 files (including that re-merging an already-merged config is idempotent), and
+for all 183 files (including that re-merging an already-merged config is idempotent), and
 `::test_every_template_loads_its_family_coco_checkpoint` builds a donor for every family/scale pair
 (27 combinations) and transfers it into every template, asserting that no target tensor is left
 untouched.
@@ -55,6 +57,8 @@ untouched.
 | YOLO12s | `cfg/mmodels/yolo12{nsmlx}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLO26x (det, all modes) | `cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | **development-verified 2026-11-10** |
 | YOLO26x (det, 2 modalities) | `cfg/mmodels/yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested 2026-11-10 |
+| YOLO26x (det, 1 modality) | `cfg/mmodels/yolo26x-mm1-if.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | thermal + depth 1-epoch smoke 2026-11-13 |
+| YOLO26x (det, learned fusion) | `cfg/mmodels/yolo26x-mm3-bf-{gated,conv}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | BF-gated/BF-conv 1-epoch smoke 2026-11-13 |
 | YOLOv13 | none | — | — | — | — | — | not shipped by Ultralytics 8.4.91 |
 
 YOLOv8x and YOLO11 evidence: `::test_yolov8x_templates_build_and_backpropagate` covers the 13 YOLOv8
@@ -112,7 +116,27 @@ and `::test_yolo26x_fusion_modes_build_and_backpropagate`, plus manual smoke run
   reloads it for a posed validation pass;
 - `predict(..., data=<multimodal yaml>)` loads `rgb`, `thermal` and `depth` companions;
 - a list of primary image paths is routed through `LoadImagesAndVideos`, so each sample keeps its
-  real source path (`tests/test_multimodal.py::test_multimodal_predictor_keeps_primary_paths_for_a_list_source`).
+  real source path (`tests/test_multimodal.py::test_multimodal_predictor_keeps_primary_paths_for_a_list_source`);
+- one-modality `[1]` (1 channel: thermal-only or depth-only) builds, infers and backpropagates, and
+  `derive_copy_plan` treats it as a non-RGB branch so COCO transfer averages the donor's RGB input
+  channels into the 1-channel stem (`::test_mm1_template_builds_and_backpropagates` and
+  `::test_mm1_coco_transfer_averages_the_first_convolution`; report `copied=1091, transformed=1,
+  skipped=0` on `yolo26x.pt`);
+- R-LiViT real-data 1-epoch smoke runs (thermal and depth, `fraction=0.1`, 640 px, batch 4, AdamW,
+  seed 0) train, validate, save `best.pt` and reload it for a fused validation pass;
+- the learned-fusion pair `yolo26x-mm3-bf-gated.yaml` (B8, per-channel `2*sigmoid(gate(x))`) and
+  `yolo26x-mm3-bf-conv.yaml` (C1, plain residual control) share one `MultiModalFusion` implementation
+  and differ only in the second 1×1 Conv per modality: both use identity projections plus a zero-init
+  Conv, so each starts exactly at BF and has the same parameter count (`nc=2`, `scale: x`: BF
+  121,817,412, B8 = C1 132,448,068, i.e. +10,630,656 each).
+  `::test_gated_and_conv_templates_start_at_bf_with_matched_capacity` asserts bit-identical outputs
+  after loading the BF state dict, and `::test_yolo26x_learned_fusion_templates_build_and_backpropagate`
+  asserts nonzero gradients in every gate/residual Conv and every modality stem;
+- R-LiViT B8/C1 1-epoch smoke runs (`fraction=0.1`, batch 4, AdamW, seed 0) train, validate, save,
+  reload and predict on RGB-T-D companions; the gate and residual Convs leave their zero
+  initialization as soon as the optimizer steps (checkpoint inspection). A `fraction=0.02` smoke never
+  steps the optimizer because `accumulate=16` exceeds the 9 iterations in the epoch, so its untouched
+  checkpoint is not evidence of frozen fusion.
 
 ## Real-dataset smoke run (2026-11-10)
 
@@ -174,7 +198,8 @@ it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxe
 
 ## Not yet covered
 
-- Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates.
+- Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates
+  (E2 smoke-passed 2026-11-13; full training in progress).
 - Real-data fine-tuning from COCO weights for v9/v10/v11/v12/YOLO26 (the transfer itself is covered by
   `::test_every_template_loads_its_family_coco_checkpoint`; only the training run is missing).
 - Real-data train/predict for scales other than `s` in v8–v12 (build, forward, backward and parameter growth

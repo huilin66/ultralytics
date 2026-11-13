@@ -51,8 +51,8 @@ class Modalities:
             data (dict[str, Any]): Dataset configuration containing a ``modalities`` list and resolved ``path``.
         """
         specs = data.get("modalities")
-        if not isinstance(specs, list) or len(specs) < 2:
-            raise ValueError("Multi-modal data requires a 'modalities' list with at least two entries.")
+        if not isinstance(specs, list) or not specs:
+            raise ValueError("Multi-modal data requires a non-empty 'modalities' list.")
 
         dataset_root = _logical_absolute_path(data.get("path", ""))
         modalities = []

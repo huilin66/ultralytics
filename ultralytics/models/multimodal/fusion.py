@@ -42,16 +42,18 @@ def parse_fusion_spec(config: dict[str, Any]) -> FusionSpec | None:
     channels = config.get("channels")
     if (
         not isinstance(sections, list)
-        or len(sections) < 2
+        or not sections
         or any(not isinstance(section, int) or section < 1 for section in sections)
     ):
-        raise ValueError("multimodal.input_sections must contain at least two positive integers.")
+        raise ValueError("multimodal.input_sections must contain at least one positive integer.")
     if sum(sections) != channels:
         raise ValueError(f"multimodal.input_sections sums to {sum(sections)}, but model channels={channels}.")
 
     mode = settings.get("fusion")
     if mode not in FUSION_MODES:
         raise ValueError(f"multimodal.fusion must be one of {sorted(FUSION_MODES)}, got {mode!r}.")
+    if len(sections) == 1 and mode != "IF":
+        raise ValueError("A single-section model has no fusion; multimodal.fusion must be IF.")
     operator = settings.get("operator", "concat")
     if operator not in FUSION_OPERATORS:
         raise ValueError(f"multimodal.operator must be one of {sorted(FUSION_OPERATORS)}, got {operator!r}.")

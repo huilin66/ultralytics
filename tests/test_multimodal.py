@@ -89,6 +89,51 @@ def test_modalities_reject_unaligned_images(tmp_path):
         modalities.load(tmp_path / "images" / "rgb" / "train" / "sample_0.jpg")
 
 
+def test_modalities_accept_a_single_modality(tmp_path):
+    """A single-sensor dataset should load one channel without requiring a fake companion."""
+    _write_dataset(tmp_path)
+    modalities = Modalities(
+        {
+            "path": tmp_path,
+            "channels": 1,
+            "modalities": [{"name": "thermal", "path": "images/thermal", "channels": 1, "suffix": ".png"}],
+        }
+    )
+
+    assert modalities.channels == 1
+    assert modalities.bgr_slices == ()
+    assert modalities.load(tmp_path / "images" / "thermal" / "train" / "sample_0.png").shape == (12, 20, 1)
+
+
+def test_multimodal_dataset_loads_a_single_modality(tmp_path):
+    """The mm1 layout used by single-sensor baselines should yield one-channel samples."""
+    _write_dataset(tmp_path)
+    for split in ("train", "val"):
+        target = tmp_path / "labels" / "thermal" / split
+        target.mkdir(parents=True)
+        for source in (tmp_path / "labels" / "rgb" / split).glob("*.txt"):
+            target.joinpath(source.name).write_text(source.read_text())
+
+    data = {
+        "path": tmp_path,
+        "channels": 1,
+        "names": {0: "object"},
+        "modalities": [{"name": "thermal", "path": "images/thermal", "channels": 1, "suffix": ".png"}],
+    }
+    dataset = MultiModalDataset(
+        img_path=tmp_path / "images" / "thermal" / "train",
+        imgsz=32,
+        augment=False,
+        batch_size=2,
+        data=data,
+        hyp=DEFAULT_CFG,
+    )
+
+    sample = dataset[0]["img"]
+    assert sample.shape == (1, 32, 32)
+    assert sample[0, 6, 0].item() == 20
+
+
 def test_modalities_keep_the_staged_path_when_primary_is_a_symbolic_link(tmp_path):
     """Companion lookup must use the data-YAML layout rather than resolve a linked primary image to its source."""
     source = tmp_path / "source" / "visible"
@@ -158,6 +203,20 @@ def test_multimodal_fusion_operators_validate_feature_geometry():
         MultiModalFusion([2, 2], "concat")([features[0], torch.ones(1, 2, 4, 8)])
 
 
+@pytest.mark.parametrize("operator, attribute", [("gated", "gates"), ("conv", "residuals")])
+def test_learned_fusion_operators_start_at_concatenation(operator, attribute):
+    """Both learned operators must equal concatenation at initialization while training their added Conv."""
+    features = [torch.ones(1, 2, 8, 8), torch.full((1, 2, 8, 8), 2.0)]
+    fusion = MultiModalFusion([2, 2], operator)
+    output = fusion(features)
+    assert torch.equal(output, MultiModalFusion([2, 2], "concat")(features))
+    output.sum().backward()
+    weights = getattr(fusion, attribute)
+    assert len(weights) == 2
+    for weight in weights:
+        assert weight.weight.grad is not None and weight.weight.grad.abs().sum() > 0
+
+
 def test_modal_fold_unfold_uses_one_shared_batch():
     """Fold and unfold should preserve modality order while giving a stage one larger batch."""
     features = [torch.ones(2, 2, 8, 8), torch.full((2, 2, 8, 8), 2.0), torch.full((2, 2, 8, 8), 3.0)]
@@ -186,6 +245,17 @@ def test_fusion_spec_validates_modes_channels_and_weight_sharing():
     config["multimodal"]["fusion"] = "IF"
     config["multimodal"]["fusion_points"] = []
     with pytest.raises(ValueError, match="share_weight"):
+        parse_fusion_spec(config)
+
+
+def test_fusion_spec_accepts_a_single_section():
+    """A one-sensor template should declare IF without fusion points and reject feature fusion."""
+    config = {"channels": 1, "multimodal": {"input_sections": [1], "fusion": "IF", "fusion_points": []}}
+    spec = parse_fusion_spec(config)
+
+    assert spec.input_sections == (1,)
+    config["multimodal"]["fusion"] = "BF"
+    with pytest.raises(ValueError, match="single-section"):
         parse_fusion_spec(config)
 
 
@@ -393,6 +463,48 @@ def test_yolo26x_multimodal_model_keeps_the_native_end2end_head():
         assert gradient is not None and gradient.abs().sum() > 0
 
 
+def test_mm1_template_builds_and_backpropagates():
+    """A one-sensor template should build, infer and train a 1-channel input."""
+    cfg = yaml_model_load("ultralytics/cfg/mmodels/yolo26x-mm1-if.yaml")
+    cfg["scale"] = "n"
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+
+    assert model.yaml["channels"] == 1
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, 1, 64, 64))
+    assert prediction.shape == (1, 84, 6)
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, 1, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    assert model.model[0].conv.weight.shape[1] == 1
+    assert model.model[0].conv.weight.grad.abs().sum() > 0
+
+
+def test_mm1_coco_transfer_averages_the_first_convolution():
+    """A single-sensor target should average RGB donor filters instead of copying channel zero."""
+    source_cfg = yaml_model_load("ultralytics/cfg/models/26/yolo26.yaml")
+    source_cfg["scale"] = "n"
+    source = DetectionModel(source_cfg, verbose=False)
+    cfg = yaml_model_load("ultralytics/cfg/mmodels/yolo26x-mm1-if.yaml")
+    cfg["scale"] = "n"
+    target = MultiModalDetectionModel(cfg, verbose=False)
+
+    report = load_coco_pretrained(target, source, verbose=False)
+
+    assert torch.allclose(target.model[0].conv.weight, source.model[0].conv.weight.mean(dim=1, keepdim=True))
+    assert report.transformed_tensors == 1
+    assert report.skipped_tensors == 0
+
+
 @pytest.mark.parametrize(
     "mode, branch_layers",
     [
@@ -440,6 +552,61 @@ def test_yolo26x_fusion_modes_build_and_backpropagate(mode, branch_layers):
     }[mode]
     for layer in fusion_layers:
         assert len(model.model[layer].channels) == 3
+
+
+@pytest.mark.parametrize("suffix, attribute", [("bf-gated", "gates"), ("bf-conv", "residuals")])
+def test_yolo26x_learned_fusion_templates_build_and_backpropagate(suffix, attribute):
+    """The gated and capacity-control templates must build, infer and train their added fusion Convs."""
+    cfg = yaml_model_load(f"ultralytics/cfg/mmodels/yolo26x-mm3-{suffix}.yaml")
+    cfg["scale"] = "n"
+    model = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+    model.args = DEFAULT_CFG
+    assert model.end2end is True
+
+    model.eval()
+    with torch.inference_mode():
+        prediction, _ = model(torch.zeros(1, 5, 64, 64))
+    assert prediction.shape == (1, 84, 6)
+
+    model.train()
+    batch = {
+        "img": torch.rand(2, 5, 64, 64),
+        "cls": torch.zeros(2, 1, 1),
+        "bboxes": torch.tensor([[32.0, 32.0, 24.0, 24.0], [40.0, 20.0, 16.0, 12.0]]),
+        "batch_idx": torch.tensor([0, 1]),
+    }
+    loss, _ = model(batch)
+    loss.sum().backward()
+    for layer in (37, 39, 41):
+        fusion = model.model[layer]
+        assert len(fusion.channels) == 3
+        for weight in getattr(fusion, attribute):
+            assert weight.weight.grad is not None and weight.weight.grad.abs().sum() > 0
+    for layer in (2, 14, 26):  # first convolution of the RGB, thermal and depth backbones
+        assert model.model[layer].conv.weight.grad.abs().sum() > 0
+
+
+def test_gated_and_conv_templates_start_at_bf_with_matched_capacity():
+    """B8 and C1 must both reproduce BF exactly at initialization under one identical parameter count."""
+    models = {}
+    for name in ("bf", "bf-gated", "bf-conv"):
+        cfg = yaml_model_load(f"ultralytics/cfg/mmodels/yolo26x-mm3-{name}.yaml")
+        cfg["scale"] = "n"
+        models[name] = MultiModalDetectionModel(cfg, nc=2, verbose=False)
+        models[name].args = DEFAULT_CFG
+
+    counts = {name: sum(parameter.numel() for parameter in model.parameters()) for name, model in models.items()}
+    assert counts["bf-gated"] == counts["bf-conv"] > counts["bf"]
+
+    models["bf"].eval()
+    with torch.inference_mode():
+        expected, _ = models["bf"](torch.zeros(1, 5, 64, 64))
+    for name in ("bf-gated", "bf-conv"):
+        models[name].load_state_dict(models["bf"].state_dict(), strict=False)
+        models[name].eval()
+        with torch.inference_mode():
+            actual, _ = models[name](torch.zeros(1, 5, 64, 64))
+        assert torch.equal(actual, expected), name
 
 
 @pytest.mark.parametrize(
