@@ -211,6 +211,8 @@ reports/data_statistics/
 
 - [ ] **状态：** 进行中（E1、E1.5 已完成；E2 进行中，E3 未开始）
 
+**结果口径约定：**「**正式训练结果**」= 200 epoch、3 seed、COCO 预训练、完整数据，其 val/test 数值可作为实验结论引用；「**预先测试 / 冒烟**」= 1–3 epoch 或 fraction<1 的短跑，只验证数据/训练/推理链路与显存，其 val mAP 不得作为基线或论文结果引用。
+
 ### E1. 工程目标
 
 - [x] **状态：** 已完成（2026-11-10）
@@ -226,7 +228,7 @@ reports/data_statistics/
 
 **配置统一（2026-11-10）：** Ultralytics 的 `yaml_model_load` 不支持跨文件继承，因此 180 个模板共用的契约（`channels`、`input_sections`、`operator`、`share_weight`、`pretrained` 策略）统一定义在 `ultralytics/cfg/mmodels/base.yaml`，由 `MultiModalModelMixin` 在构建前通过 `load_multimodal_config` 深度合并（模板内声明的键优先）。模板只保留自身差异：`mm2` 文件覆写通道切分，其余全部继承 `pretrained: {source: auto}` 且不手写层映射。**所有家族（v8/v9/v10/v11/v12/YOLO26）的模板均可加载本家族同规模 COCO 预训练权重**，层映射由 `derive_copy_plan` 依据 donor 与 target 的 YAML 图自动推导；`yolov9e`、`yolo11`/`yolo12` 的 head/neck 投影宽度与 `yolov9e` bf/ef/nif 的融合宽度已按 donor 实际输出通道修正。覆盖性由 `tests/test_multimodal.py::test_every_template_inherits_the_shared_contract`（配置）与 `::test_every_template_loads_its_family_coco_checkpoint`（27 个家族/规模组合 × 全部 180 个模板，跳过张量为 0）校验。
 
-连通性 smoke 结果（YOLO26x BF，1 epoch、fraction=0.1、640 px、batch 8、`pretrained=False`，RTX 5090）：
+**预先测试（非正式结果）** — 连通性 smoke 结果（YOLO26x BF，1 epoch、fraction=0.1、640 px、batch 8、`pretrained=False`，RTX 5090）：
 
 | 数据集       | Train box/cls/dfl     | Val box/cls   | P      | R      | mAP50-95 | 推理        |
 | ------------ | --------------------- | ------------- | ------ | ------ | -------- | ----------- |
@@ -235,18 +237,20 @@ reports/data_statistics/
 
 推理阶段两个数据集各用 4 张 val 主模态图（路径列表）+ 1 张（单文件）验证配对加载，均成功；置信度贴近 `conf=0.001` 下限（MID-3K 0.0119、R-LiViT 0.0016），符合 10% 训练量的预期。**这些数字只用于验证链路，不得作为基线或论文结果引用。**
 
-融合模式横向对比（R-LiViT_mdet，1 epoch、fraction=0.1、640 px、batch 4、`pretrained=False`，RTX 5090；batch 与上表不同，推理耗时不可直接比较）：
+**预先测试（非正式结果）** — 融合模式横向对比（R-LiViT_mdet，1 epoch、fraction=0.1、640 px、batch 4、`pretrained=False`，RTX 5090；batch 与上表不同，推理耗时不可直接比较）：
 
-| 模式 | 融合位置                | 参数量      | Train box/cls/dfl     | Val box/cls   | P      | R      | mAP50-95 | 推理        |
-| ---- | ----------------------- | ----------- | --------------------- | ------------- | ------ | ------ | -------- | ----------- |
-| IF   | 输入端拼接              | 58,814,916  | 4.483 / 5.620 / 0.016 | 4.411 / 5.581 | 0.0000 | 0.0240 | 0.0000   | 2.03 ms/img |
-| EF   | encoder P3/P4/P5        | 112,334,148 | 4.414 / 5.498 / 0.016 | 4.405 / 5.586 | 0.0001 | 0.0114 | 0.0000   | 4.11 ms/img |
-| NIF  | encoder P3/P4 + nape P5 | 115,287,876 | 4.311 / 5.397 / 0.015 | 4.393 / 5.588 | 0.0000 | 0.0000 | 0.0000   | 4.26 ms/img |
-| BF   | backbone P3/P4/P5       | 121,817,412 | 4.368 / 5.659 / 0.016 | 4.393 / 5.587 | 0.0000 | 0.0038 | 0.0000   | 3.97 ms/img |
-| NF   | neck P3/P4/P5           | 167,899,716 | 4.379 / 5.438 / 0.015 | 4.412 / 5.589 | 0.0000 | 0.0057 | 0.0000   | 5.44 ms/img |
-| HF   | head P3/P4/P5           | 171,892,548 | 4.303 / 5.387 / 0.015 | 4.391 / 5.566 | 0.0000 | 0.0000 | 0.0000   | 5.50 ms/img |
+| 模式 | 融合位置                | 参数量      | 峰值显存 | Train box/cls/dfl     | Val box/cls   | P      | R      | mAP50-95 | 推理        |
+| ---- | ----------------------- | ----------- | -------- | --------------------- | ------------- | ------ | ------ | -------- | ----------- |
+| IF   | 输入端拼接              | 58,814,916  | 6.86 GB  | 4.483 / 5.620 / 0.016 | 4.411 / 5.581 | 0.0000 | 0.0240 | 0.0000   | 2.03 ms/img |
+| EF   | encoder P3/P4/P5        | 112,334,148 | 11.85 GB | 4.414 / 5.498 / 0.016 | 4.405 / 5.586 | 0.0001 | 0.0114 | 0.0000   | 4.11 ms/img |
+| NIF  | encoder P3/P4 + nape P5 | 115,287,876 | 12.00 GB | 4.311 / 5.397 / 0.015 | 4.393 / 5.588 | 0.0000 | 0.0000 | 0.0000   | 4.26 ms/img |
+| BF   | backbone P3/P4/P5       | 121,817,412 | 12.41 GB | 4.368 / 5.659 / 0.016 | 4.393 / 5.587 | 0.0000 | 0.0038 | 0.0000   | 3.97 ms/img |
+| NF   | neck P3/P4/P5           | 167,899,716 | 15.63 GB | 4.379 / 5.438 / 0.015 | 4.412 / 5.589 | 0.0000 | 0.0057 | 0.0000   | 5.44 ms/img |
+| HF   | head P3/P4/P5           | 171,892,548 | 15.95 GB | 4.303 / 5.387 / 0.015 | 4.391 / 5.566 | 0.0000 | 0.0000 | 0.0000   | 5.50 ms/img |
 
 BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直接横向比较。每个模式均重载各自 `best.pt`，对 4 张 val 主模态图（路径列表）推理，`conf=0.001` 下均输出 300 个框（`max_det` 上限），最高置信度 0.0016–0.0017，与 1 epoch/10% 数据量一致。**同样只用于链路验证。**
+
+表中的峰值显存为同协议正式 run 的实测值（`torch.cuda.max_memory_allocated`，batch 4 / 640 px，RTX 3090，3 seed 最大值，见 E1.5 正式训练执行记录）；本 1-epoch 冒烟运行在 RTX 5090 且未单独记录显存。峰值显存主要由 batch、输入尺寸、模型结构与优化器状态决定，与 epoch 数无关。
 
 ### E1.5 — 融合方式预筛选（YOLO26x，正式训练前）
 
@@ -257,27 +261,29 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 - **为什么先用 YOLO26x：** 它的六个模板已完成构建、前向、反向测试，并且是当前唯一在真实数据上把六种模式全跑过一遍链路的架构，筛选成本最低。
 - **前置条件：** 预训练权重现已对全部家族与规模可用，本轮统一使用 `pretrained: {source: auto}`；不开预训练时各模式都接近随机初始化，差异基本是噪声。
 - **控制变量：** 同一数据比例、epoch、batch、输入尺寸、随机种子与增强，六个模式只改融合位置。
-- **结论使用限制：** 六模式参数量从 58.8M（IF）到 171.9M（HF）相差约 3 倍，精度差异会混入容量因素。本步只用于**筛选与排序**，不能作为「融合位置更优」的论文结论；正式结论需要 E2 的容量对照（C1）与多 seed 支撑。
+- **结论使用限制：** 六模式参数量从 58.8M（IF）到 171.9M（HF）相差约 3 倍，精度差异会混入容量因素。本步只用于**筛选与排序**，不能作为「融合位置更优」的论文结论；正式结论需要 F3 的容量对照（C1）与多 seed 支撑。
 - **产物：** 一张「模式 → 参数量 / 训练损失 / val mAP / 推理延迟」表，作为正式实验选择融合模式与分配算力的依据。
 
-#### E1.5 执行记录与结果（2026-11-13）
+#### E1.5 正式训练执行记录与结果（200 epoch × 3 seed，2026-11-13）
 
 **训练配置：** R-LiViT_mdet（train 1704 / val 216 / test 480，8 类，5 通道 RGB+T+D）；YOLO26x mm3 六模式，统一加载同家族 COCO 预训练（`pretrained: {source: auto}`）；AdamW，lr0=1e-3、lrf=0.01、cos_lr、warmup 0.5 epoch、momentum 0.937、weight_decay 5e-4，cosine 按 200 epoch 退火；batch=4、accumulate=16（等效 nbs=64）、imgsz=640、epochs=200、close_mosaic=10、deterministic=True；seed 0/1/2 各占一张 RTX 3090（24 GiB）。batch=8 在 24 GiB 上 OOM（训练器自动降为 4），因此 18 个 run 统一以 batch=4 重启，`runs/e15_rlivit_b4_200ep/` 下每个 `args.yaml` 即实际配置。
 
 **完成情况：** 18/18 run 完成（2026-11-13 06:48–06:55 UTC），总耗时约 38.6 h（3 GPU 并行）。每 epoch 耗时 IF 67–68 s、EF/NIF 107–110 s、BF 114 s、NF 140–144 s、HF 142–144 s；峰值显存 6.8–16.0 GB（IF 最低，HF 最高）。EF seed2 触发早停（best epoch 98，patience=100，实际 198 epoch）。逐 seed、逐类别的完整数据见 `runs/e15_rlivit_b4_200ep/e15_val_test_results.xlsx`（Summary / Val_Detail / Test_Detail / Test_PerClass）与 `test_eval/*.json`。
 
-**验证集（训练中每 epoch 验证，取最后一轮；mAP50-95）：**
+**正式训练验证集结果（200 epoch、3 seed；训练中每 epoch 验证，取最后一轮；mAP50-95）：**
 
-| 模式 | 融合位置                | 参数量  | seed 0 | seed 1 | seed 2 | mean ± std          | mAP50  |
-| ---- | ----------------------- | ------- | ------ | ------ | ------ | ------------------- | ------ |
-| BF   | backbone P3/P4/P5       | 121.8 M | 0.4445 | 0.4424 | 0.4381 | **0.4417 ± 0.0032** | 0.6755 |
-| IF   | 输入端拼接              | 58.8 M  | 0.4360 | 0.4448 | 0.4346 | 0.4385 ± 0.0055     | 0.6539 |
-| HF   | head P3/P4/P5           | 171.9 M | 0.4356 | 0.4428 | 0.4285 | 0.4356 ± 0.0072     | 0.6634 |
-| EF   | encoder P3/P4/P5        | 112.3 M | 0.4428 | 0.4326 | 0.4309 | 0.4354 ± 0.0064     | 0.6541 |
-| NIF  | encoder P3/P4 + nape P5 | 115.3 M | 0.4314 | 0.4406 | 0.4295 | 0.4339 ± 0.0060     | 0.6610 |
-| NF   | neck P3/P4/P5           | 167.9 M | 0.4318 | 0.4393 | 0.4082 | 0.4264 ± 0.0162     | 0.6506 |
+| 模式 | 融合位置                | 参数量  | s/epoch | seed 0 | seed 1 | seed 2 | mean ± std          | mAP50  |
+| ---- | ----------------------- | ------- | ------- | ------ | ------ | ------ | ------------------- | ------ |
+| BF   | backbone P3/P4/P5       | 121.8 M | 114.4   | 0.4445 | 0.4424 | 0.4381 | **0.4417 ± 0.0032** | 0.6755 |
+| IF   | 输入端拼接              | 58.8 M  | 67.9    | 0.4360 | 0.4448 | 0.4346 | 0.4385 ± 0.0055     | 0.6539 |
+| HF   | head P3/P4/P5           | 171.9 M | 142.6   | 0.4356 | 0.4428 | 0.4285 | 0.4356 ± 0.0072     | 0.6634 |
+| EF   | encoder P3/P4/P5        | 112.3 M | 108.7   | 0.4428 | 0.4326 | 0.4309 | 0.4354 ± 0.0064     | 0.6541 |
+| NIF  | encoder P3/P4 + nape P5 | 115.3 M | 109.7   | 0.4314 | 0.4406 | 0.4295 | 0.4339 ± 0.0060     | 0.6610 |
+| NF   | neck P3/P4/P5           | 167.9 M | 142.1   | 0.4318 | 0.4393 | 0.4082 | 0.4264 ± 0.0162     | 0.6506 |
 
-**测试集（best.pt 按 val fitness 选出后一次性评估 480 张；mAP50-95）：**
+`s/epoch` 为 3 seed 均值，逐 run 原始值在各 run 目录的 `pilot.json`；六模式峰值显存统一记录在 E1 的「融合模式横向对比」表。
+
+**正式训练测试集结果（best.pt 按 val fitness 选出后一次性评估 480 张；mAP50-95）：**
 
 | 模式 | seed 0 | seed 1 | seed 2 | mean ± std          | mAP50  | 与 BF 配对差 | val − test |
 | ---- | ------ | ------ | ------ | ------------------- | ------ | ------------ | ---------- |
@@ -292,7 +298,7 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 
 **per-class 观察（test）：** escooter 是主要短板，AP50-95 仅 0.04–0.11；car ≈0.63、person ≈0.41、tramway ≈0.62–0.71。类别间差异远大于模式间差异，正式实验应把 escooter/小目标单独报告。
 
-**筛选结论：** 正式实验主线选 **BF**；**NIF / IF / EF 保留为消融**；**NF / HF 降为补充实验**（参数量最大且 test 无优势）。该结论只用于分配算力，不能写成「backbone 融合最优」的论文结论：六模式容量相差约 3 倍，且 seed 数不足；E2 的容量对照（C1）与更多 seed 才能支撑正式结论。推理延迟留到 E3 按统一协议（batch=1）测量，本轮不作为筛选依据。
+**筛选结论：** 正式实验主线选 **BF**；**NIF / IF / EF 保留为消融**；**NF / HF 降为补充实验**（参数量最大且 test 无优势）。该结论只用于分配算力，不能写成「backbone 融合最优」的论文结论：六模式容量相差约 3 倍，且 seed 数不足；F3 的容量对照（C1）与更多 seed 才能支撑正式结论。推理延迟留到 E3 按统一协议（batch=1）测量，本轮不作为筛选依据。
 
 **已知问题（E2 前处理或记录）：**
 
@@ -302,45 +308,58 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 
 ### E2. 必须具备的基线
 
-- [ ] **状态：** 进行中（2026-11-13 开始工程准备；B6/B7 复用 E1.5）
+- [ ] **状态：** 进行中（2026-11-14 改为 BF-based branch 消融：仅 B0–B5 新训练，B7 复用 E1.5；B8/C1 移至 F3）
 
-- `B0`: RGB-only YOLO（官方预训练与标准训练）。
-- `B1`: Thermal-only，`B2`: Depth-only（输入适配与预训练策略固定）。
-- `B3`: RGB-T，`B4`: RGB-D，`B5`: T-D（统一的朴素 Fusion）。
-- `B6`: RGB-T-D Early Concat。
-- `B7`: RGB-T-D Feature Add / Concat（同位置融合）。
-- `B8`: RGB-T-D Gated Fusion（普通可学习门控）。
+- `B0`: RGB-only YOLO（官方预训练与标准训练，单分支参照）。
+- `B1`: Thermal-only，`B2`: Depth-only（单分支参照，单输入无融合）。
+- `B3`: RGB-T，`B4`: RGB-D，`B5`: T-D（`mm2-*-bf`，与 B7 同一 BF 融合架构的双分支消融）。
+- `B7`: RGB-T-D BF（三分支基准，复用 E1.5）。
+
+B8（Gated Fusion）与 C1（容量匹配普通卷积）不属于 E2，放在 F3 方法消融。
 
 比较时对模型规模、预训练初始化、输入分辨率、Epoch/更新步数、数据增强、Batch/有效 Batch、优化器、验证频率、选优规则进行控制。另增加同参数量/同 FLOPs 容量对照，避免把大模型优势归因于融合设计。
 
-#### E2 执行方案（2026-11-13 确定）
+#### E2 执行方案（2026-11-13 确定，2026-11-14 改为 BF-based branch 消融）
 
 **数据顺序：** 先 R-LiViT_mdet（E1.5 链路已就绪），完成后按同一矩阵铺开 MID-3K_mdet。
 
 **统一训练配方（与 E1.5 完全一致）：** COCO 预训练初始化；AdamW lr0=1e-3、lrf=0.01、cos_lr、warmup_epochs=0.5（warmup_bias_lr=0.1、warmup_momentum=0.8）、momentum=0.937、weight_decay=5e-4；batch=4 × accumulate=16（nbs=64）；imgsz=640；200 epochs；close_mosaic=10；deterministic；patience=100；seeds 0/1/2。所有 run 共用同一 split、增强与更新步预算。
 
-| ID | 输入 | 数据 YAML（R-LiViT_mdet） | 模型模板 | 来源 |
-| --- | --- | --- | --- | --- |
-| B0 | RGB (3ch) | `data-rgb.yaml` | 官方 `yolo26x.yaml`（标准 `DetectionModel`） | 新训练 ×3 |
-| B1 | Thermal (1ch) | `data-thermal.yaml` | `yolo26x-mm1-if.yaml` | 新训练 ×3 |
-| B2 | Depth (1ch) | `data-depth.yaml` | `yolo26x-mm1-if.yaml` | 新训练 ×3 |
-| B3 | RGB-T (4ch) | `data-rgb-t.yaml` | `yolo26x-mm2-31-if.yaml` | 新训练 ×3 |
-| B4 | RGB-D (4ch) | `data-rgb-d.yaml` | `yolo26x-mm2-31-if.yaml` | 新训练 ×3 |
-| B5 | T-D (2ch) | `data-t-d.yaml` | `yolo26x-mm2-11-if.yaml` | 新训练 ×3 |
-| B6 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-if.yaml` | 复用 E1.5 IF ×3 |
-| B7 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf.yaml` | 复用 E1.5 BF ×3 |
-| B8 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf-gated.yaml` | 新实现 + 新训练 ×3 |
-| C1 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf-conv.yaml` | 新实现 + 新训练 ×3 |
+**E2 = 基于 BF 的 branch 消融：3 个单分支输入参照 + 3 个双分支 BF 融合；B7（三分支 BF）为基准。**
+
+| ID | 输入 | 数据 YAML（R-LiViT_mdet） | 模型模板 | 分支/融合 | 来源 |
+| --- | --- | --- | --- | --- | --- |
+| B0 | RGB (3ch) | `data-rgb.yaml` | 官方 `yolo26x.yaml`（标准 `DetectionModel`） | 1 分支，无融合 | 新训练 ×3 |
+| B1 | Thermal (1ch) | `data-thermal.yaml` | `yolo26x-mm1-if.yaml` | 1 分支，无融合 | 新训练 ×3 |
+| B2 | Depth (1ch) | `data-depth.yaml` | `yolo26x-mm1-if.yaml` | 1 分支，无融合 | 新训练 ×3 |
+| B3 | RGB-T (4ch) | `data-rgb-t.yaml` | `yolo26x-mm2-31-bf.yaml` | 2 分支，BF P3/P4/P5 | 新训练 ×3 |
+| B4 | RGB-D (4ch) | `data-rgb-d.yaml` | `yolo26x-mm2-31-bf.yaml` | 2 分支，BF P3/P4/P5 | 新训练 ×3 |
+| B5 | T-D (2ch) | `data-t-d.yaml` | `yolo26x-mm2-11-bf.yaml` | 2 分支，BF P3/P4/P5 | 新训练 ×3 |
+| B7 | RGB-T-D (5ch) | `data.yaml`（E1.5） | `yolo26x-mm3-bf.yaml` | 3 分支，BF（**基准**） | 复用 E1.5 BF ×3 |
 
 **已定决策：**
 
-- B1/B2 采用**单通道 mm1 模板**（不复制成三通道）：`channels: 1`、`input_sections: [1]`、`fusion: IF`；COCO RGB 首层权重按输入通道均值适配（`input_init="mean"`），与 mm3 非 RGB 分支逻辑一致。已用 thermal/depth 各 1 epoch 真实数据冒烟验证（`copied=1091, transformed=1, skipped=0`）。
-- B6/B7 直接复用 E1.5 的 IF/BF 三个 seed（同数据、同配方），不重复训练。
-- B8 用普通可学习门控在 backbone P3/P4/P5 逐通道加权三模态特征后 concat（保持与 BF 相同的融合图，仅加门控），`yolo26x-mm3-bf-gated.yaml`；每模态先过恒等初始化 1×1 投影，再乘 `2*sigmoid(gate(x))`（gate 零初始化 → 初始为 1，训练起点与 BF 完全一致）；参数量与 BF 同量级；不引入 MoE 或可靠性路由（留给 Phase 4）。
-- C1 用与 B8 同位置、同参数量级的普通卷积（无门控）融合，`yolo26x-mm3-bf-conv.yaml`：恒等投影 + 零初始化残差卷积，同样精确起步于 BF；B8 与 C1 参数量逐位相同（x scale、nc=2：132,448,068 vs BF 121,817,412，各 +10,630,656），二者之差只来自门控。
-- B0 使用官方 `yolo26x.pt`；B1–B5、B8、C1 均由 COCO 权重迁移初始化。B3/B4 共用同一个 3+1 模板，仅数据 YAML 不同。
-- 新增 run 约 24 个（B0–B5 18 个、B8 3 个、C1 3 个）；按 E1.5 实测约 106 GPU·h，3×RTX 3090 约 35 h wall；复用 B6/B7 约节省 30 GPU·h。MID-3K 在 R-LiViT 完成后执行。
-- 工程状态（2026-11-13）：B8/C1 模板与 `MultiModalFusion` 的 `gated`/`conv` 算子已实现，单测覆盖初始等价、参数量相等与三处融合点的反向传播；`tools/run_e2_baselines.py` 已对 B0–B5/B8/C1 全部 8 个条件完成 1-epoch 冒烟（训练/验证/保存/重载/predict 均通过），待启动正式 200 epoch 训练。
+- E2 的模态贡献消融全部在 **BF 架构内**：B3–B5 与 B7 只差模态集合，分支数、融合点、neck/head、配方、seed 完全一致；不使用 IF 做双分支消融，避免融合架构与模态集合同时变化。
+- B0–B2 是单分支参照，本身没有可融合的第二路特征；mm1 的 `IF` 只是单输入模板的命名，不是早期特征融合。
+- B6（5 通道 IF）不再属于 E2；E1.5 的 IF 结果保留为“早期融合 vs BF”的补充证据，不进 E2 表。
+- B1/B2 采用**单通道 mm1 模板**（不复制成三通道）：`channels: 1`、`input_sections: [1]`；COCO RGB 首层权重按输入通道均值适配（`input_init="mean"`），与 mm3 非 RGB 分支逻辑一致。已用 thermal/depth 各 1 epoch 真实数据冒烟验证（`copied=1091, transformed=1, skipped=0`）。
+- B7 直接复用 E1.5 的 BF 三个 seed（同数据、同配方），不重复训练。
+- B0 使用官方 `yolo26x.pt`；B1–B5 均由 COCO 权重迁移初始化。B3/B4 共用同一个 3+1 模板，仅数据 YAML 不同。
+- 新增 run 共 18 个（B0–B5 各 ×3）；B3–B5 由 IF 改为双分支 BF 后单 run 约 4.5 h，B0–B2 约 3.5 h，单 seed 约 24 h，3×RTX 3090 墙钟约 24 h（约 72 GPU·h）；复用 B7 节省约 19 GPU·h。MID-3K 在 R-LiViT 完成后执行。
+- 工程状态（2026-11-14）：3 epoch × 3 seed **预先测试**完成，18/18 run 正常（`runs/e2_rlivit_3ep/`，全部有 best.pt、无 OOM）：b0 73 s/epoch 6.0 GB，b1/b2 68–71 s 5.9 GB，b3/b4/b5 97–101 s 9.5–10.3 GB；B3–B5 的 BF 模板首次在真实数据上完成训练/验证。该测试只验证链路，3 epoch 的 val mAP 不作为基线结果；下一步进入 200 epoch 正式训练。
+
+**E2 预先测试记录（2026-11-14，3 epoch × 3 seed；非正式训练结果）：**
+
+| 条件 | 输入 | 参数量 | s/epoch | 峰值显存 | 3ep val mAP50-95 | 3ep val mAP50 | P | R |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| B0 RGB | 3ch | 59.0M | 73.0 | 5.97 GB | 0.2935±0.0164 | 0.4721±0.0206 | 0.693 | 0.413 |
+| B1 Thermal | 1ch | 59.0M | 71.0 | 5.93 GB | 0.0971±0.0120 | 0.2297±0.0067 | 0.428 | 0.229 |
+| B2 Depth | 1ch | 59.0M | 68.2 | 5.93 GB | 0.0016±0.0019 | 0.0055±0.0068 | 0.091 | 0.026 |
+| B3 RGB-T | 4ch | 94.0M | 99.6 | 9.50 GB | 0.1876±0.0114 | 0.3437±0.0144 | 0.609 | 0.318 |
+| B4 RGB-D | 4ch | 94.0M | 101.1 | 10.27 GB | 0.1696±0.0076 | 0.3196±0.0115 | 0.554 | 0.307 |
+| B5 T-D | 2ch | 94.0M | 97.4 | 10.22 GB | 0.0340±0.0041 | 0.0960±0.0126 | 0.391 | 0.125 |
+
+B7 未参与该测试（E1.5 为 200 epoch，不可比）。生成命令：`python tools/summarize_e2_baselines.py --project runs/e2_rlivit_3ep --e15-project <不存在的路径>`，避免把 E1.5 的 200 epoch B7 行并入 3 epoch 表。
 
 ### E3. 训练记录与评测协议
 
@@ -363,7 +382,7 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 
 ### F1. 先做研究假设，再写 MoE
 
-预期问题：直接融合会把受噪声、缺失或对齐误差影响的模态引入主干，从而导致负迁移。**先通过 B0–B8 和分场景分析确认问题存在**，再决定是否需要 MoE。
+预期问题：直接融合会把受噪声、缺失或对齐误差影响的模态引入主干，从而导致负迁移。**先通过 B0–B7 和分场景分析确认问题存在**，再决定是否需要 MoE。
 
 ### F2. 建议的主方法：Reliability-Aware Mixture-of-Fusion-Experts
 
@@ -378,13 +397,15 @@ BF 行取自上表的 batch 8 运行，其余为 batch 4，推理耗时不可直
 | ID  | 设计                             | 要回答的问题             |
 | --- | -------------------------------- | ------------------------ |
 | A0  | Concat/Add                       | 固定融合基线             |
-| A1  | 普通 Gated Fusion                | 动态权重是否足够         |
+| A1  | 普通 Gated Fusion（B8 模板 `yolo26x-mm3-bf-gated.yaml`） | 动态权重是否足够         |
 | A2  | Fusion-MoE（无质量输入）         | 专家变换是否有额外价值   |
 | A3  | Fusion-MoE + Reliability Router  | 质量引导是否有效         |
 | A4  | A3 + Depth Validity/Quality 特征 | 质量定义是否进一步改善   |
 | A5  | A3/A4 多尺度版本                 | 跨尺度设计是否必要       |
 | A6  | A3/A4 Top-2 Sparse               | 稀疏化能否改善速度/代价  |
-| C1  | 容量匹配的普通卷积融合           | 增益是否仅由参数增加导致 |
+| C1  | 容量匹配的普通卷积融合（模板 `yolo26x-mm3-bf-conv.yaml`） | 增益是否仅由参数增加导致 |
+
+> B8/C1 实现细节：两者都在 BF 的 backbone P3/P4/P5 融合点先做恒等初始化的 1×1 投影；B8 再乘 `2*sigmoid(gate(x))`（gate 零初始化，训练起点与 BF 完全一致），C1 改为加零初始化残差卷积。二者参数逐位相同（x scale、nc=2：132,448,068 vs BF 121,817,412，各 +10,630,656），差值只来自门控；`MultiModalFusion` 的 `gated`/`conv` 算子与单测已就绪，F 阶段直接复用。
 
 若某模块没有稳定增益，移除它，不为了凑创新点而保留。要求可视化专家使用率、路由熵、逐尺度权重，并检查专家塌缩与跨场景行为。
 

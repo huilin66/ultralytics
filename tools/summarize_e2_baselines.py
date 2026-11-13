@@ -1,9 +1,10 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-"""Aggregate the E2 baseline matrix into one comparison table.
+"""Aggregate the E2 BF-based branch ablation into one comparison table.
 
 Reads ``<project>/seed*_summary.json`` (or per-run ``e2.json`` while a process
-is still running), joins B6/B7 from the published E1.5 runs, and reports
-mean/std of the final-epoch validation metrics per condition plus parameters.
+is still running), joins B7 (three-branch BF) from the published E1.5 runs, and
+reports mean/std of the final-epoch validation metrics per condition plus
+parameters.
 
 Example:
     python tools/summarize_e2_baselines.py
@@ -20,10 +21,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-ITEMS = ("b0-rgb", "b1-thermal", "b2-depth", "b3-rgb-t", "b4-rgb-d", "b5-t-d", "b6-if", "b7-bf", "b8-gated", "c1-conv")
+ITEMS = ("b0-rgb", "b1-thermal", "b2-depth", "b3-rgb-t", "b4-rgb-d", "b5-t-d", "b7-bf")
 KEYS = ("metrics/mAP50-95(B)", "metrics/mAP50(B)", "metrics/precision(B)", "metrics/recall(B)")
-# B6/B7 reuse the E1.5 runs: item -> fusion mode recorded in that project.
-E15_REUSE = {"b6-if": "if", "b7-bf": "bf"}
+# B7 reuses the E1.5 BF runs: item -> fusion mode recorded in that project.
+E15_REUSE = {"b7-bf": "bf"}
 
 
 def load_rows(project: Path) -> dict[str, dict[int, dict]]:
@@ -64,13 +65,10 @@ def param_counts() -> dict[str, float]:
             "b0-rgb": "official",
             "b1-thermal": "yolo26x-mm1-if.yaml",
             "b2-depth": "yolo26x-mm1-if.yaml",
-            "b3-rgb-t": "yolo26x-mm2-31-if.yaml",
-            "b4-rgb-d": "yolo26x-mm2-31-if.yaml",
-            "b5-t-d": "yolo26x-mm2-11-if.yaml",
-            "b6-if": "yolo26x-mm3-if.yaml",
+            "b3-rgb-t": "yolo26x-mm2-31-bf.yaml",
+            "b4-rgb-d": "yolo26x-mm2-31-bf.yaml",
+            "b5-t-d": "yolo26x-mm2-11-bf.yaml",
             "b7-bf": "yolo26x-mm3-bf.yaml",
-            "b8-gated": "yolo26x-mm3-bf-gated.yaml",
-            "c1-conv": "yolo26x-mm3-bf-conv.yaml",
         }
         for item in ITEMS:
             template = templates[item]

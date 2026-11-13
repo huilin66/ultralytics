@@ -1,9 +1,13 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-"""Run one seed of the E2 baseline matrix (R-LiViT, B0-B5 + B8 + C1).
+"""Run one seed of the E2 branch ablation (R-LiViT, B0-B5).
+
+E2 is a BF-based branch ablation: B0-B2 are single-branch references (no fusion),
+B3-B5 fuse two branches with BF (``mm2-*-bf``), and B7 (three-branch BF) reuses
+the published E1.5 runs. B8/C1 are fusion-operator controls and belong to F3.
 
 Each process owns one GPU and runs every new condition for its seed, so three
-processes give seeds 0/1/2 in parallel. B6 (IF) and B7 (BF) reuse the published
-E1.5 runs and are intentionally absent here; the summarizer joins them in.
+processes give seeds 0/1/2 in parallel. B7 (BF) is intentionally absent here;
+the summarizer joins it in.
 
 Every condition trains with the identical E1.5 recipe: COCO transfer, AdamW at
 lr0=1e-3, cosine decay, 200 epochs, imgsz 640, physical batch 4 with nbs=64.
@@ -35,11 +39,9 @@ RUNS = {
     "b0-rgb": {"model": "official", "data": "data-rgb.yaml"},
     "b1-thermal": {"model": "yolo26x-mm1-if.yaml", "data": "data-thermal.yaml"},
     "b2-depth": {"model": "yolo26x-mm1-if.yaml", "data": "data-depth.yaml"},
-    "b3-rgb-t": {"model": "yolo26x-mm2-31-if.yaml", "data": "data-rgb-t.yaml"},
-    "b4-rgb-d": {"model": "yolo26x-mm2-31-if.yaml", "data": "data-rgb-d.yaml"},
-    "b5-t-d": {"model": "yolo26x-mm2-11-if.yaml", "data": "data-t-d.yaml"},
-    "b8-gated": {"model": "yolo26x-mm3-bf-gated.yaml", "data": "data.yaml"},
-    "c1-conv": {"model": "yolo26x-mm3-bf-conv.yaml", "data": "data.yaml"},
+    "b3-rgb-t": {"model": "yolo26x-mm2-31-bf.yaml", "data": "data-rgb-t.yaml"},
+    "b4-rgb-d": {"model": "yolo26x-mm2-31-bf.yaml", "data": "data-rgb-d.yaml"},
+    "b5-t-d": {"model": "yolo26x-mm2-11-bf.yaml", "data": "data-t-d.yaml"},
 }
 
 

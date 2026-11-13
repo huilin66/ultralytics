@@ -56,7 +56,7 @@ untouched.
 | YOLO11 (seg) | `cfg/models/multimodal/yolo11-mm3-bf-seg.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested, task inference tested |
 | YOLO12s | `cfg/mmodels/yolo12{nsmlx}-mm3-{mode}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | R-LiViT smoke 2026-11-10 |
 | YOLO26x (det, all modes) | `cfg/mmodels/yolo26x-mm3-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | **development-verified 2026-11-10** |
-| YOLO26x (det, 2 modalities) | `cfg/mmodels/yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | — | — | build/forward/backward tested 2026-11-10 |
+| YOLO26x (det, 2 modalities) | `cfg/mmodels/yolo26x-mm2-{31,11}-{if,ef,nif,bf,nf,hf}.yaml` | ✅ | ✅ | ✅ | ✅ | — | build/forward/backward tested 2026-11-10; mm2 BF real-data train/val in the E2 3-epoch × 3-seed test 2026-11-14 |
 | YOLO26x (det, 1 modality) | `cfg/mmodels/yolo26x-mm1-if.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | thermal + depth 1-epoch smoke 2026-11-13 |
 | YOLO26x (det, learned fusion) | `cfg/mmodels/yolo26x-mm3-bf-{gated,conv}.yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | BF-gated/BF-conv 1-epoch smoke 2026-11-13 |
 | YOLOv13 | none | — | — | — | — | — | not shipped by Ultralytics 8.4.91 |
@@ -198,11 +198,13 @@ it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxe
 
 ## Not yet covered
 
-- Two-modality `data.yaml` subsets (B3–B5) and real-data train/predict runs for the `mm2` templates
-  (E2 smoke-passed 2026-11-13; full training in progress).
+- Two-modality `data.yaml` subsets (B3–B5): train/val are covered by the E2 3-epoch × 3-seed test
+  (2026-11-14, `runs/e2_rlivit_3ep/`); reload-and-predict on the `mm2` checkpoints and full 200-epoch
+  training are still pending.
 - Real-data fine-tuning from COCO weights for v9/v10/v11/v12/YOLO26 (the transfer itself is covered by
   `::test_every_template_loads_its_family_coco_checkpoint`; only the training run is missing).
 - Real-data train/predict for scales other than `s` in v8–v12 (build, forward, backward and parameter growth
   are covered for every scale).
 - Real-data train/predict for the x-scale YOLOv8x templates and the YOLO11 segmentation template.
-- Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B8 baseline matrix.
+- Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B7 baseline matrix (B8/C1
+  learned-fusion templates are reserved for the F3 method ablation).
