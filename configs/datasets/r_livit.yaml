@@ -4,8 +4,8 @@
 dataset: r_livit
 display_name: R-LiViT
 
-raw_root: Y:/dataset
-out_root: Y:/dataset
+raw_root: /srv/nas/home/dataset
+out_root: /srv/nas/home/dataset
 
 # The release has train/test sequences only; val is carved from train groups.
 ratios: "0.8,0.1,0.1"
@@ -14,7 +14,7 @@ previews: 6
 workers: 4
 
 options:
-  extract_root: Y:/dataset/_extracted
+  extract_root: /srv/nas/home/dataset/_extracted
   # Project LiDAR scans to RGB with calibration_params.json. Images are shipped
   # undistorted, so the pinhole K is used without distortion coefficients.
   include_lidar_depth: true

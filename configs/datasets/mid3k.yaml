@@ -4,8 +4,8 @@
 dataset: mid3k
 display_name: MID-3K
 
-raw_root: Y:/dataset
-out_root: Y:/dataset
+raw_root: /srv/nas/home/dataset
+out_root: /srv/nas/home/dataset
 
 # MID-3K ships no official split; samples are grouped by collection time so
 # consecutive frames of one walk stay in the same split.
@@ -15,6 +15,6 @@ previews: 6
 workers: 4
 
 options:
-  extract_root: Y:/dataset/_extracted
+  extract_root: /srv/nas/home/dataset/_extracted
   # 5-minute buckets reproduce the 54 collection groups used for the split.
   group_bucket_minutes: 5

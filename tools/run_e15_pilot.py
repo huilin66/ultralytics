@@ -48,6 +48,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--lr0", type=float, default=1e-3)
     parser.add_argument("--lrf", type=float, default=0.01)
     parser.add_argument("--warmup-epochs", type=float, default=0.5)
+    parser.add_argument("--close-mosaic", type=int, default=0, help="epochs without mosaic at the end (10 for long runs)")
     parser.add_argument("--project", default=str(REPO / "runs" / "e15_rlivit"))
     parser.add_argument("--overwrite", action="store_true", help="rerun even when a finished run exists")
     return parser.parse_args(argv)
@@ -111,7 +112,7 @@ def run_one(args: argparse.Namespace, mode: str) -> dict:
         "lrf": args.lrf,
         "cos_lr": True,
         "warmup_epochs": args.warmup_epochs,
-        "close_mosaic": 0,
+        "close_mosaic": args.close_mosaic,
         "seed": args.seed,
         "deterministic": True,
         "val": True,
