@@ -199,12 +199,14 @@ it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxe
 ## Not yet covered
 
 - Two-modality `data.yaml` subsets (B3–B5): train/val are covered by the E2 3-epoch × 3-seed test
-  (2026-11-14, `runs/e2_rlivit_3ep/`); reload-and-predict on the `mm2` checkpoints and full 200-epoch
-  training are still pending.
+  (2026-11-14, `runs/e2_rlivit_3ep/`) and by the 200-epoch × 3-seed runs plus reload-and-evaluate on the
+  frozen test split (`runs/e2_rlivit/{b3-rgb-t,b4-rgb-d,b5-t-d}-seed*/`, `runs/e2_rlivit/test_eval/`);
+  reload-and-predict on images from the `mm2` checkpoints is still pending.
 - Real-data fine-tuning from COCO weights for v9/v10/v11/v12/YOLO26 (the transfer itself is covered by
   `::test_every_template_loads_its_family_coco_checkpoint`; only the training run is missing).
 - Real-data train/predict for scales other than `s` in v8–v12 (build, forward, backward and parameter growth
   are covered for every scale).
 - Real-data train/predict for the x-scale YOLOv8x templates and the YOLO11 segmentation template.
-- Formal (full-epoch, multi-seed) training on R-LiViT / MID-3K and the B0–B7 baseline matrix (B8/C1
-  learned-fusion templates are reserved for the F3 method ablation).
+- Formal (full-epoch, multi-seed) training on R-LiViT is done for the E2 B0–B7 matrix (200 epoch × 3 seeds,
+  2026-11-14); the MID-3K matrix is still pending. B8/C1 learned-fusion templates remain reserved for the F3
+  method ablation.
