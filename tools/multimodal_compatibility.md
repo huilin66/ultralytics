@@ -196,6 +196,53 @@ parameter counts because their nape tail is a single layer; YOLO12s EF/NIF/BF ar
 it has no nape tail at all. At `conf=0.001` the Detect head returns 35–52 boxes, while YOLOv10's end2end
 `v10Detect` returns the 300-box `max_det` cap; all confidences are ≈0.0016–0.0017.
 
+## Efficiency (2026-11-15)
+
+Measured on the 12 trained R-LiViT checkpoints: RTX 3090 24 GiB, `model.fuse()`, fp16, batch=1,
+640×640. Each model gets 20 warm-up passes and then 3 rounds × 100 iterations timed with
+`torch.cuda.Event`, keeping the median. Models are measured interleaved — a single sequential pass drifts
+by up to 27% because the GPU clocks ramp up during the first model (B0 measured 16.5 ms first, 13.0 ms
+last), while interleaved rounds stay within 3%. Latency covers the network forward only; decoding,
+resizing and normalising the RGB/T/D files is excluded. GFLOPs comes from `thop.profile` on an fp32 input
+with the correct stacked channel count (see Known issues for why `get_flops()` cannot do this).
+
+| Model | Branches / fusion | Input channels | Params fused (M) | GFLOPs | Latency (ms) | FPS |
+|---|---|---|---|---|---|---|
+| B0 RGB (official YOLO26x) | 1 | 3 | 55.6 | 96.7 | 13.02 | 76.8 |
+| B1 thermal (`mm1-if`) | 1 | 1 | 55.6 | 96.5 | 13.05 | 76.7 |
+| B2 depth (`mm1-if`) | 1 | 1 | 55.6 | 96.5 | 13.08 | 76.4 |
+| B3 RGB-T (`mm2-31-bf`) | 2, BF | 4 | 90.7 | 162.9 | 20.64 | 48.4 |
+| B4 RGB-D (`mm2-31-bf`) | 2, BF | 4 | 90.7 | 162.9 | 20.89 | 47.9 |
+| B5 T-D (`mm2-11-bf`) | 2, BF | 2 | 90.7 | 162.7 | 20.80 | 48.1 |
+| A0 IF (`mm3-if`) | 1 (input stack) | 5 | 55.6 | 96.9 | 13.00 | 76.9 |
+| A1 EF (`mm3-ef`) | 3, encoder | 5 | 109.1 | 218.2 | 23.40 | 42.7 |
+| A2 NIF (`mm3-nif`) | 3, encoder+nape | 5 | 112.1 | 219.3 | 23.89 | 41.9 |
+| A3/B7 BF (`mm3-bf`) | 3, backbone | 5 | 118.6 | 221.9 | 26.55 | 37.7 |
+| A4 NF (`mm3-nf`) | 3, neck | 5 | 164.7 | 282.1 | 36.39 | 27.5 |
+| A5 HF (`mm3-hf`) | 3, head | 5 | 168.6 | 288.5 | 36.96 | 27.1 |
+
+Latency tracks GFLOPs linearly. Compared with a single branch, two-branch BF costs +38% latency
+(76.8 → 48 FPS) and three-branch BF costs +29% on top of two branches (48 → 37.7 FPS). NF and HF spend
+27–30% more FLOPs than BF and score lower on the frozen test split (`runs/e2_rlivit/test_eval/`), so
+neither is defensible on efficiency grounds. Raw rows: `runs/e2_rlivit/flops_fps.json`.
+
+## Known issues
+
+- `get_flops()` returns 0.0 for every multimodal model. It sizes the dummy input from the channel count of
+  the first parameter's convolution, but a multimodal graph starts with `ModalSplit`, which expects the
+  stacked channel count (5 for `mm3`); the 3-channel probe raises `ValueError` inside the `try` and the
+  zero is returned. Consequence: `yolo val` summaries never print GFLOPs for these models. The efficiency
+  table above therefore calls `thop.profile` directly. The fix belongs in `get_flops`, which should take
+  the model's declared input channels rather than the first convolution's.
+- Checkpoints saved before 2026-11-13 15:30 UTC (`e406b4a26`) cannot forward on the current code.
+  That commit added `projections` / `residuals` / `gates` to `MultiModalFusion` and `forward` references
+  them unconditionally; instances pickled earlier carry no such attributes, so loading one raises
+  `AttributeError: 'MultiModalFusion' object has no attribute 'projections'`. Every E1.5 checkpoint
+  (A0–A5) is affected, including the ones whose test scores are published; E2 checkpoints are not.
+  Running them requires restoring the three attributes to `None` (the correct value for the `concat`
+  operator) — the efficiency rows for A1–A5 were measured that way. The fix belongs in the class's own
+  deserialisation (restore defaults for older state), not as a `getattr` fallback inside `forward`.
+
 ## Not yet covered
 
 - Two-modality `data.yaml` subsets (B3–B5): train/val are covered by the E2 3-epoch × 3-seed test
