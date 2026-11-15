@@ -209,7 +209,7 @@ reports/data_statistics/
 
 ## E. Phase 3 — Ultralytics 通用多模态基线
 
-- [ ] **状态：** 进行中（E1、E1.5 已完成；E2 的 R-LiViT 矩阵已完成，MID-3K 矩阵未开始；E3 进行中，效率指标已实测）
+- [ ] **状态：** 进行中（E1、E1.5、E3 已完成；E2 的 R-LiViT 矩阵已完成，MID-3K 矩阵未开始）
 
 **结果口径约定：**「**正式训练结果**」= 200 epoch、3 seed、COCO 预训练、完整数据，其 val/test 数值可作为实验结论引用；「**预先测试 / 冒烟**」= 1–3 epoch 或 fraction<1 的短跑，只验证数据/训练/推理链路与显存，其 val mAP 不得作为基线或论文结果引用。
 
@@ -413,7 +413,7 @@ B7 未参与该测试（E1.5 为 200 epoch，不可比）。生成命令：`pyth
 
 ### E3. 训练记录与评测协议
 
-- [ ] **状态：** 进行中（2026-11-15：已补 GFLOPs 与 batch=1 推理延迟/FPS；显存沿用 E1/E2 的训练峰值；按 2026-11-15 决定，不记录 dataset/split checksum、Git SHA、checkpoint hash）
+- [x] **状态：** 已完成（2026-11-15 通过）。三项按 2026-11-15 决定豁免、不阻塞验收：small-object AP 不统计；推理显存用 E1/E2 训练峰值代替 batch=1 单测；dataset/split checksum、Git SHA、checkpoint hash 不记录（配置与权重路径随各 run 的 `args.yaml` 与 `weights/` 保留）。
 
 - 划分：官方 split 优先；缺 val 时仅从训练组按场景/序列分组生成，测试集始终冻结。R-LiViT 官方只提供 train/test 序列，val 必须从 train 组内切出且不得与 test 重叠；MID-3K 无官方划分，按采集时间组切分。两者的测试集在确定后即冻结，不得用 Test 调参。
 - 采用验证集 mAP50-95 选择单个最佳 checkpoint；不得根据 Test 调超参数/挑模型。
