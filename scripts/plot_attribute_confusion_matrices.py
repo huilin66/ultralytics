@@ -35,7 +35,7 @@ import numpy as np
 
 
 DEFAULT_MODELS: Tuple[str, ...] = ("YOLOv10x", "MAYOLOx")
-DEFAULT_LEVEL_NAMES: Tuple[str, ...] = ("No risk", "High risk")
+DEFAULT_LEVEL_NAMES: Tuple[str, ...] = ("Absent", "Present")
 
 
 def _parser() -> argparse.ArgumentParser:
