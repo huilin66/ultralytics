@@ -823,3 +823,150 @@ Ordinal MAE 等价于二分类属性错误率；Calibration 指标使用完整 s
     YOLOv10x_confusion_row_normalized.png
     MAYOLOx_confusion_counts.png
     MAYOLOx_confusion_row_normalized.png
+
+## 7. End-to-end attribute metrics
+
+### 7.1 Protocol and validation
+
+This section adds end-to-end attribute metrics without replacing the existing
+conditional metrics. The data were evaluated from
+`Z:\huilin\backup\ubda_backup\data\billboard\mayolo_v3` and the checkpoint
+weights were read from
+`Z:\huilin\backup\ubda_backup\ultralytics\runs\experiments`. The legacy
+conditional metrics use the original confidence-floor protocol (`conf=0.001`),
+whereas the new end-to-end operating point uses `conf=0.25`, NMS IoU `0.7`,
+and matching IoU `0.5`.
+
+For end-to-end scoring, only class-correct one-to-one matches are used. Matches
+are assigned greedily in descending IoU order. A matched pair contributes the
+attribute decision of the predicted box; a missed ground-truth instance
+contributes FN for its Present attributes; an unmatched prediction contributes
+FP for its predicted Present attributes. Absent attributes on unmatched
+objects are not counted as TN. Duplicate boxes and wrong-class boxes are
+therefore handled as unmatched predictions. `Precision_e2e`, `Recall_e2e`,
+and `F1_macro_e2e` are macro averages over the ten binary attribute channels.
+Each row reports the mean and sample standard deviation over five seeds.
+
+Before adding these results, the original metrics were re-evaluated using the
+same data, weights, and legacy protocol. The five-seed attribute metrics for
+E5 and E6 matched the previous results (differences below numerical precision),
+and the representative YOLOv10x and MAYOLOx checks also matched. The mean mAP50
+differences for E5 and E6 were `+0.000052` and `-0.000173`, respectively; this
+does not change the reported rounded values. RT-DETR was checked with its
+attribute-aware RT-DETR validator rather than the ordinary detection validator.
+
+The evaluator and aggregation code are:
+
+    scripts/eval_end_to_end_attributes.py
+    scripts/eval_end_to_end_e5_e6.py
+    scripts/aggregate_e2e_results.py
+
+### 7.2 Table 4: Main-model Test comparison
+
+| Model | n | Precision_e2e | Recall_e2e | Macro-F1_e2e |
+|---|---:|---:|---:|---:|
+| MAYOLOb | 5 | 0.249754 ± 0.063187 | 0.124029 ± 0.017809 | 0.156670 ± 0.029491 |
+| MAYOLOl | 5 | 0.207409 ± 0.038246 | 0.102427 ± 0.020493 | 0.131022 ± 0.022067 |
+| MAYOLOm | 5 | 0.187175 ± 0.061764 | 0.104415 ± 0.010127 | 0.125810 ± 0.014177 |
+| MAYOLOn | 5 | 0.181352 ± 0.099008 | 0.090988 ± 0.038556 | 0.110650 ± 0.050967 |
+| MAYOLOs | 5 | 0.200390 ± 0.062323 | 0.107041 ± 0.015330 | 0.133758 ± 0.021885 |
+| MAYOLOx | 5 | 0.212575 ± 0.081637 | 0.125526 ± 0.048637 | 0.150000 ± 0.057982 |
+| RT-DETR-L | 5 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 |
+| RT-DETR-X | 5 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 |
+| YOLOv10b | 5 | 0.245190 ± 0.044071 | 0.126690 ± 0.014322 | 0.163728 ± 0.019143 |
+| YOLOv10l | 5 | 0.166992 ± 0.059092 | 0.105140 ± 0.039103 | 0.124518 ± 0.044027 |
+| YOLOv10m | 5 | 0.224760 ± 0.060131 | 0.105965 ± 0.034316 | 0.132992 ± 0.032286 |
+| YOLOv10n | 5 | 0.117357 ± 0.073872 | 0.036491 ± 0.019192 | 0.053092 ± 0.029171 |
+| YOLOv10s | 5 | 0.190770 ± 0.068360 | 0.064766 ± 0.012040 | 0.090006 ± 0.017607 |
+| YOLOv10x | 5 | 0.211895 ± 0.120930 | 0.106749 ± 0.064672 | 0.134398 ± 0.077393 |
+| YOLOv11l | 5 | 0.221544 ± 0.043397 | 0.134351 ± 0.031210 | 0.157346 ± 0.031415 |
+| YOLOv11m | 5 | 0.204399 ± 0.041660 | 0.113965 ± 0.038063 | 0.140256 ± 0.036916 |
+| YOLOv11n | 5 | 0.119061 ± 0.056992 | 0.059327 ± 0.027632 | 0.074653 ± 0.034090 |
+| YOLOv11s | 5 | 0.164535 ± 0.092689 | 0.081257 ± 0.038651 | 0.104487 ± 0.054086 |
+| YOLOv11x | 5 | 0.277813 ± 0.067729 | 0.163193 ± 0.037011 | 0.197949 ± 0.036100 |
+| YOLOv12l | 5 | 0.185842 ± 0.013329 | 0.146930 ± 0.032035 | 0.150954 ± 0.013552 |
+| YOLOv12m | 5 | 0.185900 ± 0.046117 | 0.114415 ± 0.028542 | 0.129028 ± 0.026313 |
+| YOLOv12n | 5 | 0.151844 ± 0.059597 | 0.062164 ± 0.034182 | 0.079080 ± 0.038556 |
+| YOLOv12s | 5 | 0.164684 ± 0.042977 | 0.101047 ± 0.030539 | 0.121657 ± 0.033089 |
+| YOLOv12x | 5 | 0.219846 ± 0.104147 | 0.142649 ± 0.050603 | 0.163416 ± 0.061783 |
+| YOLOv13l | 5 | 0.214512 ± 0.102700 | 0.140018 ± 0.028038 | 0.159822 ± 0.041610 |
+| YOLOv13n | 5 | 0.097439 ± 0.065444 | 0.053713 ± 0.027514 | 0.063708 ± 0.030858 |
+| YOLOv13s | 5 | 0.110354 ± 0.045764 | 0.078977 ± 0.024940 | 0.087647 ± 0.027665 |
+| YOLOv13x | 5 | 0.214508 ± 0.061114 | 0.114251 ± 0.032356 | 0.136210 ± 0.038403 |
+| YOLOv26l | 5 | 0.221394 ± 0.047659 | 0.111807 ± 0.019888 | 0.138792 ± 0.023646 |
+| YOLOv26m | 5 | 0.142335 ± 0.050167 | 0.087251 ± 0.040034 | 0.103632 ± 0.041114 |
+| YOLOv26n | 5 | 0.096548 ± 0.108414 | 0.031053 ± 0.022264 | 0.043911 ± 0.033251 |
+| YOLOv26s | 5 | 0.109669 ± 0.042013 | 0.056374 ± 0.022463 | 0.071839 ± 0.027038 |
+| YOLOv26x | 5 | 0.170729 ± 0.056339 | 0.096930 ± 0.027680 | 0.115954 ± 0.031880 |
+| YOLOv8l | 5 | 0.220751 ± 0.049443 | 0.139848 ± 0.021648 | 0.165841 ± 0.028343 |
+| YOLOv8m | 5 | 0.236615 ± 0.054857 | 0.091316 ± 0.016979 | 0.118732 ± 0.023679 |
+| YOLOv8n | 5 | 0.131493 ± 0.043182 | 0.081696 ± 0.026470 | 0.093928 ± 0.022731 |
+| YOLOv8s | 5 | 0.097441 ± 0.032432 | 0.065643 ± 0.018148 | 0.073384 ± 0.017012 |
+| YOLOv8x | 5 | 0.188283 ± 0.029852 | 0.111368 ± 0.036323 | 0.132776 ± 0.038673 |
+| YOLOv9c | 5 | 0.217879 ± 0.056830 | 0.139702 ± 0.062841 | 0.157243 ± 0.057067 |
+| YOLOv9e | 5 | 0.216515 ± 0.083762 | 0.155871 ± 0.053930 | 0.173492 ± 0.062038 |
+| YOLOv9m | 5 | 0.172759 ± 0.018411 | 0.107193 ± 0.013015 | 0.125783 ± 0.011661 |
+| YOLOv9s | 5 | 0.175087 ± 0.035266 | 0.083181 ± 0.032320 | 0.102334 ± 0.029334 |
+| YOLOv9t | 5 | 0.115402 ± 0.070705 | 0.039825 ± 0.018114 | 0.056544 ± 0.027402 |
+
+Raw aggregate: `runs/experiments/E2E_attribute_metrics/table4_all_test_conf025_final_agg.csv`.
+
+### 7.3 Table 5: Multi-label detection and two-stage detection + classification
+
+| Model | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
+|---|---:|---:|---:|---:|---:|
+| E5 | 5 | 0.472065 ± 0.036617 | 0.142714 ± 0.070769 | 0.040994 ± 0.017399 | 0.060551 ± 0.025563 |
+| E6 | 5 | 0.557895 ± 0.013243 | 0.057889 ± 0.008849 | 0.050000 ± 0.010206 | 0.051564 ± 0.005107 |
+
+Raw summaries: `runs/experiments/E2E_attribute_metrics/table5_e5_test_conf025_fixed/summary.csv` and `runs/experiments/E2E_attribute_metrics/table5_e6_test_conf025_fixed/summary.csv`.
+
+### 7.4 Table 6: w4 validation sensitivity
+
+| w4 | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
+|---|---:|---:|---:|---:|---:|
+| 0.0 | 5 | 0.597665 ± 0.024081 | 0.037150 ± 0.008412 | 0.328464 ± 0.092027 | 0.062928 ± 0.012176 |
+| 0.5 | 5 | 0.592996 ± 0.026902 | 0.361734 ± 0.034653 | 0.185798 ± 0.051255 | 0.231050 ± 0.045657 |
+| 1.0 | 5 | 0.584436 ± 0.022921 | 0.381976 ± 0.081432 | 0.202446 ± 0.038299 | 0.247831 ± 0.046742 |
+
+Raw aggregate: `runs/experiments/E2E_attribute_metrics/table6_w4_val_conf025_agg.csv`.
+
+### 7.5 Table 7: GIA position validation
+
+| Variant | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
+|---|---:|---:|---:|---:|---:|
+| Baseline | 5 | 0.592996 ± 0.026902 | 0.361734 ± 0.034653 | 0.185798 ± 0.051255 | 0.231050 ± 0.045657 |
+| GIA-p10 | 5 | 0.592218 ± 0.039624 | 0.335211 ± 0.033218 | 0.172173 ± 0.032284 | 0.217975 ± 0.029513 |
+| GIA-p22 | 5 | 0.579767 ± 0.019455 | 0.311812 ± 0.057185 | 0.162500 ± 0.039937 | 0.202364 ± 0.044994 |
+| GIA-p5-7 | 5 | 0.585992 ± 0.038969 | 0.329659 ± 0.080419 | 0.177250 ± 0.042532 | 0.219020 ± 0.043156 |
+
+Raw aggregate: `runs/experiments/E2E_attribute_metrics/table7_gia_val_conf025_agg.csv`.
+
+### 7.6 Table 8: GCA structure validation
+
+| Variant | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
+|---|---:|---:|---:|---:|---:|
+| Baseline | 5 | 0.592996 ± 0.026902 | 0.361734 ± 0.034653 | 0.185798 ± 0.051255 | 0.231050 ± 0.045657 |
+| GCA-GAT | 5 | 0.592996 ± 0.026902 | 0.389038 ± 0.046828 | 0.177833 ± 0.050491 | 0.229392 ± 0.048514 |
+| GCA-GCN | 5 | 0.592996 ± 0.026902 | 0.363226 ± 0.029510 | 0.181131 ± 0.053114 | 0.228194 ± 0.048434 |
+| GCA-GIN | 5 | 0.592996 ± 0.026902 | 0.371150 ± 0.059962 | 0.183405 ± 0.052506 | 0.229191 ± 0.050073 |
+| GCA-GRAPHSAGE | 5 | 0.592996 ± 0.026902 | 0.371144 ± 0.060947 | 0.182167 ± 0.054009 | 0.228520 ± 0.050801 |
+
+Raw aggregate: `runs/experiments/E2E_attribute_metrics/table8_gca_val_conf025_agg.csv`.
+
+### 7.7 Table 9: Ablation Test comparison
+
+The ablation results are shown separately for the native and one-to-many
+inference heads because they are distinct inference modes.
+
+| Variant | Mode | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
+|---|---|---:|---:|---:|---:|---:|
+| Baseline | native | 5 | 0.577328 ± 0.034186 | 0.211895 ± 0.120930 | 0.106749 ± 0.064672 | 0.134398 ± 0.077393 |
+| GIA | native | 5 | 0.570850 ± 0.030966 | 0.213833 ± 0.064733 | 0.117690 ± 0.050937 | 0.146400 ± 0.057143 |
+| GCA-GIN | native | 5 | 0.577328 ± 0.034186 | 0.216523 ± 0.129303 | 0.114029 ± 0.067826 | 0.139285 ± 0.078732 |
+| GIA-GCA-GIN | native | 5 | 0.570850 ± 0.030966 | 0.209479 ± 0.071469 | 0.119415 ± 0.047392 | 0.143531 ± 0.052004 |
+| Baseline | one2many | 5 | 0.612955 ± 0.027548 | 0.198219 ± 0.095526 | 0.096251 ± 0.057900 | 0.119786 ± 0.066133 |
+| GIA | one2many | 5 | 0.609717 ± 0.021727 | 0.210616 ± 0.083771 | 0.120526 ± 0.038674 | 0.146280 ± 0.049876 |
+| GCA-GIN | one2many | 5 | 0.612955 ± 0.027548 | 0.183379 ± 0.084690 | 0.095585 ± 0.056857 | 0.114163 ± 0.059820 |
+| GIA-GCA-GIN | one2many | 5 | 0.609717 ± 0.021727 | 0.214575 ± 0.084093 | 0.127193 ± 0.050711 | 0.150000 ± 0.057982 |
+
+Raw aggregates: `runs/experiments/E2E_attribute_metrics/table9_ablation_test_conf025_final_agg.csv` and `runs/experiments/E2E_attribute_metrics/table9_ablation_test_conf025_one2many_only_agg.csv`.

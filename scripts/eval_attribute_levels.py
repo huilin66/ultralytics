@@ -35,6 +35,11 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate detailed test attribute/level metrics")
     parser.add_argument("--data", required=True, help="mdet dataset YAML")
     parser.add_argument(
+        "--data-root",
+        default=None,
+        help="Optional runtime override for the dataset YAML path field",
+    )
+    parser.add_argument(
         "--model",
         action="append",
         required=True,
@@ -347,8 +352,12 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
 
 def main() -> None:
     args = _parser().parse_args()
+    from mdet_eval_utils import resolved_data_yaml
+
     output_dir = Path(args.project) / args.name
-    results = [_evaluate_one(args, *_parse_model_spec(spec)) for spec in args.model]
+    with resolved_data_yaml(args.data, args.data_root) as resolved_data:
+        args.data = resolved_data
+        results = [_evaluate_one(args, *_parse_model_spec(spec)) for spec in args.model]
     _write_rows(output_dir / "summary.csv", [result["summary"] for result in results])
     _write_rows(output_dir / "per_class_test.csv", [row for result in results for row in result["per_class"]])
     _write_rows(
