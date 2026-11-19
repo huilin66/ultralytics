@@ -1,11 +1,12 @@
-"""Evaluate end-to-end attribute metrics for multi-attribute detection.
+"""Evaluate end-to-end two-level attribute metrics for multi-attribute detection.
 
 The existing attribute metrics are conditional: they are computed only on
 class-correct detections matched to ground truth at IoU >= 0.5.  This script
-keeps those metrics untouched and additionally counts end-to-end positive
-attribute decisions.  Missed ground-truth objects contribute FN for their
-Present attributes; unmatched predictions contribute FP for predicted Present
-attributes.  Absent attributes on unmatched objects are not fabricated as TN.
+keeps those metrics untouched and additionally computes the same two-level
+Precision, Recall, Macro-F1, and Micro-F1 formulation end to end.  Missed
+ground-truth objects contribute FN for their ground-truth level, and unmatched
+predictions contribute FP for their predicted level, including the Absent
+level.
 """
 
 from __future__ import annotations
@@ -69,8 +70,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--conf",
         type=float,
-        default=0.25,
-        help="Detection confidence threshold for the end-to-end operating point (default: 0.25)",
+        default=0.001,
+        help="Detection confidence threshold for end-to-end evaluation (default: 0.001)",
     )
     parser.add_argument("--iou", type=float, default=0.7, help="NMS IoU threshold")
     parser.add_argument("--iou-match", type=float, default=0.5, help="GT/prediction matching IoU")
@@ -122,7 +123,7 @@ def _greedy_class_correct_matches(
 
 
 class EndToEndMDetectionValidator:
-    """MDetectionValidator plus positive-level end-to-end accounting."""
+    """MDetectionValidator plus two-level end-to-end accounting."""
 
     use_rtdetr_validator = False
 
@@ -140,13 +141,13 @@ class EndToEndMDetectionValidator:
         class _Validator(BaseMDetectionValidator):
             def init_metrics(self, model):
                 super().init_metrics(model)
-                self.e2e_tp = np.zeros(self.na, dtype=np.int64)
-                self.e2e_fp = np.zeros(self.na, dtype=np.int64)
-                self.e2e_fn = np.zeros(self.na, dtype=np.int64)
+                self.e2e_tp = np.zeros((self.na, self.nal), dtype=np.int64)
+                self.e2e_fp = np.zeros((self.na, self.nal), dtype=np.int64)
+                self.e2e_fn = np.zeros((self.na, self.nal), dtype=np.int64)
                 self.e2e_gt_instances = 0
                 self.e2e_pred_instances = 0
                 self.e2e_matched_instances = 0
-                self.e2e_gt_positive_support = np.zeros(self.na, dtype=np.int64)
+                self.e2e_gt_level_support = np.zeros((self.na, self.nal), dtype=np.int64)
 
             def _decode_attribute_levels(self, pred_attributes: torch.Tensor) -> torch.Tensor:
                 if self.multiclass_attributes:
@@ -190,11 +191,15 @@ class EndToEndMDetectionValidator:
                 self.e2e_gt_instances += len(gt_classes)
                 self.e2e_pred_instances += len(predn)
                 if len(gt_attributes_np):
-                    self.e2e_gt_positive_support += (gt_attributes_np == 1).sum(axis=0)
+                    for level in range(self.nal):
+                        self.e2e_gt_level_support[:, level] += (gt_attributes_np == level).sum(axis=0)
 
-                pred_levels = self._decode_attribute_levels(
-                    predn[:, 6 : 6 + self.attribute_channels]
-                ).detach().cpu().numpy()
+                if len(predn):
+                    pred_levels = self._decode_attribute_levels(
+                        predn[:, 6 : 6 + self.attribute_channels]
+                    ).detach().cpu().numpy()
+                else:
+                    pred_levels = np.empty((0, self.na), dtype=np.int64)
                 gt_idx, pred_idx = _greedy_class_correct_matches(
                     gt_boxes,
                     predn[:, :4],
@@ -209,52 +214,80 @@ class EndToEndMDetectionValidator:
                 for gi, pi in zip(gt_idx, pred_idx):
                     matched_gt[gi] = True
                     matched_pred[pi] = True
-                    gt = gt_attributes_np[gi] == 1
-                    pred_level = pred_levels[pi] == 1
-                    self.e2e_tp += gt & pred_level
-                    self.e2e_fp += ~gt & pred_level
-                    self.e2e_fn += gt & ~pred_level
+                    gt_levels = gt_attributes_np[gi]
+                    predicted_levels = pred_levels[pi]
+                    for attribute in range(self.na):
+                        gt_level = int(gt_levels[attribute])
+                        predicted_level = int(predicted_levels[attribute])
+                        if gt_level == predicted_level:
+                            self.e2e_tp[attribute, gt_level] += 1
+                        else:
+                            self.e2e_fp[attribute, predicted_level] += 1
+                            self.e2e_fn[attribute, gt_level] += 1
 
                 if len(gt_attributes_np):
-                    self.e2e_fn += ((gt_attributes_np[~matched_gt] == 1).sum(axis=0)).astype(np.int64)
+                    for gt_levels in gt_attributes_np[~matched_gt]:
+                        for attribute, gt_level in enumerate(gt_levels):
+                            self.e2e_fn[attribute, int(gt_level)] += 1
                 if len(pred_levels):
-                    self.e2e_fp += ((pred_levels[~matched_pred] == 1).sum(axis=0)).astype(np.int64)
+                    for predicted_levels in pred_levels[~matched_pred]:
+                        for attribute, predicted_level in enumerate(predicted_levels):
+                            self.e2e_fp[attribute, int(predicted_level)] += 1
 
             def _e2e_summary(self) -> dict[str, Any]:
                 precision = np.divide(
                     self.e2e_tp,
                     self.e2e_tp + self.e2e_fp,
-                    out=np.zeros(self.na, dtype=np.float64),
+                    out=np.zeros((self.na, self.nal), dtype=np.float64),
                     where=(self.e2e_tp + self.e2e_fp) > 0,
                 )
                 recall = np.divide(
                     self.e2e_tp,
                     self.e2e_tp + self.e2e_fn,
-                    out=np.zeros(self.na, dtype=np.float64),
+                    out=np.zeros((self.na, self.nal), dtype=np.float64),
                     where=(self.e2e_tp + self.e2e_fn) > 0,
                 )
                 f1 = np.divide(
                     2 * precision * recall,
                     precision + recall,
-                    out=np.zeros(self.na, dtype=np.float64),
+                    out=np.zeros((self.na, self.nal), dtype=np.float64),
                     where=(precision + recall) > 0,
                 )
                 names = list(self.attribute_names.keys())
                 per_attribute = []
                 for i in range(self.na):
+                    attribute_precision = float(np.mean(precision[i]))
+                    attribute_recall = float(np.mean(recall[i]))
+                    attribute_f1 = float(np.mean(f1[i]))
                     per_attribute.append(
                         {
                             "attribute_index": i,
                             "attribute": names[i] if i < len(names) else str(i),
-                            "gt_present_support": int(self.e2e_gt_positive_support[i]),
-                            "TP": int(self.e2e_tp[i]),
-                            "FP": int(self.e2e_fp[i]),
-                            "FN": int(self.e2e_fn[i]),
-                            "Precision_e2e": float(precision[i]),
-                            "Recall_e2e": float(recall[i]),
-                            "F1_e2e": float(f1[i]),
+                            "gt_absent_support": int(self.e2e_gt_level_support[i, 0]),
+                            "gt_present_support": int(self.e2e_gt_level_support[i, 1])
+                            if self.nal > 1
+                            else 0,
+                            "TP": int(self.e2e_tp[i].sum()),
+                            "FP": int(self.e2e_fp[i].sum()),
+                            "FN": int(self.e2e_fn[i].sum()),
+                            "Precision_macro_e2e": attribute_precision,
+                            "Recall_macro_e2e": attribute_recall,
+                            "F1_macro_e2e": attribute_f1,
                         }
                     )
+                macro_precision = float(np.mean(precision))
+                macro_recall = float(np.mean(recall))
+                macro_f1 = float(np.mean(f1))
+                micro_tp = float(self.e2e_tp.sum())
+                micro_fp = float(self.e2e_fp.sum())
+                micro_fn = float(self.e2e_fn.sum())
+                micro_precision = micro_tp / (micro_tp + micro_fp) if micro_tp + micro_fp else 0.0
+                micro_recall = micro_tp / (micro_tp + micro_fn) if micro_tp + micro_fn else 0.0
+                micro_f1 = (
+                    2.0 * micro_precision * micro_recall / (micro_precision + micro_recall)
+                    if micro_precision + micro_recall
+                    else 0.0
+                )
                 return {
                     "detection_recall_e2e": self.e2e_matched_instances / self.e2e_gt_instances
                     if self.e2e_gt_instances
@@ -262,9 +295,12 @@ class EndToEndMDetectionValidator:
                     "gt_instances": self.e2e_gt_instances,
                     "pred_instances": self.e2e_pred_instances,
                     "matched_instances": self.e2e_matched_instances,
-                    "Precision_e2e": float(np.mean(precision)) if len(precision) else 0.0,
-                    "Recall_e2e": float(np.mean(recall)) if len(recall) else 0.0,
-                    "F1_macro_e2e": float(np.mean(f1)) if len(f1) else 0.0,
+                    "F1_macro_e2e": macro_f1,
+                    "Precision_macro_e2e": macro_precision,
+                    "Recall_macro_e2e": macro_recall,
+                    "Precision_micro_e2e": micro_precision,
+                    "Recall_micro_e2e": micro_recall,
+                    "F1_micro_e2e": micro_f1,
                     "per_attribute": per_attribute,
                 }
 

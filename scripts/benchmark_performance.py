@@ -495,7 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--warmup", type=int, default=50)
     parser.add_argument("--iterations", type=int, default=200)
-    parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold for end-to-end postprocessing")
+    parser.add_argument("--conf", type=float, default=0.001, help="Confidence threshold for end-to-end postprocessing")
     parser.add_argument("--iou", type=float, default=0.7, help="IoU threshold for end-to-end NMS")
     parser.add_argument("--max-det", type=int, default=300, help="Maximum detections per image")
     parser.add_argument("--fuse", action="store_true", help="Fuse Conv-BN layers before benchmarking")

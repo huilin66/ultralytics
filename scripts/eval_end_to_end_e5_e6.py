@@ -1,4 +1,4 @@
-"""Compute end-to-end positive-attribute metrics for the E5/E6 baselines.
+"""Compute end-to-end two-level attribute metrics for the E5/E6 baselines.
 
 E5 is a one-box multi-label detector.  E6 is a detector followed by a
 multi-label crop classifier.  The original E5/E6 summaries are conditional on
@@ -48,9 +48,12 @@ E2E_FIELDS = (
     "gt_instances",
     "pred_instances",
     "matched_instances",
-    "Precision_e2e",
-    "Recall_e2e",
+    "Precision_macro_e2e",
+    "Recall_macro_e2e",
     "F1_macro_e2e",
+    "Precision_micro_e2e",
+    "Recall_micro_e2e",
+    "F1_micro_e2e",
 )
 
 
@@ -62,6 +65,7 @@ def _e2e_summary(
     pred_instances: int,
     matched_instances: int,
 ) -> dict[str, float | int]:
+    """Summarize the same two-level metrics used by the mdet evaluator."""
     precision = np.divide(tp, tp + fp, out=np.zeros_like(tp, dtype=float), where=(tp + fp) > 0)
     recall = np.divide(tp, tp + fn, out=np.zeros_like(tp, dtype=float), where=(tp + fn) > 0)
     f1 = np.divide(
@@ -70,35 +74,56 @@ def _e2e_summary(
         out=np.zeros_like(precision, dtype=float),
         where=(precision + recall) > 0,
     )
+    macro_precision = float(precision.mean()) if precision.size else 0.0
+    macro_recall = float(recall.mean()) if recall.size else 0.0
+    macro_f1 = float(f1.mean()) if f1.size else 0.0
+    micro_tp = float(tp.sum())
+    micro_fp = float(fp.sum())
+    micro_fn = float(fn.sum())
+    micro_precision = micro_tp / (micro_tp + micro_fp) if micro_tp + micro_fp else 0.0
+    micro_recall = micro_tp / (micro_tp + micro_fn) if micro_tp + micro_fn else 0.0
+    micro_f1 = (
+        2.0 * micro_precision * micro_recall / (micro_precision + micro_recall)
+        if micro_precision + micro_recall
+        else 0.0
+    )
     return {
         "detection_recall_e2e": matched_instances / gt_instances if gt_instances else 0.0,
         "gt_instances": int(gt_instances),
         "pred_instances": int(pred_instances),
         "matched_instances": int(matched_instances),
-        "Precision_e2e": float(precision.mean()) if len(precision) else 0.0,
-        "Recall_e2e": float(recall.mean()) if len(recall) else 0.0,
-        "F1_macro_e2e": float(f1.mean()) if len(f1) else 0.0,
+        "Precision_macro_e2e": macro_precision,
+        "Recall_macro_e2e": macro_recall,
+        "F1_macro_e2e": macro_f1,
+        "Precision_micro_e2e": micro_precision,
+        "Recall_micro_e2e": micro_recall,
+        "F1_micro_e2e": micro_f1,
     }
 
 
-def _update_positive_counts(
+def _update_two_level_counts(
     tp: np.ndarray,
     fp: np.ndarray,
     fn: np.ndarray,
     gt_present: np.ndarray,
     pred_present: np.ndarray,
 ) -> None:
-    """Accumulate binary Present-level decisions for one matched object."""
+    """Accumulate Absent/Present confusion counts for one matched object."""
 
-    tp += gt_present & pred_present
-    fp += ~gt_present & pred_present
-    fn += gt_present & ~pred_present
+    for attribute, (gt_level, predicted_level) in enumerate(zip(gt_present, pred_present)):
+        gt_level = int(gt_level)
+        predicted_level = int(predicted_level)
+        if gt_level == predicted_level:
+            tp[attribute, gt_level] += 1
+        else:
+            fp[attribute, predicted_level] += 1
+            fn[attribute, gt_level] += 1
 
 
 class EndToEndE5Validator(E5ReportValidator):
     """E5 validator with an independent fixed-confidence end-to-end counter."""
 
-    e2e_conf = 0.25
+    e2e_conf = 0.001
     e2e_iou_match = 0.5
 
     def init_metrics(self, model):
@@ -110,9 +135,9 @@ class EndToEndE5Validator(E5ReportValidator):
         # consistent.
         self.box_confusion_matrix = np.zeros((self.nc + 1, self.nc + 1), dtype=np.int64)
         self._last_box_confusion = None
-        self.e2e_tp = np.zeros(self.attribute_count, dtype=np.int64)
-        self.e2e_fp = np.zeros(self.attribute_count, dtype=np.int64)
-        self.e2e_fn = np.zeros(self.attribute_count, dtype=np.int64)
+        self.e2e_tp = np.zeros((self.attribute_count, 2), dtype=np.int64)
+        self.e2e_fp = np.zeros((self.attribute_count, 2), dtype=np.int64)
+        self.e2e_fn = np.zeros((self.attribute_count, 2), dtype=np.int64)
         self.e2e_gt_instances = 0
         self.e2e_pred_instances = 0
         self.e2e_matched_instances = 0
@@ -144,11 +169,13 @@ class EndToEndE5Validator(E5ReportValidator):
         for gi, pi in zip(gt_idx, pred_idx):
             matched_gt[gi] = True
             matched_pred[pi] = True
-            _update_positive_counts(self.e2e_tp, self.e2e_fp, self.e2e_fn, gt_attributes[gi], pred_attributes[pi])
-        if len(gt_attributes):
-            self.e2e_fn += gt_attributes[~matched_gt].sum(axis=0).astype(np.int64)
-        if len(pred_attributes):
-            self.e2e_fp += pred_attributes[~matched_pred].sum(axis=0).astype(np.int64)
+            _update_two_level_counts(self.e2e_tp, self.e2e_fp, self.e2e_fn, gt_attributes[gi], pred_attributes[pi])
+        for gt_levels in gt_attributes[~matched_gt]:
+            for attribute, gt_level in enumerate(gt_levels):
+                self.e2e_fn[attribute, int(gt_level)] += 1
+        for predicted_levels in pred_attributes[~matched_pred]:
+            for attribute, predicted_level in enumerate(predicted_levels):
+                self.e2e_fp[attribute, int(predicted_level)] += 1
 
     def update_metrics(self, preds, batch):
         super().update_metrics(preds, batch)
@@ -192,7 +219,19 @@ def _resolved_multilabel_yaml(data_yaml: str, data_root: str | None):
             for line in lines:
                 normalized = line.strip().replace("\\", "/")
                 marker = "mayolo_v3_multilabel/"
-                relative = normalized.split(marker, 1)[1] if marker in normalized else f"images/{Path(normalized).name}"
+                if marker in normalized:
+                    relative = normalized.split(marker, 1)[1]
+                else:
+                    # Materialized manifests may already contain the split
+                    # subdirectory (images/test or images/val).  Preserve it
+                    # instead of collapsing every image to images/<name>.
+                    image_marker = "/images/"
+                    image_index = normalized.lower().find(image_marker)
+                    relative = (
+                        normalized[image_index + 1 :]
+                        if image_index >= 0
+                        else f"images/{Path(normalized).name}"
+                    )
                 remapped.append(str(root / Path(relative)))
             manifest = temporary_root / f"{split}.txt"
             manifest.write_text("\n".join(remapped) + "\n", encoding="utf-8")
@@ -294,9 +333,9 @@ def _e6_end_to_end(results, spec, classifier, args, output_dir: Path) -> dict[st
     gt_instances = 0
     pred_instances = 0
     matched_instances = 0
-    tp = np.zeros(10, dtype=np.int64)
-    fp = np.zeros(10, dtype=np.int64)
-    fn = np.zeros(10, dtype=np.int64)
+    tp = np.zeros((10, 2), dtype=np.int64)
+    fp = np.zeros((10, 2), dtype=np.int64)
+    fn = np.zeros((10, 2), dtype=np.int64)
 
     for image_index, result in enumerate(results):
         image_path = Path(result.path).resolve()
@@ -330,7 +369,8 @@ def _e6_end_to_end(results, spec, classifier, args, output_dir: Path) -> dict[st
         matched_gt = set(int(gi) for gi in gt_idx)
         for gt_index in range(len(gt_objects)):
             if gt_index not in matched_gt:
-                fn += gt_attributes[gt_index].astype(np.int64)
+                for attribute, gt_level in enumerate(gt_attributes[gt_index]):
+                    fn[attribute, int(gt_level)] += 1
         for prediction_index, prediction in enumerate(raw_predictions):
             crop_left, crop_top, crop_right, crop_bottom = _crop_box(prediction[:4], width, height, args.crop_pad)
             if crop_right <= crop_left or crop_bottom <= crop_top:
@@ -344,29 +384,45 @@ def _e6_end_to_end(results, spec, classifier, args, output_dir: Path) -> dict[st
             crop_paths.append(crop_path)
             records.append((image_index, matched_by_pred.get(prediction_index, -1)))
 
+    # All detector tensors have already been converted to CPU arrays above.
+    # Clear the Results list before running the classifier over the retained
+    # detections; otherwise the detector output tensors remain live while the
+    # crop classifier allocates its feature maps.
+    results.clear()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     if crop_paths:
-        classifier_results = classifier.predict(
-            source=[str(path) for path in crop_paths],
-            predictor=MultiLabelClassificationPredictor,
-            device=args.device,
-            imgsz=args.classifier_imgsz,
-            batch=args.classifier_batch,
-            conf=args.classifier_threshold,
-            verbose=False,
-        )
-        predictions = np.asarray(
-            [result.multilabel_scores.detach().cpu().numpy() >= args.classifier_threshold for result in classifier_results],
-            dtype=bool,
-        ).reshape(-1, 10)
+        prediction_rows = []
+        for start in range(0, len(crop_paths), 128):
+            classifier_results = classifier.predict(
+                source=[str(path) for path in crop_paths[start : start + 128]],
+                predictor=MultiLabelClassificationPredictor,
+                device=args.device,
+                imgsz=args.classifier_imgsz,
+                batch=args.classifier_batch,
+                conf=args.classifier_threshold,
+                stream=True,
+                verbose=False,
+            )
+            prediction_rows.extend(
+                result.multilabel_scores.detach().cpu().numpy() >= args.classifier_threshold
+                for result in classifier_results
+            )
+            del classifier_results
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        predictions = np.asarray(prediction_rows, dtype=bool).reshape(-1, 10)
     else:
         predictions = np.zeros((0, 10), dtype=bool)
 
     for (image_index, gt_index), prediction in zip(records, predictions):
         gt_attributes = gt_by_image[image_index][2]
         if gt_index >= 0:
-            _update_positive_counts(tp, fp, fn, gt_attributes[gt_index], prediction)
+            _update_two_level_counts(tp, fp, fn, gt_attributes[gt_index], prediction)
         else:
-            fp += prediction.astype(np.int64)
+            for attribute, predicted_level in enumerate(prediction):
+                fp[attribute, int(predicted_level)] += 1
     return _e2e_summary(tp, fp, fn, gt_instances, pred_instances, matched_instances)
 
 
@@ -412,20 +468,35 @@ def evaluate_e6(args: argparse.Namespace) -> None:
 
             crop_dir = Path(args.project) / f"{args.name}_{label}_conditional_crops"
             crops, targets = _matched_crops(conditional_results, spec, crop_dir, args.iou_match, args.crop_pad)
-            classifier_results = classifier.predict(
-                source=[str(path) for path in crops],
-                predictor=MultiLabelClassificationPredictor,
-                device=args.device,
-                imgsz=args.classifier_imgsz,
-                batch=args.classifier_batch,
-                conf=args.classifier_threshold,
-                verbose=False,
-            ) if crops else []
-            scores = np.asarray(
-                [result.multilabel_scores.detach().cpu().numpy() for result in classifier_results], dtype=np.float32
-            )
+            score_rows = []
+            for start in range(0, len(crops), 128):
+                classifier_results = classifier.predict(
+                    source=[str(path) for path in crops[start : start + 128]],
+                    predictor=MultiLabelClassificationPredictor,
+                    device=args.device,
+                    imgsz=args.classifier_imgsz,
+                    batch=args.classifier_batch,
+                    conf=args.classifier_threshold,
+                    stream=True,
+                    verbose=False,
+                )
+                score_rows.extend(
+                    result.multilabel_scores.detach().cpu().numpy() for result in classifier_results
+                )
+                del classifier_results
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            scores = np.asarray(score_rows, dtype=np.float32)
             predictions = scores >= args.classifier_threshold
             conditional = _attribute_metrics(targets, predictions)
+            # The conditional pass and the end-to-end pass use the same
+            # detector operating point when conf == e2e_conf, but the latter
+            # must classify all retained detections.  Release the conditional
+            # result lists before creating the second crop set; otherwise the
+            # detector and both classifier result lists can exceed GPU memory.
+            del conditional_results, crops, targets, scores, predictions
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             e2e_results = detector.predict(
                 source=[str(path) for path in spec.splits["test"]],
                 predictor=MDetectionPredictor,
@@ -444,6 +515,12 @@ def evaluate_e6(args: argparse.Namespace) -> None:
                 args,
                 Path(args.project) / f"{args.name}_{label}_e2e_crops",
             )
+            # The returned summary contains only numeric counters.  Release
+            # the per-image prediction objects before loading the next seed;
+            # they retain GPU tensors through the Results/Boxes objects.
+            del e2e_results
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             values = {
                 "model": label,
                 "weight": detector_weight,
@@ -476,7 +553,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--classifier-imgsz", type=int, default=224)
     parser.add_argument("--classifier-threshold", type=float, default=0.5)
     parser.add_argument("--conf", type=float, default=0.001, help="Legacy conditional/mAP confidence floor")
-    parser.add_argument("--e2e-conf", type=float, default=0.25, help="Fixed end-to-end detection threshold")
+    parser.add_argument("--e2e-conf", type=float, default=0.001, help="End-to-end detection confidence threshold")
     parser.add_argument("--iou", type=float, default=0.7)
     parser.add_argument("--iou-match", type=float, default=0.5)
     parser.add_argument("--crop-pad", type=float, default=0.10)

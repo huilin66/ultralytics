@@ -828,32 +828,41 @@ Ordinal MAE 等价于二分类属性错误率；Calibration 指标使用完整 s
 
 ### 7.1 Protocol and validation
 
-This section adds end-to-end attribute metrics without replacing the existing
-conditional metrics. The data were evaluated from
-`Z:\huilin\backup\ubda_backup\data\billboard\mayolo_v3` and the checkpoint
-weights were read from
-`Z:\huilin\backup\ubda_backup\ultralytics\runs\experiments`. The legacy
-conditional metrics use the original confidence-floor protocol (`conf=0.001`),
-whereas the new end-to-end operating point uses `conf=0.25`, NMS IoU `0.7`,
-and matching IoU `0.5`.
+This section reports end-to-end attribute metrics in addition to the existing
+conditional metrics; the conditional columns are not replaced. Both the
+conditional and end-to-end metrics use the same detection confidence floor
+(conf=0.001), NMS IoU=0.7, matching IoU=0.5, class-correct greedy one-to-one
+matching, and batch size 16.
 
-For end-to-end scoring, only class-correct one-to-one matches are used. Matches
-are assigned greedily in descending IoU order. A matched pair contributes the
-attribute decision of the predicted box; a missed ground-truth instance
-contributes FN for its Present attributes; an unmatched prediction contributes
-FP for its predicted Present attributes. Absent attributes on unmatched
-objects are not counted as TN. Duplicate boxes and wrong-class boxes are
-therefore handled as unmatched predictions. `Precision_e2e`, `Recall_e2e`,
-and `F1_macro_e2e` are macro averages over the ten binary attribute channels.
+Both conditional and end-to-end metrics use the same two-level attribute
+formulation with Absent and Present levels. For a matched pair, a correct
+level contributes one TP for that level; a level disagreement contributes one
+FP for the predicted level and one FN for the ground-truth level. A missed
+ground-truth instance contributes FN for its true level for every attribute,
+including Absent. An unmatched prediction, including a duplicate or
+wrong-class prediction, contributes FP for its predicted level, including
+Absent. Thus, end-to-end scores differ from conditional scores only in their
+confusion counts: missed ground truths and unmatched predictions are included
+end to end, whereas conditional scores are computed only on matched pairs.
+
+Macro Precision, Macro Recall, and Macro-F1 are equal-weight averages over the
+ten attributes and their two levels (20 attribute-level one-vs-rest tasks).
+Micro Precision, Micro Recall, and Micro-F1 pool all attribute-level counts.
+The compact tables below report the macro Precision, macro Recall, macro F1,
+and micro F1; the complete macro/micro fields are retained in each raw CSV.
 Each row reports the mean and sample standard deviation over five seeds.
 
-Before adding these results, the original metrics were re-evaluated using the
-same data, weights, and legacy protocol. The five-seed attribute metrics for
-E5 and E6 matched the previous results (differences below numerical precision),
-and the representative YOLOv10x and MAYOLOx checks also matched. The mean mAP50
-differences for E5 and E6 were `+0.000052` and `-0.000173`, respectively; this
-does not change the reported rounded values. RT-DETR was checked with its
-attribute-aware RT-DETR validator rather than the ordinary detection validator.
+For cross-table consistency, the YOLOv10x row in Table 4 and the
+Baseline-native rows in Table 9 use the same five E2.27 baseline checkpoints,
+with the same native inference mode and the same end-to-end thresholds.
+
+Before recording the new end-to-end values, the checkpoint lists and all
+existing metric fields were checked for each cross-table comparison. For the
+aligned YOLOv10x/T9-baseline checkpoint set, every field is identical. Small
+run-to-run GPU floating-point differences may still occur when a checkpoint is
+evaluated independently. The e2e values below are recomputed at the same
+conf=0.001 protocol as the original metrics. RT-DETR was evaluated with its
+attribute-aware validator.
 
 The evaluator and aggregation code are:
 
@@ -863,110 +872,110 @@ The evaluator and aggregation code are:
 
 ### 7.2 Table 4: Main-model Test comparison
 
-| Model | n | Precision_e2e | Recall_e2e | Macro-F1_e2e |
-|---|---:|---:|---:|---:|
-| MAYOLOb | 5 | 0.249754 ± 0.063187 | 0.124029 ± 0.017809 | 0.156670 ± 0.029491 |
-| MAYOLOl | 5 | 0.207409 ± 0.038246 | 0.102427 ± 0.020493 | 0.131022 ± 0.022067 |
-| MAYOLOm | 5 | 0.187175 ± 0.061764 | 0.104415 ± 0.010127 | 0.125810 ± 0.014177 |
-| MAYOLOn | 5 | 0.181352 ± 0.099008 | 0.090988 ± 0.038556 | 0.110650 ± 0.050967 |
-| MAYOLOs | 5 | 0.200390 ± 0.062323 | 0.107041 ± 0.015330 | 0.133758 ± 0.021885 |
-| MAYOLOx | 5 | 0.212575 ± 0.081637 | 0.125526 ± 0.048637 | 0.150000 ± 0.057982 |
-| RT-DETR-L | 5 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 |
-| RT-DETR-X | 5 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 | 0.000000 ± 0.000000 |
-| YOLOv10b | 5 | 0.245190 ± 0.044071 | 0.126690 ± 0.014322 | 0.163728 ± 0.019143 |
-| YOLOv10l | 5 | 0.166992 ± 0.059092 | 0.105140 ± 0.039103 | 0.124518 ± 0.044027 |
-| YOLOv10m | 5 | 0.224760 ± 0.060131 | 0.105965 ± 0.034316 | 0.132992 ± 0.032286 |
-| YOLOv10n | 5 | 0.117357 ± 0.073872 | 0.036491 ± 0.019192 | 0.053092 ± 0.029171 |
-| YOLOv10s | 5 | 0.190770 ± 0.068360 | 0.064766 ± 0.012040 | 0.090006 ± 0.017607 |
-| YOLOv10x | 5 | 0.211895 ± 0.120930 | 0.106749 ± 0.064672 | 0.134398 ± 0.077393 |
-| YOLOv11l | 5 | 0.221544 ± 0.043397 | 0.134351 ± 0.031210 | 0.157346 ± 0.031415 |
-| YOLOv11m | 5 | 0.204399 ± 0.041660 | 0.113965 ± 0.038063 | 0.140256 ± 0.036916 |
-| YOLOv11n | 5 | 0.119061 ± 0.056992 | 0.059327 ± 0.027632 | 0.074653 ± 0.034090 |
-| YOLOv11s | 5 | 0.164535 ± 0.092689 | 0.081257 ± 0.038651 | 0.104487 ± 0.054086 |
-| YOLOv11x | 5 | 0.277813 ± 0.067729 | 0.163193 ± 0.037011 | 0.197949 ± 0.036100 |
-| YOLOv12l | 5 | 0.185842 ± 0.013329 | 0.146930 ± 0.032035 | 0.150954 ± 0.013552 |
-| YOLOv12m | 5 | 0.185900 ± 0.046117 | 0.114415 ± 0.028542 | 0.129028 ± 0.026313 |
-| YOLOv12n | 5 | 0.151844 ± 0.059597 | 0.062164 ± 0.034182 | 0.079080 ± 0.038556 |
-| YOLOv12s | 5 | 0.164684 ± 0.042977 | 0.101047 ± 0.030539 | 0.121657 ± 0.033089 |
-| YOLOv12x | 5 | 0.219846 ± 0.104147 | 0.142649 ± 0.050603 | 0.163416 ± 0.061783 |
-| YOLOv13l | 5 | 0.214512 ± 0.102700 | 0.140018 ± 0.028038 | 0.159822 ± 0.041610 |
-| YOLOv13n | 5 | 0.097439 ± 0.065444 | 0.053713 ± 0.027514 | 0.063708 ± 0.030858 |
-| YOLOv13s | 5 | 0.110354 ± 0.045764 | 0.078977 ± 0.024940 | 0.087647 ± 0.027665 |
-| YOLOv13x | 5 | 0.214508 ± 0.061114 | 0.114251 ± 0.032356 | 0.136210 ± 0.038403 |
-| YOLOv26l | 5 | 0.221394 ± 0.047659 | 0.111807 ± 0.019888 | 0.138792 ± 0.023646 |
-| YOLOv26m | 5 | 0.142335 ± 0.050167 | 0.087251 ± 0.040034 | 0.103632 ± 0.041114 |
-| YOLOv26n | 5 | 0.096548 ± 0.108414 | 0.031053 ± 0.022264 | 0.043911 ± 0.033251 |
-| YOLOv26s | 5 | 0.109669 ± 0.042013 | 0.056374 ± 0.022463 | 0.071839 ± 0.027038 |
-| YOLOv26x | 5 | 0.170729 ± 0.056339 | 0.096930 ± 0.027680 | 0.115954 ± 0.031880 |
-| YOLOv8l | 5 | 0.220751 ± 0.049443 | 0.139848 ± 0.021648 | 0.165841 ± 0.028343 |
-| YOLOv8m | 5 | 0.236615 ± 0.054857 | 0.091316 ± 0.016979 | 0.118732 ± 0.023679 |
-| YOLOv8n | 5 | 0.131493 ± 0.043182 | 0.081696 ± 0.026470 | 0.093928 ± 0.022731 |
-| YOLOv8s | 5 | 0.097441 ± 0.032432 | 0.065643 ± 0.018148 | 0.073384 ± 0.017012 |
-| YOLOv8x | 5 | 0.188283 ± 0.029852 | 0.111368 ± 0.036323 | 0.132776 ± 0.038673 |
-| YOLOv9c | 5 | 0.217879 ± 0.056830 | 0.139702 ± 0.062841 | 0.157243 ± 0.057067 |
-| YOLOv9e | 5 | 0.216515 ± 0.083762 | 0.155871 ± 0.053930 | 0.173492 ± 0.062038 |
-| YOLOv9m | 5 | 0.172759 ± 0.018411 | 0.107193 ± 0.013015 | 0.125783 ± 0.011661 |
-| YOLOv9s | 5 | 0.175087 ± 0.035266 | 0.083181 ± 0.032320 | 0.102334 ± 0.029334 |
-| YOLOv9t | 5 | 0.115402 ± 0.070705 | 0.039825 ± 0.018114 | 0.056544 ± 0.027402 |
+| Model | n | Detection Recall (e2e) | Precision_macro_e2e | Recall_macro_e2e | F1_macro_e2e | F1_micro_e2e |
+|---|---:|---:|---:|---:|---:|---:|
+| MAYOLOb | 5 | 0.800000 ± 0.017786 | 0.181332 ± 0.027945 | 0.472039 ± 0.014373 | 0.248759 ± 0.026935 | 0.378998 ± 0.044004 |
+| MAYOLOl | 5 | 0.809717 ± 0.025121 | 0.183338 ± 0.022894 | 0.470109 ± 0.004192 | 0.249504 ± 0.024076 | 0.385181 ± 0.035763 |
+| MAYOLOm | 5 | 0.842105 ± 0.023607 | 0.139588 ± 0.036454 | 0.491695 ± 0.014940 | 0.199189 ± 0.049445 | 0.295974 ± 0.077959 |
+| MAYOLOn | 5 | 0.931984 ± 0.015523 | 0.045914 ± 0.019583 | 0.515606 ± 0.018166 | 0.046981 ± 0.014717 | 0.023662 ± 0.000357 |
+| MAYOLOs | 5 | 0.825911 ± 0.018106 | 0.126950 ± 0.029460 | 0.473067 ± 0.013383 | 0.172377 ± 0.018830 | 0.249470 ± 0.031684 |
+| MAYOLOx | 5 | 0.799190 ± 0.065131 | 0.179448 ± 0.064612 | 0.480159 ± 0.037445 | 0.247994 ± 0.076844 | 0.376527 ± 0.116059 |
+| RT-DETR-L | 5 | 0.841296 ± 0.011593 | 0.005408 ± 0.000073 | 0.420555 ± 0.005634 | 0.010679 ± 0.000143 | 0.021349 ± 0.000286 |
+| RT-DETR-X | 5 | 0.862348 ± 0.028484 | 0.005544 ± 0.000186 | 0.431086 ± 0.014448 | 0.010946 ± 0.000367 | 0.021884 ± 0.000733 |
+| YOLOv10b | 5 | 0.774089 ± 0.025186 | 0.163845 ± 0.024882 | 0.462813 ± 0.013189 | 0.235844 ± 0.030605 | 0.356700 ± 0.049493 |
+| YOLOv10l | 5 | 0.788664 ± 0.013243 | 0.155123 ± 0.021949 | 0.459665 ± 0.019056 | 0.221776 ± 0.024027 | 0.341953 ± 0.025102 |
+| YOLOv10m | 5 | 0.796761 ± 0.019710 | 0.154917 ± 0.037959 | 0.466844 ± 0.013645 | 0.215114 ± 0.040953 | 0.323965 ± 0.066297 |
+| YOLOv10n | 5 | 0.875304 ± 0.011942 | 0.011679 ± 0.003712 | 0.466203 ± 0.011519 | 0.019912 ± 0.005096 | 0.022204 ± 0.000276 |
+| YOLOv10s | 5 | 0.809717 ± 0.033139 | 0.102923 ± 0.032048 | 0.450570 ± 0.014463 | 0.143832 ± 0.043314 | 0.218969 ± 0.068367 |
+| YOLOv10x | 5 | 0.782186 ± 0.025829 | 0.167231 ± 0.054525 | 0.460190 ± 0.026936 | 0.230399 ± 0.051200 | 0.354513 ± 0.059392 |
+| YOLOv11l | 5 | 0.934413 ± 0.018420 | 0.060031 ± 0.018949 | 0.564746 ± 0.014927 | 0.097836 ± 0.031290 | 0.119990 ± 0.050586 |
+| YOLOv11m | 5 | 0.868016 ± 0.030913 | 0.083512 ± 0.021317 | 0.511121 ± 0.019898 | 0.130957 ± 0.030197 | 0.174238 ± 0.044874 |
+| YOLOv11n | 5 | 0.950607 ± 0.013243 | 0.027754 ± 0.011117 | 0.522680 ± 0.020385 | 0.035345 ± 0.009004 | 0.024070 ± 0.000336 |
+| YOLOv11s | 5 | 0.954656 ± 0.014985 | 0.032061 ± 0.014081 | 0.535060 ± 0.012268 | 0.048147 ± 0.021158 | 0.043889 ± 0.024995 |
+| YOLOv11x | 5 | 0.837247 ± 0.025987 | 0.152367 ± 0.035236 | 0.525495 ± 0.030517 | 0.220630 ± 0.039192 | 0.301431 ± 0.052447 |
+| YOLOv12l | 5 | 0.851012 ± 0.021877 | 0.109940 ± 0.019143 | 0.519569 ± 0.015015 | 0.174475 ± 0.029513 | 0.254543 ± 0.047121 |
+| YOLOv12m | 5 | 0.885020 ± 0.048295 | 0.094282 ± 0.044191 | 0.519142 ± 0.015145 | 0.145047 ± 0.064116 | 0.206788 ± 0.099825 |
+| YOLOv12n | 5 | 0.937652 ± 0.012010 | 0.034875 ± 0.010992 | 0.507903 ± 0.017757 | 0.037399 ± 0.011069 | 0.023794 ± 0.000292 |
+| YOLOv12s | 5 | 0.937652 ± 0.032716 | 0.038278 ± 0.020417 | 0.528409 ± 0.026868 | 0.055463 ± 0.028590 | 0.057288 ± 0.050015 |
+| YOLOv12x | 5 | 0.852632 ± 0.043942 | 0.120380 ± 0.049114 | 0.521509 ± 0.029892 | 0.185499 ± 0.067252 | 0.268897 ± 0.098855 |
+| YOLOv13l | 5 | 0.849393 ± 0.034638 | 0.108811 ± 0.029771 | 0.504188 ± 0.022806 | 0.173325 ± 0.038818 | 0.259621 ± 0.057486 |
+| YOLOv13n | 5 | 0.948178 ± 0.006653 | 0.017908 ± 0.007115 | 0.513053 ± 0.015630 | 0.025883 ± 0.004997 | 0.024004 ± 0.000177 |
+| YOLOv13s | 5 | 0.943320 ± 0.015148 | 0.017258 ± 0.006358 | 0.527641 ± 0.005520 | 0.029004 ± 0.009758 | 0.028629 ± 0.010552 |
+| YOLOv13x | 5 | 0.840486 ± 0.068384 | 0.115021 ± 0.051465 | 0.490527 ± 0.033680 | 0.175503 ± 0.068246 | 0.274789 ± 0.108278 |
+| YOLOv26l | 5 | 0.860729 ± 0.021915 | 0.088333 ± 0.012359 | 0.510371 ± 0.017784 | 0.144692 ± 0.019021 | 0.212396 ± 0.027334 |
+| YOLOv26m | 5 | 0.869636 ± 0.027962 | 0.060457 ± 0.016381 | 0.502045 ± 0.016060 | 0.104291 ± 0.025597 | 0.157782 ± 0.032262 |
+| YOLOv26n | 5 | 0.923887 ± 0.026764 | 0.008483 ± 0.000868 | 0.480252 ± 0.015655 | 0.015845 ± 0.001582 | 0.023407 ± 0.000676 |
+| YOLOv26s | 5 | 0.924696 ± 0.021154 | 0.025688 ± 0.007252 | 0.521918 ± 0.013933 | 0.046887 ± 0.011970 | 0.067033 ± 0.018122 |
+| YOLOv26x | 5 | 0.842915 ± 0.042016 | 0.100131 ± 0.029295 | 0.501649 ± 0.027248 | 0.160456 ± 0.039938 | 0.245009 ± 0.066741 |
+| YOLOv8l | 5 | 0.831579 ± 0.030913 | 0.136127 ± 0.045247 | 0.501115 ± 0.008324 | 0.203121 ± 0.055511 | 0.294825 ± 0.074665 |
+| YOLOv8m | 5 | 0.874494 ± 0.041879 | 0.115065 ± 0.036662 | 0.502554 ± 0.020477 | 0.156077 ± 0.056041 | 0.221548 ± 0.090310 |
+| YOLOv8n | 5 | 0.949798 ± 0.015836 | 0.031335 ± 0.021173 | 0.513880 ± 0.003784 | 0.032437 ± 0.009229 | 0.024078 ± 0.000343 |
+| YOLOv8s | 5 | 0.923077 ± 0.035871 | 0.046162 ± 0.024098 | 0.506256 ± 0.019845 | 0.070699 ± 0.036449 | 0.098818 ± 0.058882 |
+| YOLOv8x | 5 | 0.840486 ± 0.045138 | 0.131418 ± 0.063165 | 0.497902 ± 0.024040 | 0.193565 ± 0.082615 | 0.283619 ± 0.125358 |
+| YOLOv9c | 5 | 0.868016 ± 0.033459 | 0.131421 ± 0.030950 | 0.534379 ± 0.042071 | 0.199697 ± 0.038622 | 0.281830 ± 0.066512 |
+| YOLOv9e | 5 | 0.846964 ± 0.042404 | 0.137511 ± 0.062880 | 0.517448 ± 0.019972 | 0.201091 ± 0.072131 | 0.284751 ± 0.093437 |
+| YOLOv9m | 5 | 0.855061 ± 0.028828 | 0.118178 ± 0.018618 | 0.505468 ± 0.030715 | 0.178464 ± 0.028376 | 0.259812 ± 0.063464 |
+| YOLOv9s | 5 | 0.926316 ± 0.023503 | 0.060790 ± 0.024857 | 0.527173 ± 0.024231 | 0.089724 ± 0.033601 | 0.112417 ± 0.038812 |
+| YOLOv9t | 5 | 0.952227 ± 0.010479 | 0.028531 ± 0.015519 | 0.504105 ± 0.003630 | 0.031309 ± 0.011055 | 0.024176 ± 0.000236 |
 
-Raw aggregate: `runs/experiments/E2E_attribute_metrics/table4_all_test_conf025_final_agg.csv`.
+Raw aggregate: runs/experiments/E2E_attribute_metrics/table4_e2e_twolevel_mdet_conf001/aggregated.csv
 
 ### 7.3 Table 5: Multi-label detection and two-stage detection + classification
 
-| Model | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
-|---|---:|---:|---:|---:|---:|
-| E5 | 5 | 0.472065 ± 0.036617 | 0.142714 ± 0.070769 | 0.040994 ± 0.017399 | 0.060551 ± 0.025563 |
-| E6 | 5 | 0.557895 ± 0.013243 | 0.057889 ± 0.008849 | 0.050000 ± 0.010206 | 0.051564 ± 0.005107 |
+| Model | n | Detection Recall | Precision_macro_e2e | Recall_macro_e2e | F1_macro_e2e | F1_micro_e2e |
+|---|---:|---:|---:|---:|---:|---:|
+| E5 | 5 | 0.796761 ± 0.013549 | 0.113843 ± 0.023833 | 0.419323 ± 0.005831 | 0.130984 ± 0.025406 | 0.201040 ± 0.041119 |
+| E6 | 5 | 0.788664 ± 0.036370 | 0.078672 ± 0.009258 | 0.425956 ± 0.020650 | 0.125987 ± 0.017428 | 0.214552 ± 0.035498 |
 
-Raw summaries: `runs/experiments/E2E_attribute_metrics/table5_e5_test_conf025_fixed/summary.csv` and `runs/experiments/E2E_attribute_metrics/table5_e6_test_conf025_fixed/summary.csv`.
+Raw summaries: runs/experiments/E2E_attribute_metrics/table5_e5_twolevel_mdet_conf001_retry/aggregated.csv and runs/experiments/E2E_attribute_metrics/table5_e6_twolevel_mdet_conf001_final/aggregated.csv.
 
 ### 7.4 Table 6: w4 validation sensitivity
 
-| w4 | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
-|---|---:|---:|---:|---:|---:|
-| 0.0 | 5 | 0.597665 ± 0.024081 | 0.037150 ± 0.008412 | 0.328464 ± 0.092027 | 0.062928 ± 0.012176 |
-| 0.5 | 5 | 0.592996 ± 0.026902 | 0.361734 ± 0.034653 | 0.185798 ± 0.051255 | 0.231050 ± 0.045657 |
-| 1.0 | 5 | 0.584436 ± 0.022921 | 0.381976 ± 0.081432 | 0.202446 ± 0.038299 | 0.247831 ± 0.046742 |
+| w4 | n | Detection Recall | Precision_macro_e2e | Recall_macro_e2e | F1_macro_e2e | F1_micro_e2e |
+|---|---:|---:|---:|---:|---:|---:|
+| 0.0 | 5 | 0.789105 ± 0.012119 | 0.135363 ± 0.028848 | 0.409497 ± 0.035073 | 0.167856 ± 0.022666 | 0.213475 ± 0.030122 |
+| 0.5 | 5 | 0.771206 ± 0.034299 | 0.210582 ± 0.020616 | 0.495510 ± 0.034795 | 0.275199 ± 0.033522 | 0.372707 ± 0.055928 |
+| 1.0 | 5 | 0.785992 ± 0.031611 | 0.226608 ± 0.059124 | 0.507079 ± 0.018485 | 0.296393 ± 0.056188 | 0.397797 ± 0.067704 |
 
-Raw aggregate: `runs/experiments/E2E_attribute_metrics/table6_w4_val_conf025_agg.csv`.
+Raw aggregate: runs/experiments/E2E_attribute_metrics/table6_e2e_twolevel_mdet_conf001/aggregated.csv
 
 ### 7.5 Table 7: GIA position validation
 
-| Variant | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
-|---|---:|---:|---:|---:|---:|
-| Baseline | 5 | 0.592996 ± 0.026902 | 0.361734 ± 0.034653 | 0.185798 ± 0.051255 | 0.231050 ± 0.045657 |
-| GIA-p10 | 5 | 0.592218 ± 0.039624 | 0.335211 ± 0.033218 | 0.172173 ± 0.032284 | 0.217975 ± 0.029513 |
-| GIA-p22 | 5 | 0.579767 ± 0.019455 | 0.311812 ± 0.057185 | 0.162500 ± 0.039937 | 0.202364 ± 0.044994 |
-| GIA-p5-7 | 5 | 0.585992 ± 0.038969 | 0.329659 ± 0.080419 | 0.177250 ± 0.042532 | 0.219020 ± 0.043156 |
+| Variant | n | Detection Recall | Precision_macro_e2e | Recall_macro_e2e | F1_macro_e2e | F1_micro_e2e |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline | 5 | 0.771206 ± 0.034299 | 0.210582 ± 0.020616 | 0.495510 ± 0.034795 | 0.275199 ± 0.033522 | 0.372707 ± 0.055928 |
+| GIA-p10 | 5 | 0.780545 ± 0.036873 | 0.191799 ± 0.041596 | 0.487938 ± 0.026200 | 0.258170 ± 0.052574 | 0.360708 ± 0.084679 |
+| GIA-p22 | 5 | 0.794553 ± 0.038460 | 0.208854 ± 0.074157 | 0.496838 ± 0.013540 | 0.274227 ± 0.075102 | 0.383110 ± 0.096739 |
+| GIA-p5-7 | 5 | 0.798444 ± 0.067530 | 0.210756 ± 0.075483 | 0.507773 ± 0.026221 | 0.276573 ± 0.079116 | 0.387898 ± 0.103739 |
 
-Raw aggregate: `runs/experiments/E2E_attribute_metrics/table7_gia_val_conf025_agg.csv`.
+Raw aggregate: runs/experiments/E2E_attribute_metrics/table7_e2e_twolevel_mdet_conf001/aggregated.csv
 
 ### 7.6 Table 8: GCA structure validation
 
-| Variant | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
-|---|---:|---:|---:|---:|---:|
-| Baseline | 5 | 0.592996 ± 0.026902 | 0.361734 ± 0.034653 | 0.185798 ± 0.051255 | 0.231050 ± 0.045657 |
-| GCA-GAT | 5 | 0.592996 ± 0.026902 | 0.389038 ± 0.046828 | 0.177833 ± 0.050491 | 0.229392 ± 0.048514 |
-| GCA-GCN | 5 | 0.592996 ± 0.026902 | 0.363226 ± 0.029510 | 0.181131 ± 0.053114 | 0.228194 ± 0.048434 |
-| GCA-GIN | 5 | 0.592996 ± 0.026902 | 0.371150 ± 0.059962 | 0.183405 ± 0.052506 | 0.229191 ± 0.050073 |
-| GCA-GRAPHSAGE | 5 | 0.592996 ± 0.026902 | 0.371144 ± 0.060947 | 0.182167 ± 0.054009 | 0.228520 ± 0.050801 |
+| Variant | n | Detection Recall | Precision_macro_e2e | Recall_macro_e2e | F1_macro_e2e | F1_micro_e2e |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline | 5 | 0.771206 ± 0.034299 | 0.210582 ± 0.020616 | 0.495510 ± 0.034795 | 0.275199 ± 0.033522 | 0.372707 ± 0.055928 |
+| GCA-GAT | 5 | 0.771206 ± 0.034299 | 0.209031 ± 0.035649 | 0.494318 ± 0.033164 | 0.273972 ± 0.036264 | 0.372782 ± 0.056149 |
+| GCA-GCN | 5 | 0.771206 ± 0.034299 | 0.204185 ± 0.027278 | 0.495805 ± 0.034959 | 0.274467 ± 0.036055 | 0.372828 ± 0.055995 |
+| GCA-GIN | 5 | 0.771206 ± 0.034299 | 0.213763 ± 0.029992 | 0.494642 ± 0.027507 | 0.273147 ± 0.035239 | 0.372880 ± 0.056048 |
+| GCA-GRAPHSAGE | 5 | 0.771206 ± 0.034299 | 0.208601 ± 0.036609 | 0.495618 ± 0.035785 | 0.273930 ± 0.035711 | 0.372827 ± 0.055964 |
 
-Raw aggregate: `runs/experiments/E2E_attribute_metrics/table8_gca_val_conf025_agg.csv`.
+Raw aggregate: runs/experiments/E2E_attribute_metrics/table8_e2e_twolevel_mdet_conf001/aggregated.csv
 
 ### 7.7 Table 9: Ablation Test comparison
 
 The ablation results are shown separately for the native and one-to-many
 inference heads because they are distinct inference modes.
 
-| Variant | Mode | n | Detection Recall | Precision_e2e | Recall_e2e | Macro-F1_e2e |
-|---|---|---:|---:|---:|---:|---:|
-| Baseline | native | 5 | 0.577328 ± 0.034186 | 0.211895 ± 0.120930 | 0.106749 ± 0.064672 | 0.134398 ± 0.077393 |
-| GIA | native | 5 | 0.570850 ± 0.030966 | 0.213833 ± 0.064733 | 0.117690 ± 0.050937 | 0.146400 ± 0.057143 |
-| GCA-GIN | native | 5 | 0.577328 ± 0.034186 | 0.216523 ± 0.129303 | 0.114029 ± 0.067826 | 0.139285 ± 0.078732 |
-| GIA-GCA-GIN | native | 5 | 0.570850 ± 0.030966 | 0.209479 ± 0.071469 | 0.119415 ± 0.047392 | 0.143531 ± 0.052004 |
-| Baseline | one2many | 5 | 0.612955 ± 0.027548 | 0.198219 ± 0.095526 | 0.096251 ± 0.057900 | 0.119786 ± 0.066133 |
-| GIA | one2many | 5 | 0.609717 ± 0.021727 | 0.210616 ± 0.083771 | 0.120526 ± 0.038674 | 0.146280 ± 0.049876 |
-| GCA-GIN | one2many | 5 | 0.612955 ± 0.027548 | 0.183379 ± 0.084690 | 0.095585 ± 0.056857 | 0.114163 ± 0.059820 |
-| GIA-GCA-GIN | one2many | 5 | 0.609717 ± 0.021727 | 0.214575 ± 0.084093 | 0.127193 ± 0.050711 | 0.150000 ± 0.057982 |
+| Variant | Mode | n | Detection Recall | Precision_macro_e2e | Recall_macro_e2e | F1_macro_e2e | F1_micro_e2e |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Baseline | native | 5 | 0.782186 ± 0.025829 | 0.167231 ± 0.054525 | 0.460190 ± 0.026936 | 0.230399 ± 0.051200 | 0.354513 ± 0.059392 |
+| GIA | native | 5 | 0.784615 ± 0.053204 | 0.167792 ± 0.058195 | 0.465179 ± 0.038001 | 0.236270 ± 0.069046 | 0.368316 ± 0.111043 |
+| GCA-GIN | native | 5 | 0.782186 ± 0.025829 | 0.162004 ± 0.040140 | 0.462724 ± 0.030631 | 0.229684 ± 0.045846 | 0.354616 ± 0.059366 |
+| GIA-GCA-GIN | native | 5 | 0.784615 ± 0.053204 | 0.166567 ± 0.056849 | 0.467863 ± 0.034773 | 0.235642 ± 0.068018 | 0.368264 ± 0.110890 |
+| Baseline | one2many | 5 | 0.805668 ± 0.034945 | 0.179135 ± 0.040004 | 0.475200 ± 0.028729 | 0.244120 ± 0.042532 | 0.366069 ± 0.051594 |
+| GIA | one2many | 5 | 0.799190 ± 0.065131 | 0.178174 ± 0.066408 | 0.475075 ± 0.036509 | 0.245570 ± 0.077375 | 0.376332 ± 0.116142 |
+| GCA-GIN | one2many | 5 | 0.805668 ± 0.034945 | 0.174708 ± 0.038009 | 0.477933 ± 0.030149 | 0.242408 ± 0.041730 | 0.366307 ± 0.051756 |
+| GIA-GCA-GIN | one2many | 5 | 0.799190 ± 0.065131 | 0.179448 ± 0.064612 | 0.480159 ± 0.037445 | 0.247994 ± 0.076844 | 0.376527 ± 0.116059 |
 
-Raw aggregates: `runs/experiments/E2E_attribute_metrics/table9_ablation_test_conf025_final_agg.csv` and `runs/experiments/E2E_attribute_metrics/table9_ablation_test_conf025_one2many_only_agg.csv`.
+Raw aggregate: runs/experiments/E2E_attribute_metrics/table9_e2e_twolevel_conf001/aggregated.csv

@@ -20,9 +20,12 @@ DEFAULT_METRICS = (
     "F1_macro_conditional_test",
     "F1_micro_conditional_test",
     "detection_recall_e2e",
-    "Precision_e2e",
-    "Recall_e2e",
+    "Precision_macro_e2e",
+    "Recall_macro_e2e",
     "F1_macro_e2e",
+    "Precision_micro_e2e",
+    "Recall_micro_e2e",
+    "F1_micro_e2e",
 )
 
 
