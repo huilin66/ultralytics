@@ -255,10 +255,27 @@ class EndToEndMDetectionValidator:
                 )
                 names = list(self.attribute_names.keys())
                 per_attribute = []
+                per_level = []
                 for i in range(self.na):
                     attribute_precision = float(np.mean(precision[i]))
                     attribute_recall = float(np.mean(recall[i]))
                     attribute_f1 = float(np.mean(f1[i]))
+                    for level in range(self.nal):
+                        per_level.append(
+                            {
+                                "attribute_index": i,
+                                "attribute": names[i] if i < len(names) else str(i),
+                                "level": level,
+                                "level_name": "Absent" if level == 0 else "Present",
+                                "gt_support": int(self.e2e_gt_level_support[i, level]),
+                                "TP": int(self.e2e_tp[i, level]),
+                                "FP": int(self.e2e_fp[i, level]),
+                                "FN": int(self.e2e_fn[i, level]),
+                                "Precision_e2e": float(precision[i, level]),
+                                "Recall_e2e": float(recall[i, level]),
+                                "F1_e2e": float(f1[i, level]),
+                            }
+                        )
                     per_attribute.append(
                         {
                             "attribute_index": i,
@@ -302,6 +319,7 @@ class EndToEndMDetectionValidator:
                     "Recall_micro_e2e": micro_recall,
                     "F1_micro_e2e": micro_f1,
                     "per_attribute": per_attribute,
+                    "per_level": per_level,
                 }
 
             def update_metrics(self, preds, batch):
@@ -382,16 +400,20 @@ def _evaluate_one(args: argparse.Namespace, data_yaml: str, label: str, weights:
         f"mAP50-95_{suffix}": float(results["metrics/mAP50-95(B)"]),
         f"F1_macro_conditional_{suffix}": float(results["metrics/f1_macro(A)"]),
         f"F1_micro_conditional_{suffix}": float(results["metrics/f1_macro_global(A)"]),
-        **{key: value for key, value in end_to_end.items() if key != "per_attribute"},
+        **{key: value for key, value in end_to_end.items() if key not in {"per_attribute", "per_level"}},
     }
     per_attribute = [
         {"model": label, "mode": mode, "weight": weights, "conf": args.conf, **row}
         for row in end_to_end["per_attribute"]
     ]
+    per_level = [
+        {"model": label, "mode": mode, "weight": weights, "conf": args.conf, **row}
+        for row in end_to_end["per_level"]
+    ]
     del model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    return {"summary": summary, "per_attribute": per_attribute}
+    return {"summary": summary, "per_attribute": per_attribute, "per_level": per_level}
 
 
 def main() -> None:
@@ -407,8 +429,10 @@ def main() -> None:
             results.append(_evaluate_one(args, data_yaml, label, weights, mode))
     _write_csv(output_dir / "summary.csv", [result["summary"] for result in results])
     _write_csv(output_dir / "per_attribute.csv", [row for result in results for row in result["per_attribute"]])
+    _write_csv(output_dir / "per_level.csv", [row for result in results for row in result["per_level"]])
     print(f"[summary] {output_dir / 'summary.csv'}")
     print(f"[details] {output_dir / 'per_attribute.csv'}")
+    print(f"[details] {output_dir / 'per_level.csv'}")
     for result in results:
         print(result["summary"])
 
