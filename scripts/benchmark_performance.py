@@ -120,17 +120,28 @@ def _parameter_count(model: torch.nn.Module) -> float:
     return round(sum(parameter.numel() for parameter in model.parameters()) / 1e6, 6)
 
 
-def _set_one2many(model: YOLO) -> None:
-    """Switch an mdetect model to its one-to-many inference head."""
+def _set_one2many(model: YOLO, remove_one2one: bool = True) -> None:
+    """Switch an mdetect model to one-to-many inference.
+
+    When ``remove_one2one`` is false, the one-to-one modules remain attached to
+    the model but are not executed by the one-to-many inference path.  This
+    provides the explicit HO-without-structural-removal comparison.
+    """
 
     detector = getattr(model, "model", None)
     layers = getattr(detector, "model", None)
     if layers is None or not layers:
         raise RuntimeError("Could not locate the mdetect model head")
-    switch = getattr(layers[-1], "use_one2many_head", None)
-    if switch is None:
-        raise RuntimeError("Checkpoint does not expose use_one2many_head()")
-    switch()
+    head = layers[-1]
+    if remove_one2one:
+        switch = getattr(head, "use_one2many_head", None)
+        if switch is None:
+            raise RuntimeError("Checkpoint does not expose use_one2many_head()")
+        switch()
+    else:
+        if not getattr(head, "end2end", False):
+            raise RuntimeError("Checkpoint is not an end-to-end model with a one-to-one branch")
+        head.end2end = False
 
 
 def _time_forward(
@@ -388,8 +399,10 @@ def benchmark_one(weight: str, label: str, args: argparse.Namespace) -> dict[str
     else:
         task_kwargs = {"task": args.task} if args.task else {}
         yolo = YOLO(weight, **task_kwargs)
-    if args.head_mode == "one2many":
-        _set_one2many(yolo)
+    if args.head_mode == "one2many_keep":
+        _set_one2many(yolo, remove_one2one=False)
+    elif args.head_mode == "one2many":
+        _set_one2many(yolo, remove_one2one=True)
     if args.fuse:
         yolo.fuse()
     network = yolo.model.to(device).eval()
@@ -488,7 +501,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Model API used to load checkpoints; auto detects RT-DETR from the weight path",
     )
     parser.add_argument("--task", default=None, help="Optional Ultralytics task override, e.g. detect or mdetect")
-    parser.add_argument("--head-mode", choices=("native", "one2many"), default="native")
+    parser.add_argument(
+        "--head-mode",
+        choices=("native", "one2many_keep", "one2many"),
+        default="native",
+        help="native: one-to-one inference; one2many_keep: one-to-many inference while retaining one-to-one modules; one2many: one-to-many inference after removing one-to-one modules",
+    )
     parser.add_argument("--device", default="0", help="CUDA device, CPU, or device string")
     parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp16")
     parser.add_argument("--batch", type=int, default=1)
