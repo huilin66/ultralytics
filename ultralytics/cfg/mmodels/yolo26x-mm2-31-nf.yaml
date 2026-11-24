@@ -58,7 +58,7 @@ head:
   - [-1, 2, C3k2, [512, True]]
   - [-1, 1, Conv, [512, 3, 2]]
   - [[34, 12], 1, Concat, [1]]
-  - [-1, 2, C3k2, [1024, True, 0.5, True]]
+  - [-1, 1, C3k2, [1024, True, 0.5, True]]
   - [24, 1, nn.Upsample, [None, 2, "nearest"]]
   - [[37, 20], 1, Concat, [1]]
   - [-1, 2, C3k2, [512, True]]
@@ -70,7 +70,7 @@ head:
   - [-1, 2, C3k2, [512, True]]
   - [-1, 1, Conv, [512, 3, 2]]
   - [[46, 24], 1, Concat, [1]]
-  - [-1, 2, C3k2, [1024, True, 0.5, True]]
+  - [-1, 1, C3k2, [1024, True, 0.5, True]]
   - [[30, 42], 1, MultiModalFusion, [concat]] # P3 fusion
   - [-1, 1, Conv, [256, 1, 1]] # fused P3
   - [[33, 45], 1, MultiModalFusion, [concat]] # P4 fusion

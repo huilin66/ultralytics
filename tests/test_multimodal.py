@@ -388,6 +388,42 @@ def test_every_template_inherits_the_shared_contract():
         assert load_multimodal_config(config) == config, path.name
 
 
+def _declarations(entries):
+    """Return the (module, repeats, arguments) of every layer, ignoring the ``from`` field."""
+    return [(entry[2], entry[1], str(entry[3])) for entry in entries]
+
+
+def _modality_branches(backbone):
+    """Split a modality backbone into one layer list per ``Index`` section."""
+    if not {"ModalSplit", "ModalDrop"} & {entry[2] for entry in backbone}:
+        return [backbone]
+    indices = [i for i, entry in enumerate(backbone) if entry[2] == "Index"]
+    fusions = [i for i, entry in enumerate(backbone) if entry[2] == "MultiModalFusion"]
+    end = fusions[0] if fusions else len(backbone)
+    return [backbone[i + 1 : (indices[k + 1] if k + 1 < len(indices) else end)] for k, i in enumerate(indices)]
+
+
+def test_backbone_fusion_templates_keep_the_stock_layer_structure():
+    """A ``-bf`` template may add split/fuse nodes but must not change the stock backbone, neck or head.
+
+    The contract that the ablation rests on is that a multimodal cell differs from its single-modality
+    sibling only in the number of input branches. A template that quietly deepens the neck (the
+    ``yolo26x-mm2`` templates did, by one ``C3k2`` block) breaks that without failing any other test.
+    """
+    checked = 0
+    for path in sorted(Path("ultralytics/cfg/mmodels").glob("*-bf*.yaml")):
+        family, scale = _template_family_and_scale(path.stem)
+        template = yaml_model_load(path)
+        stock = yaml_model_load(DONOR_CONFIGS[family].format(scale=scale))
+        stock_backbone = _declarations(stock["backbone"])
+        stock_head = _declarations(stock["head"])
+        for index, branch in enumerate(_modality_branches(template["backbone"])):
+            assert _declarations(branch) == stock_backbone, f"{path.name}: branch {index} diverges from {family}"
+        assert _declarations(template["head"]) == stock_head, f"{path.name}: head diverges from {family}"
+        checked += 1
+    assert checked >= 30, f"expected every backbone-fusion template, only found {checked}"
+
+
 DONOR_CONFIGS = {
     "yolov8": "ultralytics/cfg/models/v8/yolov8.yaml",
     "yolov9": "ultralytics/cfg/models/v9/yolov9{scale}.yaml",
