@@ -29,10 +29,13 @@ from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tools"))
 
-from ultralytics.cfg import get_save_dir  # noqa: E402
-from ultralytics.models.multimodal import MultiModalYOLO  # noqa: E402
-from ultralytics.models.multimodal.pretrained import load_coco_pretrained  # noqa: E402
+from run_provenance import describe, pin
+
+from ultralytics.cfg import get_save_dir
+from ultralytics.models.multimodal import MultiModalYOLO
+from ultralytics.models.multimodal.pretrained import load_coco_pretrained
 
 # Every condition except B0 starts from the same COCO checkpoint transferred into its template.
 RUNS = {
@@ -104,6 +107,28 @@ def build_model(args: argparse.Namespace, item: str):
     return model
 
 
+def pin_run(run_dir: Path, item: str, args: argparse.Namespace, data: Path) -> dict:
+    """Record this condition's graph, data and recipe, and refuse a directory they no longer match."""
+    template = RUNS[item]["model"]
+    if template == "official":
+        files = REPO / "ultralytics" / "cfg" / "models" / "26" / "yolo26x.yaml"
+    else:
+        files = [REPO / "ultralytics" / "cfg" / "mmodels" / template, REPO / "ultralytics/cfg/mmodels/base.yaml"]
+    recipe = {
+        key: getattr(args, key)
+        for key in ("epochs", "batch", "imgsz", "lr0", "lrf", "warmup_epochs", "close_mosaic", "fraction", "seed")
+    }
+    record = describe(
+        template=files,
+        data=data,
+        image_dir=Path(args.data_root) / "images" / "rgb",
+        checkpoint=Path(args.pretrained or "yolo26x.yaml"),
+        recipe=recipe,
+    )
+    record["item"] = item
+    return pin(run_dir, record, overwrite=args.overwrite)
+
+
 def run_one(args: argparse.Namespace, item: str) -> dict:
     """Train one condition for one seed and return its metrics row."""
     data = str(Path(args.data_root) / RUNS[item]["data"])
@@ -114,6 +139,7 @@ def run_one(args: argparse.Namespace, item: str) -> dict:
     run_dir = Path(
         get_save_dir(SimpleNamespace(project=args.project, name=name, task="detect", mode="train", exist_ok=True))
     )
+    pin_run(run_dir, item, args, Path(data))
     done = completed_epochs(run_dir)
     if done >= args.epochs and (run_dir / "weights" / "best.pt").is_file() and not args.overwrite:
         rows = read_results(run_dir)

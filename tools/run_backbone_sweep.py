@@ -18,9 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
-import platform
 import sys
 import time
 from pathlib import Path
@@ -28,10 +26,11 @@ from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tools"))
 
 import torch
+from run_provenance import describe, pin
 
-from ultralytics import __version__
 from ultralytics.cfg import get_save_dir
 from ultralytics.models.multimodal import MultiModalYOLO
 from ultralytics.models.multimodal.pretrained import load_coco_pretrained
@@ -94,55 +93,27 @@ def build_model(item: str):
     return model
 
 
-def _digest(*paths: Path) -> str:
-    """Return a short sha256 over the given files, in order."""
-    digest = hashlib.sha256()
-    for path in paths:
-        digest.update(path.read_bytes())
-    return digest.hexdigest()[:16]
-
-
-def describe(item: str, args: argparse.Namespace, data: Path) -> dict:
-    """Record what determines this cell's numbers, so a later config change cannot pass unnoticed."""
+def pin_run(run_dir: Path, item: str, args: argparse.Namespace, data: Path) -> dict:
+    """Record this cell's undiminished provenance and refuse to resume a directory it no longer matches."""
     spec = FAMILIES[RUNS[item]["family"]]
     stock = REPO / "ultralytics" / "cfg" / "models" / spec["stock"]
-    base = REPO / "ultralytics" / "cfg" / "mmodels" / "base.yaml"
-    template = REPO / "ultralytics" / "cfg" / "mmodels" / spec["dual"] if RUNS[item]["kind"] == "rgb-t" else stock
-    checkpoint = Path(spec["ckpt"])
-    images = Path(args.data_root) / "images"
-    return {
-        "item": item,
-        "template": template.name,
-        "template_sha": _digest(template, base),
-        "data_yaml": str(data),
-        "data_sha": _digest(data),
-        "images": {split: len(list((images / "rgb" / split).iterdir())) for split in ("train", "val")},
-        "pretrained": {"file": checkpoint.name, "bytes": checkpoint.stat().st_size if checkpoint.is_file() else None},
-        "recipe": {
-            key: getattr(args, key)
-            for key in ("epochs", "batch", "imgsz", "lr0", "lrf", "warmup_epochs", "close_mosaic", "seed")
-        },
-        "env": {"python": platform.python_version(), "torch": torch.__version__, "ultralytics": __version__},
-    }
-
-
-def pin_run(run_dir: Path, item: str, args: argparse.Namespace, data: Path) -> dict:
-    """Write this run's provenance and refuse to continue when anything that decides its numbers changed."""
-    record = describe(item, args, data)
-    path = run_dir / "provenance.json"
-    if path.is_file():
-        previous = json.loads(path.read_text(encoding="utf-8"))
-        for key in ("template_sha", "data_sha", "recipe"):
-            if previous.get(key) != record[key]:
-                raise SystemExit(
-                    f"[conflict] {run_dir.name}: {key} changed since this run was trained "
-                    f"({previous.get(key)} -> {record[key]}). "
-                    "Train into a new name or delete the stale run; never mix two recipes in one directory."
-                )
+    if RUNS[item]["kind"] == "rgb-t":
+        template = [REPO / "ultralytics" / "cfg" / "mmodels" / spec["dual"], REPO / "ultralytics/cfg/mmodels/base.yaml"]
     else:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(record, indent=2), encoding="utf-8")
-    return record
+        template = stock
+    recipe = {
+        key: getattr(args, key)
+        for key in ("epochs", "batch", "imgsz", "lr0", "lrf", "warmup_epochs", "close_mosaic", "seed")
+    }
+    record = describe(
+        template=template,
+        data=Path(data),
+        image_dir=Path(args.data_root) / "images" / "rgb",
+        checkpoint=Path(spec["ckpt"]),
+        recipe=recipe,
+    )
+    record["item"] = item
+    return pin(run_dir, record, overwrite=args.overwrite)
 
 
 def completed_epochs(run_dir: Path) -> int:
