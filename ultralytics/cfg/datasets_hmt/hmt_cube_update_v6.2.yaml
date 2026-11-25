@@ -1,0 +1,11 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# HMT cube-projection single-modality dataset (update v6.2). Splits come from train.txt / val.txt.
+
+path: Y:/dataset/hmt_cube_update_v6.2
+train: train.txt
+val: val.txt
+
+names:
+  0: broken
+  1: efflorescene
+  2: peeling

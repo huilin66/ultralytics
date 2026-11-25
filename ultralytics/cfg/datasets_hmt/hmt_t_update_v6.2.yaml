@@ -1,0 +1,12 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# HMT thermal single-modality dataset (update v6.2). Splits come from train.txt / val.txt; the source
+# dataset.yaml points train and val at the same images/ directory, so this file is the authoritative split.
+
+path: Y:/dataset/hmt_t_update_v6.2
+train: train.txt
+val: val.txt
+
+names:
+  0: Hollow Confirmed
+  1: Hollow Suspected
+  2: Leakage

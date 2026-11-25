@@ -1,0 +1,12 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# HMT RGB single-modality dataset (update v6.2). Splits come from train.txt / val.txt.
+
+path: Y:/dataset/hmt_rgb_update_v6.2
+train: train.txt
+val: val.txt
+
+names:
+  0: Corrosion
+  1: Efflorescene
+  2: Delaminate
+  3: Broken
