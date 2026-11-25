@@ -71,6 +71,16 @@ def parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def stock_yaml(spec: dict) -> Path:
+    """Return the stock YAML that actually exists for a family and scale.
+
+    Only ``yolov9*`` and ``yolov10*`` ship one file per scale; the others ship a single base file and
+    take the scale from the model name, so ``yolov8x.yaml`` resolves to ``yolov8.yaml``.
+    """
+    path = REPO / "ultralytics" / "cfg" / "models" / spec["stock"]
+    return path if path.is_file() else path.with_name(path.stem[:-1] + path.suffix)
+
+
 def build_model(item: str):
     """Build one cell with its COCO initialization.
 
@@ -84,8 +94,7 @@ def build_model(item: str):
     if RUNS[item]["kind"] == "rgb":
         return YOLO(spec["ckpt"], task="detect")
 
-    stock = REPO / "ultralytics" / "cfg" / "models" / spec["stock"]
-    donor = YOLO(str(stock), task="detect").load(spec["ckpt"])
+    donor = YOLO(str(REPO / "ultralytics" / "cfg" / "models" / spec["stock"]), task="detect").load(spec["ckpt"])
     cfg = REPO / "ultralytics" / "cfg" / "mmodels" / spec["dual"]
     model = MultiModalYOLO(str(cfg), task="detect")
     report = load_coco_pretrained(model, donor, verbose=False)
@@ -96,11 +105,10 @@ def build_model(item: str):
 def pin_run(run_dir: Path, item: str, args: argparse.Namespace, data: Path) -> dict:
     """Record this cell's undiminished provenance and refuse to resume a directory it no longer matches."""
     spec = FAMILIES[RUNS[item]["family"]]
-    stock = REPO / "ultralytics" / "cfg" / "models" / spec["stock"]
     if RUNS[item]["kind"] == "rgb-t":
         template = [REPO / "ultralytics" / "cfg" / "mmodels" / spec["dual"], REPO / "ultralytics/cfg/mmodels/base.yaml"]
     else:
-        template = stock
+        template = stock_yaml(spec)
     recipe = {
         key: getattr(args, key)
         for key in ("epochs", "batch", "imgsz", "lr0", "lrf", "warmup_epochs", "close_mosaic", "seed")
@@ -113,6 +121,9 @@ def pin_run(run_dir: Path, item: str, args: argparse.Namespace, data: Path) -> d
         recipe=recipe,
     )
     record["item"] = item
+    # `template` names the file that exists, which for three families is the shared base YAML; the
+    # requested name is what encodes the scale, so keep it in the record too.
+    record["graph"] = spec["stock"]
     return pin(run_dir, record, overwrite=args.overwrite)
 
 
