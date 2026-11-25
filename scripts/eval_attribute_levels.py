@@ -50,6 +50,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--conf", type=float, default=None)
+    parser.add_argument(
+        "--box-pr-conf",
+        type=float,
+        default=0.001,
+        help="Fixed confidence threshold used for exported class-wise Box P/R (default: 0.001)",
+    )
     parser.add_argument("--iou", type=float, default=0.7)
     parser.add_argument("--project", default="runs/experiments/E3_risk_level_test")
     parser.add_argument("--name", default="comparison")
@@ -82,6 +88,21 @@ def _set_one2many(model: Any) -> None:
 def _as_float(value: Any) -> float:
     """Convert numpy/torch scalar values to a CSV-friendly float."""
     return float(value.item() if hasattr(value, "item") else value)
+
+
+def _curve_values_at_confidence(curves: Any, confidence_axis: Any, confidence: float) -> np.ndarray:
+    """Interpolate one class-wise value from each confidence curve."""
+    curves = np.asarray(curves, dtype=np.float64)
+    confidence_axis = np.asarray(confidence_axis, dtype=np.float64).reshape(-1)
+    if curves.ndim != 2 or curves.shape[1] != len(confidence_axis):
+        raise RuntimeError(
+            "The detector did not expose class-wise confidence curves with a matching confidence axis: "
+            f"curves={curves.shape}, confidence_axis={confidence_axis.shape}."
+        )
+    return np.asarray(
+        [np.interp(confidence, confidence_axis, class_curve) for class_curve in curves],
+        dtype=np.float64,
+    )
 
 
 def _dataset_class_names(data: str) -> dict[int, str]:
@@ -153,20 +174,29 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
         raise RuntimeError("The test validator did not expose box metrics for class-wise AP export.")
     class_ap50 = np.asarray(getattr(box_metrics, "ap50", []), dtype=np.float64)
     class_ap5095 = np.asarray(getattr(box_metrics, "ap", []), dtype=np.float64)
-    class_precision = np.asarray(getattr(box_metrics, "p", []), dtype=np.float64)
-    class_recall = np.asarray(getattr(box_metrics, "r", []), dtype=np.float64)
+    class_precision_best_f1 = np.asarray(getattr(box_metrics, "p", []), dtype=np.float64)
+    class_recall_best_f1 = np.asarray(getattr(box_metrics, "r", []), dtype=np.float64)
+    class_precision = _curve_values_at_confidence(
+        getattr(box_metrics, "p_curve", []), getattr(box_metrics, "px", []), args.box_pr_conf
+    )
+    class_recall = _curve_values_at_confidence(
+        getattr(box_metrics, "r_curve", []), getattr(box_metrics, "px", []), args.box_pr_conf
+    )
     class_indices = np.asarray(getattr(box_metrics, "ap_class_index", []), dtype=np.int64)
     if not (
         len(class_ap50)
         == len(class_ap5095)
         == len(class_precision)
         == len(class_recall)
+        == len(class_precision_best_f1)
+        == len(class_recall_best_f1)
         == len(class_indices)
     ):
         raise RuntimeError(
             "Class-wise AP arrays have inconsistent lengths: "
             f"AP50={len(class_ap50)}, AP50-95={len(class_ap5095)}, "
             f"Precision={len(class_precision)}, Recall={len(class_recall)}, "
+            f"BestF1Precision={len(class_precision_best_f1)}, BestF1Recall={len(class_recall_best_f1)}, "
             f"class_index={len(class_indices)}."
         )
     class_names = _dataset_class_names(args.data)
@@ -183,9 +213,18 @@ def _evaluate_one(args: argparse.Namespace, label: str, weights: str, mode: str)
             "class_name": str(class_names.get(int(class_index), int(class_index))),
             "AP50_test": float(ap50),
             "AP50-95_test": float(ap5095),
+            "Box_PR_conf": float(args.box_pr_conf),
+            "Precision_bestF1_test": float(precision_best_f1),
+            "Recall_bestF1_test": float(recall_best_f1),
         }
-        for class_index, precision, recall, ap50, ap5095 in zip(
-            class_indices, class_precision, class_recall, class_ap50, class_ap5095
+        for class_index, precision, recall, precision_best_f1, recall_best_f1, ap50, ap5095 in zip(
+            class_indices,
+            class_precision,
+            class_recall,
+            class_precision_best_f1,
+            class_recall_best_f1,
+            class_ap50,
+            class_ap5095,
         )
     ]
     for row, precision, recall in zip(per_class, class_precision, class_recall):

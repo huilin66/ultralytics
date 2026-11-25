@@ -711,22 +711,22 @@ Micro-F1 在二级互斥属性设置下与 OA 数值相同。
 
 ### 6.1 Class-wise detection and attribute Test metrics
 
-`Matched instances` counts correctly classified detection--ground-truth pairs, with one count per matched object. Each matched object contributes ten attribute decisions; therefore, the generated summary also reports `matched_attribute_decisions`, which is ten times the matched-object count and must not be interpreted as the number of matched objects. `Box P` and `Box R` are per-class detection precision and recall obtained from the box evaluator; `Attr P` and `Attr R` are attribute precision and recall computed only on the matched pairs.
+`Matched instances` counts correctly classified detection--ground-truth pairs, with one count per matched object. Each matched object contributes ten attribute decisions; therefore, the generated summary also reports `matched_attribute_decisions`, which is ten times the matched-object count and must not be interpreted as the number of matched objects. `Box P` and `Box R` are per-class detection precision and recall computed after NMS with the fixed detection confidence threshold `conf=0.001`; matched instances additionally require class-correct one-to-one matching at IoU≥0.5. `Attr P` and `Attr R` are attribute precision and recall computed only on the matched pairs.
 
 | Model | Category | Matched instances | AP50 | AP50-95 | Box P | Box R | Attr Macro-F1 | Attr Micro-F1 | Attr P | Attr R |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| YOLOv10x | projecting_signboard | 106 | 0.686790 | 0.449881 | 0.672689 | 0.652455 | 0.588058 | 0.961321 | 0.598801 | 0.585407 |
-| YOLOv10x | wall_signboard | 96 | 0.557165 | 0.377410 | 0.544763 | 0.586777 | 0.573379 | 0.981250 | 0.601820 | 0.563311 |
-| MAYOLOx | projecting_signboard | 104 | 0.755672 | 0.540540 | 0.810577 | 0.722222 | 0.624551 | 0.962500 | 0.624055 | 0.631374 |
-| MAYOLOx | wall_signboard | 84 | 0.597743 | 0.434456 | 0.705860 | 0.553719 | 0.592366 | 0.986905 | 0.605731 | 0.584324 |
+| YOLOv10x | projecting_signboard | 106 | 0.686790 | 0.449881 | 0.250591 | 0.841270 | 0.588058 | 0.961321 | 0.598801 | 0.585407 |
+| YOLOv10x | wall_signboard | 96 | 0.557165 | 0.377410 | 0.182510 | 0.793388 | 0.573379 | 0.981250 | 0.601820 | 0.563311 |
+| MAYOLOx | projecting_signboard | 104 | 0.755672 | 0.540540 | 0.401544 | 0.825397 | 0.624551 | 0.962500 | 0.624055 | 0.631374 |
+| MAYOLOx | wall_signboard | 84 | 0.597743 | 0.434456 | 0.250746 | 0.694215 | 0.592366 | 0.986905 | 0.605731 | 0.584324 |
 
 结果文件相对路径：
 
-    runs/experiments/E4_4_10_finegrained_seed1/levels/summary.csv
-    runs/experiments/E4_4_10_finegrained_seed1/levels/per_class_test.csv
-    runs/experiments/E4_4_10_finegrained_seed1/levels/box_confusion_test.csv
-    runs/experiments/E4_4_10_finegrained_seed1/levels/per_class_attribute_test.csv
-    runs/experiments/E4_4_10_finegrained_seed1/levels/per_class_attribute_detail_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1_conf001/summary.csv
+    runs/experiments/E4_4_10_finegrained_seed1_conf001/per_class_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1_conf001/box_confusion_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1_conf001/per_class_attribute_test.csv
+    runs/experiments/E4_4_10_finegrained_seed1_conf001/per_class_attribute_detail_test.csv
 
 Box confusion matrix figures:
 
@@ -979,3 +979,32 @@ inference heads because they are distinct inference modes.
 | GIA-GCA-GIN | one2many | 5 | 0.799190 ± 0.065131 | 0.179448 ± 0.064612 | 0.480159 ± 0.037445 | 0.247994 ± 0.076844 | 0.376527 ± 0.116059 |
 
 Raw aggregate: runs/experiments/E2E_attribute_metrics/table9_e2e_twolevel_conf001/aggregated.csv
+
+### 7.8 HO inference-mode FPS comparison
+
+To compare the effect of retaining or removing the one-to-one head, the same
+five baseline Stage2 checkpoints were evaluated in three inference modes. The
+tests used an NVIDIA GeForce RTX 4070 Ti, CUDA FP16, 640×640 input, batch size
+1, 50 warm-up iterations, 200 timed iterations, detection confidence
+threshold 0.001, and NMS IoU threshold 0.7. Values are reported as the mean ±
+sample standard deviation over five seeds. The end-to-end measurement includes
+preprocessing, model inference, NMS/decoding, attribute post-processing, and
+host synchronization, but excludes disk I/O.
+
+| Variant | Inference mode | n | Parameters (M) | GFLOPs | Forward FPS | End-to-end FPS |
+|---|---|---:|---:|---:|---:|---:|
+| Baseline | native one-to-one | 5 | 46.451 | 240.613 | 55.578 ± 0.701 | 50.428 ± 0.186 |
+| Baseline + HO (retain one-to-one) | one-to-many; one-to-one modules retained | 5 | 46.451 | 195.893 | 66.734 ± 0.832 | 57.590 ± 1.140 |
+| Baseline + HO (remove one-to-one) | one-to-many; one-to-one modules removed | 5 | 36.860 | 195.893 | 67.549 ± 1.348 | 58.810 ± 0.349 |
+
+Relative to the baseline, retaining the one-to-one modules improves Forward FPS
+by 20.07% and end-to-end FPS by 14.20%; removing them improves Forward FPS by
+21.54% and end-to-end FPS by 16.62%. Removing the modules provides only an
+additional 1.22% Forward FPS and 2.12% end-to-end FPS improvement over retaining
+them.
+
+Raw results:
+
+    runs/experiments/performance_profile/HO_mode_compare_20261120/baseline_native_5seed.csv
+    runs/experiments/performance_profile/HO_mode_compare_20261120/baseline_ho_keep_5seed.csv
+    runs/experiments/performance_profile/HO_mode_compare_20261120/baseline_ho_remove_5seed.csv
