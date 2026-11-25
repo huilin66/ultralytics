@@ -16,13 +16,17 @@ import argparse
 import csv
 import json
 import os
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import yaml
 
-from ultralytics import YOLO
-from ultralytics.models.multimodal.model import MultiModalYOLO
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+from ultralytics import YOLO  # noqa: E402
+from ultralytics.models.multimodal import MultiModalYOLO  # noqa: E402
 
 # tag -> (weights relative to --runs, companion modalities, primary modality)
 MODELS = {
