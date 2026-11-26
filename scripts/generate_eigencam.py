@@ -167,7 +167,7 @@ def get_attribute_spec(model, head) -> tuple[dict[str, list[str]], int, int, boo
     attribute_count = int(getattr(head, "na", 0) or 0)
     attribute_levels = int(getattr(head, "nal", 2) or 2)
     if not isinstance(attribute_names, dict) or len(attribute_names) != attribute_count:
-        level_names = ["No risk", "High risk"] if attribute_levels == 2 else [str(i) for i in range(attribute_levels)]
+        level_names = ["Absent", "Present"] if attribute_levels == 2 else [str(i) for i in range(attribute_levels)]
         attribute_names = {
             f"attribute_{index}": list(level_names) for index in range(attribute_count)
         }
@@ -187,21 +187,21 @@ def get_attribute_spec(model, head) -> tuple[dict[str, list[str]], int, int, boo
 
 
 def normalize_attribute_level(level, index: int) -> str:
-    """Map legacy boolean levels to the displayed risk terminology."""
+    """Map legacy boolean levels to the displayed presence terminology."""
     if isinstance(level, (bool, np.bool_)):
-        return "High risk" if bool(level) else "No risk"
+        return "Present" if bool(level) else "Absent"
     text = str(level).strip()
     lowered = text.casefold()
-    if lowered in {"true", "yes", "1", "high risk", "high-risk"}:
-        return "High risk"
-    if lowered in {"false", "no", "0", "no risk", "no-risk"}:
-        return "No risk"
+    if lowered in {"true", "yes", "1", "high risk", "high-risk", "present"}:
+        return "Present"
+    if lowered in {"false", "no", "0", "no risk", "no-risk", "absent"}:
+        return "Absent"
     # Some old checkpoints store numeric levels as integers.  Only the first
     # two binary levels are relabeled; other multi-level names are preserved.
     if index == 0 and lowered == "0":
-        return "No risk"
+        return "Absent"
     if index == 1 and lowered == "1":
-        return "High risk"
+        return "Present"
     return text
 
 
@@ -301,12 +301,13 @@ def ydm_draw_label(
 
 
 def ydm_is_negative_attribute(value) -> bool:
-    """Identify the non-risk level for attribute-text coloring."""
+    """Identify the absent level that is omitted from the compact label."""
     if value is False or value is None:
         return True
     return str(value).strip().casefold() in {
         "false",
         "no",
+        "absent",
         "no risk",
         "no-risk",
         "0",
@@ -322,8 +323,8 @@ def ydm_draw_attributes(
 ) -> None:
     """Draw the yolo_data_manager attribute panel without cross-box changes.
 
-    The project visualization hides the negative ``No risk`` level by
-    default, so only positive/high-risk attributes are included in the panel.
+    The project visualization hides the negative ``Absent`` level by
+    default, so only ``Present`` attributes are included in the panel.
     """
     attributes = [
         (name, value) for name, value in attributes if not ydm_is_negative_attribute(value)
