@@ -32,11 +32,25 @@ DATA = {
 }
 
 
+def data_yaml(item: str) -> str:
+    """Return the dataset view a cell was trained on.
+
+    The explicit table covers the E2 cells; sweep cells are named ``<family>-rgb`` or ``<family>-rgb-t``,
+    so their modality view follows from the suffix.
+    """
+    if item in DATA:
+        return DATA[item]
+    for suffix, name in (("-rgb-t", "data-rgb-t.yaml"), ("-rgb", "data-rgb.yaml")):
+        if item.endswith(suffix):
+            return name
+    raise SystemExit(f"no dataset view known for {item}")
+
+
 def parse_args(argv=None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--project", default=str(REPO / "runs" / "e2_rlivit"))
-    parser.add_argument("--items", nargs="+", default=list(DATA), choices=list(DATA), help="cells to evaluate")
+    parser.add_argument("--items", nargs="+", default=list(DATA), help="cells to evaluate")
     parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2])
     parser.add_argument("--data-root", default="/srv/nas/home/dataset/R-LiViT_mdet")
     parser.add_argument("--imgsz", type=int, default=640)
@@ -49,6 +63,7 @@ def parse_args(argv=None) -> argparse.Namespace:
 def main(argv=None) -> int:
     """Evaluate every requested checkpoint and persist one JSON per checkpoint."""
     args = parse_args(argv)
+    from ultralytics import YOLO
     from ultralytics.models.multimodal import MultiModalYOLO
 
     project = Path(args.project)
@@ -56,7 +71,7 @@ def main(argv=None) -> int:
     out_dir.mkdir(exist_ok=True)
     failed = 0
     for item in args.items:
-        data = str(Path(args.data_root) / DATA[item])
+        data = str(Path(args.data_root) / data_yaml(item))
         for seed in args.seeds:
             run_dir = project / f"{item}-seed{seed}"
             ckpt = run_dir / "weights" / "best.pt"
@@ -69,7 +84,8 @@ def main(argv=None) -> int:
                 continue
             started = time.time()
             try:
-                model = MultiModalYOLO(str(ckpt), task="detect")
+                facade = YOLO if item == "b0-rgb" or (item not in DATA and item.endswith("-rgb")) else MultiModalYOLO
+                model = facade(str(ckpt), task="detect")
                 results = model.val(
                     data=data,
                     split="test",

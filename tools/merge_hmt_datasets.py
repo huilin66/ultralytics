@@ -58,6 +58,7 @@ class Report:
     black_thermal: dict[str, int] = field(default_factory=dict)
     black_primary: dict[str, int] = field(default_factory=dict)
     size_mismatch: list[list[str]] = field(default_factory=list)
+    dropped_orphan_thermal: int = 0
 
 
 def load_names(dataset_dir: Path) -> list[str]:
@@ -293,6 +294,7 @@ def build(samples: list[Sample], report: Report, out: Path, rgb_dir: Path, t_dir
                 "boxes": report.boxes,
                 "black_thermal": report.black_thermal,
                 "black_primary": report.black_primary,
+                "dropped_orphan_thermal": report.dropped_orphan_thermal,
                 "size_mismatch": report.size_mismatch,
             },
             ensure_ascii=False,
@@ -316,16 +318,28 @@ def main() -> None:
         help="annotated frames held out per label source for validation; 0 keeps the source split",
     )
     parser.add_argument("--dry-run", action="store_true", help="pair and validate only; write nothing")
+    parser.add_argument(
+        "--drop-orphan-thermal",
+        action="store_true",
+        help="drop samples that exist only in the thermal source instead of giving them a black primary image",
+    )
     args = parser.parse_args()
 
     samples = collect(args.rgb, args.thermal, args.cube)
+    # Split assignment runs on the full set so that removing the orphans cannot move a held-out frame
+    # of any other source; the filter is therefore applied afterwards.
     assign_split(samples, args.val_per_source)
+    orphans = [sample for sample in samples if sample.primary is None]
+    if args.drop_orphan_thermal:
+        samples = [sample for sample in samples if sample.primary is not None]
     report = summarize(samples)
+    report.dropped_orphan_thermal = len(orphans) if args.drop_orphan_thermal else 0
     check_alignment(samples, report)
     summary = {
         "samples": report.samples,
         "black_thermal": report.black_thermal,
         "black_primary": report.black_primary,
+        "dropped_orphan_thermal": report.dropped_orphan_thermal,
         "size_mismatch": len(report.size_mismatch),
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
